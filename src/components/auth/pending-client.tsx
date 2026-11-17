@@ -124,9 +124,9 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
         <CardHeader className="text-center space-y-3 pb-4">
           <div className={`mx-auto p-4 rounded-2xl w-fit shadow-lg ${
             isExpired || isSuspended 
-              ? "bg-orange-500/10 border border-orange-500/30 text-orange-400" 
+              ? "bg-orange-500/10 border border-orange-500/30 text-orange-700 dark:text-orange-400" 
               : isRejected 
-              ? "bg-red-500/10 border border-red-500/30 text-red-400" 
+              ? "bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400" 
               : "bg-amber-500/10 border border-amber-500/20 text-amber-500"
           }`}>
             {isExpired || isSuspended ? (
@@ -161,11 +161,11 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
           {isExpired || isSuspended ? (
             <div className="bg-orange-500/5 border border-orange-500/20 p-4 rounded-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-orange-500/20 pb-2.5">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-orange-400">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-orange-700 dark:text-orange-400">
                   <CreditCard className="h-4 w-4" />
                   <span>Choose Your Reactivation Plan</span>
                 </div>
-                <Badge variant="outline" className="bg-orange-500/20 text-orange-300 border-orange-500/40 text-xs font-bold">
+                <Badge variant="outline" className="bg-orange-500/20 text-orange-800 dark:text-orange-300 border-orange-500/40 text-xs font-bold">
                   {selectedCadence === "yearly" ? `$${yearlyPrice} / yr` : `$${monthlyPrice} / mo`}
                 </Badge>
               </div>
@@ -183,14 +183,14 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                 >
                   <div className="flex items-center justify-between gap-1 mb-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Annual Renewal</span>
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold">
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-bold">
                       Best Value
                     </Badge>
                   </div>
                   <div className="text-base font-extrabold text-foreground">
                     ${yearlyPrice} <span className="text-xs font-normal text-muted-foreground">/ yr</span>
                   </div>
-                  <div className="text-[11px] text-emerald-400 font-medium mt-0.5">
+                  <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium mt-0.5">
                     {prorated?.amountDueText || `$${yearlyPrice} due now`}
                   </div>
                 </button>
@@ -206,14 +206,14 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                 >
                   <div className="flex items-center justify-between gap-1 mb-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Monthly Plan</span>
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-sky-500/10 text-sky-400 border-sky-500/30 font-bold">
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30 font-bold">
                       Flexible
                     </Badge>
                   </div>
                   <div className="text-base font-extrabold text-foreground">
                     ${monthlyPrice} <span className="text-xs font-normal text-muted-foreground">/ mo</span>
                   </div>
-                  <div className="text-[11px] text-sky-400 font-medium mt-0.5">
+                  <div className="text-[11px] text-sky-700 dark:text-sky-400 font-medium mt-0.5">
                     {prorated?.monthlyAmountDueText || `$${monthlyPrice}/mo due now`}
                   </div>
                 </button>
@@ -228,7 +228,7 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                         <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
                           Reactivation Amount Due (Rest of Year)
                         </span>
-                        <span className="text-[10px] font-bold text-emerald-400">Prorated Rest-of-Year</span>
+                        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Prorated Rest-of-Year</span>
                       </div>
                       <p className="text-base font-black text-foreground">{prorated.amountDueText}</p>
                       <p className="text-[11px] text-muted-foreground">
@@ -253,7 +253,7 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                       <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
                         Reactivation Amount Due (First Month)
                       </span>
-                      <span className="text-[10px] font-bold text-sky-400">Flexible Month-to-Month</span>
+                      <span className="text-[10px] font-bold text-sky-700 dark:text-sky-400">Flexible Month-to-Month</span>
                     </div>
                     <p className="text-base font-black text-foreground">
                       {prorated?.monthlyAmountDueText || `$${monthlyPrice}.00 / month`}
@@ -269,7 +269,7 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
               )}
 
               {paymentConfig?.paymentInstructions && (
-                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
+                <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
                   {paymentConfig.paymentInstructions}
                 </div>
               )}
@@ -325,15 +325,15 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
           )}
 
           {checkMsg && (
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-400 font-medium flex items-center gap-2">
-              <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-2">
+              <Check className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
               <span>{checkMsg}</span>
             </div>
           )}
 
           {checkErr && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400 font-medium flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 shrink-0 text-red-400" />
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-700 dark:text-red-400 font-medium flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
               <span>{checkErr}</span>
             </div>
           )}

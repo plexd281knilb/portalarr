@@ -33,7 +33,7 @@ export function HeroSpotlight({
     const isRequested = availability?.isRequested;
 
     return (
-        <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-[#101018] border border-border/50 shadow-2xl min-h-[360px] sm:min-h-[440px] md:min-h-[500px] flex items-end">
+        <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-card dark:bg-[#101018] border border-border/50 shadow-2xl min-h-[360px] sm:min-h-[440px] md:min-h-[500px] flex items-end">
             {/* Backdrop Image */}
             {item.backdropPath && !backdropError ? (
                 <img
@@ -51,8 +51,8 @@ export function HeroSpotlight({
             ) : null}
 
             {/* Cinematic Gradient Overlays */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c12] via-[#0c0c12]/70 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0c0c12] via-[#0c0c12]/80 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-muted/60 dark:from-[#0c0c12] via-card dark:via-[#0c0c12]/70 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-muted/60 dark:from-[#0c0c12] via-card dark:via-[#0c0c12]/80 to-transparent" />
 
             {/* Content Container */}
             <div className="relative z-10 p-5 sm:p-8 md:p-10 max-w-3xl space-y-3 sm:space-y-4">
@@ -63,13 +63,13 @@ export function HeroSpotlight({
                         Featured Spotlight
                     </Badge>
                     <Badge variant="outline" className={`text-xs uppercase font-bold px-2 py-0.5 rounded-full backdrop-blur-md ${
-                        isTv ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" : "bg-blue-500/20 text-blue-300 border-blue-500/40"
+                        isTv ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border-cyan-500/40" : "bg-blue-500/20 text-blue-800 dark:text-blue-300 border-blue-500/40"
                     }`}>
                         {isTv ? "TV Series" : "Feature Film"}
                     </Badge>
                     {rating && Number(rating) > 0 && (
-                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold backdrop-blur-md">
-                            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-xs font-bold backdrop-blur-md">
+                            <Star className="h-3 w-3 fill-amber-400 text-amber-700 dark:text-amber-400" />
                             <span>{rating}</span>
                         </div>
                     )}
@@ -84,12 +84,12 @@ export function HeroSpotlight({
                 </div>
 
                 {/* Title */}
-                <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight line-clamp-2 drop-shadow-md">
+                <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-foreground dark:text-white tracking-tight leading-tight line-clamp-2 drop-shadow-md">
                     {item.title}
                 </h1>
 
                 {/* Overview */}
-                <p className="text-xs sm:text-sm md:text-base text-gray-300 line-clamp-3 leading-relaxed max-w-2xl drop-shadow">
+                <p className="text-xs sm:text-sm md:text-base text-slate-700 dark:text-gray-300 line-clamp-3 leading-relaxed max-w-2xl drop-shadow">
                     {item.overview}
                 </p>
 
@@ -121,7 +121,7 @@ export function HeroSpotlight({
                         <Button
                             size="lg"
                             variant="secondary"
-                            className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-600/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-md"
+                            className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 hover:bg-emerald-600/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-md"
                             onClick={() => onSelect(item)}
                             title="View in Library & Details"
                         >
@@ -134,7 +134,7 @@ export function HeroSpotlight({
                         <Button
                             size="lg"
                             variant="secondary"
-                            className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/40 hover:bg-blue-600/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-md"
+                            className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-blue-600/20 text-blue-800 dark:text-blue-300 border border-blue-500/40 hover:bg-blue-600/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-md"
                             onClick={() => onSelect(item)}
                             title="View Request Status & Details"
                         >
@@ -146,7 +146,7 @@ export function HeroSpotlight({
                     <Button
                         size="lg"
                         variant="outline"
-                        className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md transition-all active:scale-95 flex items-center gap-2"
+                        className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-muted/50 dark:bg-white/10 hover:bg-white/20 text-foreground dark:text-white border-border/70 dark:border-white/20 backdrop-blur-md transition-all active:scale-95 flex items-center gap-2"
                         onClick={() => onSelect(item)}
                     >
                         <Info className="h-4 w-4" />

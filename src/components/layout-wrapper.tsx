@@ -179,7 +179,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                 {isLoggedIn ? (
                   <>
                     {hasLibraryAccess && (
-                        <Button asChild variant="ghost" size="sm" className="flex gap-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
+                        <Button asChild variant="ghost" size="sm" className="flex gap-2 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
                             <Link href="/library" title="Book Library">
                                 <BookOpen className="h-4 w-4 shrink-0" /> 
                                 <span className="hidden sm:inline font-semibold">Book Library</span>
@@ -187,7 +187,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                         </Button>
                     )}
 
-                    <Button asChild variant="ghost" size="sm" className={`flex gap-2 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 ${pathname.startsWith("/guides") ? "bg-sky-500/15 ring-1 ring-sky-500/40 font-bold" : ""}`}>
+                    <Button asChild variant="ghost" size="sm" className={`flex gap-2 text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 hover:bg-sky-500/10 hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 ${pathname.startsWith("/guides") ? "bg-sky-500/15 ring-1 ring-sky-500/40 font-bold" : ""}`}>
                         <Link href="/guides" title="Plex Device Setup Guides">
                             <HelpCircle className="h-4 w-4 shrink-0" /> 
                             <span className="hidden md:inline font-semibold">Guides</span>
@@ -195,7 +195,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                     </Button>
 
                     {/* Account Settings Button */}
-                    <Button asChild variant="ghost" size="sm" className={`flex gap-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 ${pathname.startsWith("/profile") || pathname.startsWith("/settings/profile") ? "bg-blue-500/15 ring-1 ring-blue-500/40 font-bold" : ""}`}>
+                    <Button asChild variant="ghost" size="sm" className={`flex gap-2 text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 ${pathname.startsWith("/profile") || pathname.startsWith("/settings/profile") ? "bg-blue-500/15 ring-1 ring-blue-500/40 font-bold" : ""}`}>
                         <Link href="/profile" title="Account & Password Settings">
                             <User className="h-4 w-4 shrink-0" /> 
                             <span className="hidden sm:inline font-semibold">Account</span>

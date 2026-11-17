@@ -143,23 +143,23 @@ export function ScriptEditorModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleCloseAttempt()}>
-            <DialogContent onPointerDownOutside={(e) => { if (isDirty) e.preventDefault(); }} className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-[#0d0e14] border-zinc-800 p-0 overflow-hidden shadow-2xl">
+            <DialogContent onPointerDownOutside={(e) => { if (isDirty) e.preventDefault(); }} className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-popover dark:bg-[#0d0e14] border-border dark:border-zinc-800 p-0 overflow-hidden shadow-2xl">
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-zinc-800 bg-zinc-950/70">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-border dark:border-zinc-800 bg-muted/70 dark:bg-zinc-950/70">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 shrink-0">
+                        <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-700 dark:text-sky-400 shrink-0">
                             <FileCode className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
-                            <DialogTitle className="text-base font-semibold text-zinc-100 flex items-center gap-2 flex-wrap">
+                            <DialogTitle className="text-base font-semibold text-foreground dark:text-zinc-100 flex items-center gap-2 flex-wrap">
                                 <span>{script ? "Edit Script" : "Create New Script"}</span>
                                 {script && (
-                                    <Badge variant="outline" className="text-[10px] font-mono bg-zinc-900 border-zinc-700 text-zinc-300">
+                                    <Badge variant="outline" className="text-[10px] font-mono bg-card/95 dark:bg-zinc-900 border-border dark:border-zinc-700 text-slate-700 dark:text-zinc-300">
                                         {script.filename}
                                     </Badge>
                                 )}
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-zinc-400 mt-0.5">
+                            <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">
                                 Configure interpreter settings, scheduling cadence, and script code.
                             </DialogDescription>
                         </div>
@@ -180,7 +180,7 @@ export function ScriptEditorModal({
                 </div>
 
                 {error && (
-                    <div className="px-5 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-300 text-xs">
+                    <div className="px-5 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-800 dark:text-rose-300 text-xs">
                         {error}
                     </div>
                 )}
@@ -189,7 +189,7 @@ export function ScriptEditorModal({
                 <div className="flex-1 overflow-y-auto p-5 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-semibold text-zinc-300 mb-1 block">Script Name</label>
+                            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1 block">Script Name</label>
                             <Input 
                                 value={name} 
                                 onChange={(e) => {
@@ -199,38 +199,38 @@ export function ScriptEditorModal({
                                     }
                                 }} 
                                 placeholder="e.g. Check All Plex Servers"
-                                className="h-9 bg-zinc-900/80 border-zinc-700 text-xs"
+                                className="h-9 bg-card/95 dark:bg-zinc-900/80 border-border dark:border-zinc-700 text-xs"
                             />
                         </div>
 
                         <div>
-                            <label className="text-xs font-semibold text-zinc-300 mb-1 block">Filename</label>
+                            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1 block">Filename</label>
                             <Input 
                                 value={filename} 
                                 onChange={(e) => setFilename(e.target.value)} 
                                 placeholder="e.g. check_all_plex_servers.sh"
-                                className="h-9 bg-zinc-900/80 border-zinc-700 text-xs font-mono"
+                                className="h-9 bg-card/95 dark:bg-zinc-900/80 border-border dark:border-zinc-700 text-xs font-mono"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="text-xs font-semibold text-zinc-300 mb-1 block">Description</label>
+                        <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1 block">Description</label>
                         <Input 
                             value={description} 
                             onChange={(e) => setDescription(e.target.value)} 
                             placeholder="Brief summary of what this script accomplishes..."
-                            className="h-9 bg-zinc-900/80 border-zinc-700 text-xs"
+                            className="h-9 bg-card/95 dark:bg-zinc-900/80 border-border dark:border-zinc-700 text-xs"
                         />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                         <div>
-                            <label className="text-xs font-semibold text-zinc-300 mb-1 block">Category</label>
+                            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1 block">Category</label>
                             <select 
                                 value={category} 
                                 onChange={(e) => setCategory(e.target.value)}
-                                className="w-full h-9 rounded-md bg-zinc-900/80 border border-zinc-700 text-xs text-zinc-200 px-3"
+                                className="w-full h-9 rounded-md bg-card/95 dark:bg-zinc-900/80 border border-border dark:border-zinc-700 text-xs text-foreground dark:text-zinc-200 px-3"
                             >
                                 <option value="Plex & Media">Plex & Media</option>
                                 <option value="Database">Database</option>
@@ -242,11 +242,11 @@ export function ScriptEditorModal({
                         </div>
 
                         <div>
-                            <label className="text-xs font-semibold text-zinc-300 mb-1 block">Interpreter</label>
+                            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1 block">Interpreter</label>
                             <select 
                                 value={interpreter} 
                                 onChange={(e) => setInterpreter(e.target.value as any)}
-                                className="w-full h-9 rounded-md bg-zinc-900/80 border border-zinc-700 text-xs text-zinc-200 px-3"
+                                className="w-full h-9 rounded-md bg-card/95 dark:bg-zinc-900/80 border border-border dark:border-zinc-700 text-xs text-foreground dark:text-zinc-200 px-3"
                             >
                                 <option value="bash">Bash (/bin/bash)</option>
                                 <option value="sh">Shell (/bin/sh)</option>
@@ -256,11 +256,11 @@ export function ScriptEditorModal({
                         </div>
 
                         <div>
-                            <label className="text-xs font-semibold text-zinc-300 mb-1 block">Schedule</label>
+                            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1 block">Schedule</label>
                             <select 
                                 value={schedule} 
                                 onChange={(e) => setSchedule(e.target.value)}
-                                className="w-full h-9 rounded-md bg-zinc-900/80 border border-zinc-700 text-xs text-zinc-200 px-3"
+                                className="w-full h-9 rounded-md bg-card/95 dark:bg-zinc-900/80 border border-border dark:border-zinc-700 text-xs text-foreground dark:text-zinc-200 px-3"
                             >
                                 <option value="manual">Manual Only (On Demand)</option>
                                 <option value="hourly">Every Hour</option>
@@ -271,12 +271,12 @@ export function ScriptEditorModal({
                         </div>
 
                         <div>
-                            <label className="text-xs font-semibold text-zinc-300 mb-1 block">Timeout (Seconds)</label>
+                            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1 block">Timeout (Seconds)</label>
                             <Input 
                                 type="number" 
                                 value={timeoutSeconds} 
                                 onChange={(e) => setTimeoutSeconds(parseInt(e.target.value, 10) || 120)}
-                                className="h-9 bg-zinc-900/80 border-zinc-700 text-xs"
+                                className="h-9 bg-card/95 dark:bg-zinc-900/80 border-border dark:border-zinc-700 text-xs"
                             />
                         </div>
                     </div>
@@ -284,8 +284,8 @@ export function ScriptEditorModal({
                     {/* Code Editor Header */}
                     <div className="flex items-center justify-between pt-2">
                         <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-zinc-200">Script Code</span>
-                            <Badge variant="outline" className="text-[10px] text-zinc-400 bg-zinc-900 border-zinc-800">
+                            <span className="text-xs font-semibold text-foreground dark:text-zinc-200">Script Code</span>
+                            <Badge variant="outline" className="text-[10px] text-slate-600 dark:text-zinc-400 bg-card/95 dark:bg-zinc-900 border-border dark:border-zinc-800">
                                 {lineCount} {lineCount === 1 ? "line" : "lines"}
                             </Badge>
                         </div>
@@ -296,7 +296,7 @@ export function ScriptEditorModal({
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => handleTemplateSelect("empty_bash")}
-                                className="h-6 text-[10px] px-2 text-zinc-400 hover:text-zinc-200"
+                                className="h-6 text-[10px] px-2 text-slate-600 dark:text-zinc-400 hover:text-foreground dark:hover:text-zinc-200"
                             >
                                 Bash
                             </Button>
@@ -304,7 +304,7 @@ export function ScriptEditorModal({
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => handleTemplateSelect("empty_python")}
-                                className="h-6 text-[10px] px-2 text-zinc-400 hover:text-zinc-200"
+                                className="h-6 text-[10px] px-2 text-slate-600 dark:text-zinc-400 hover:text-foreground dark:hover:text-zinc-200"
                             >
                                 Python
                             </Button>
@@ -312,7 +312,7 @@ export function ScriptEditorModal({
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => handleTemplateSelect("empty_node")}
-                                className="h-6 text-[10px] px-2 text-zinc-400 hover:text-zinc-200"
+                                className="h-6 text-[10px] px-2 text-slate-600 dark:text-zinc-400 hover:text-foreground dark:hover:text-zinc-200"
                             >
                                 Node
                             </Button>
@@ -320,29 +320,29 @@ export function ScriptEditorModal({
                     </div>
 
                     {/* Code Textarea */}
-                    <div className="relative rounded-lg border border-zinc-800 bg-[#07080b] overflow-hidden focus-within:border-amber-500/50">
+                    <div className="relative rounded-lg border border-border dark:border-zinc-800 bg-card dark:bg-[#07080b] overflow-hidden focus-within:border-amber-500/50">
                         <textarea
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
                             rows={16}
                             spellCheck={false}
-                            className="w-full p-4 font-mono text-xs text-zinc-200 bg-transparent resize-y outline-none leading-relaxed selection:bg-amber-500/30 selection:text-white"
+                            className="w-full p-4 font-mono text-xs text-foreground dark:text-zinc-200 bg-transparent resize-y outline-none leading-relaxed selection:bg-amber-500/30 selection:text-foreground dark:selection:text-white"
                             placeholder="#!/bin/bash&#10;# Write your script code here..."
                         />
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-zinc-800 bg-zinc-950/80">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-border dark:border-zinc-800 bg-muted/80 dark:bg-zinc-950/80">
                     <span className="text-[11px] text-zinc-500">
-                        Saved scripts are stored persistently in <code className="text-zinc-400">data/scripts/</code>
+                        Saved scripts are stored persistently in <code className="text-slate-600 dark:text-zinc-400">data/scripts/</code>
                     </span>
                     <div className="flex items-center gap-2 justify-end">
                         <Button 
                             variant="ghost" 
                             size="sm" 
                             onClick={handleCloseAttempt}
-                            className="h-8 text-xs text-zinc-400 hover:text-zinc-200 flex-1 sm:flex-initial"
+                            className="h-8 text-xs text-slate-600 dark:text-zinc-400 hover:text-foreground dark:hover:text-zinc-200 flex-1 sm:flex-initial"
                         >
                             Cancel
                         </Button>

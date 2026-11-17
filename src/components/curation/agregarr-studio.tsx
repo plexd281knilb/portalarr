@@ -2640,7 +2640,7 @@ export function AgregarrStudio() {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-amber-700 dark:text-amber-400" />
                 <p className="text-sm font-medium">Loading Agregarr Collections &amp; Hubs Studio...</p>
             </div>
         );
@@ -2658,12 +2658,12 @@ export function AgregarrStudio() {
 
             {/* Static Server & Library Section Navigator */}
             {servers.length > 0 && (
-                <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
                     <div className="p-4 space-y-3.5">
                         {/* Plex Servers Static Tabs */}
-                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
-                                <Tv className="h-4 w-4 text-amber-400" />
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-border dark:border-slate-800/80 pb-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                <Tv className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                 <span>Plex Server:</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
@@ -2678,12 +2678,12 @@ export function AgregarrStudio() {
                                             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                                 isSelected
                                                     ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-950/60 border border-amber-300/50 ring-1 ring-amber-300/40 font-black'
-                                                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                                    : 'bg-muted/80 dark:bg-slate-800/80 hover:bg-slate-700/80 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white border border-border dark:border-slate-700/60'
                                             }`}
                                         >
-                                            <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-slate-950 shadow-sm' : 'bg-emerald-400'}`} />
+                                            <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-muted dark:bg-slate-950 shadow-sm' : 'bg-emerald-400'}`} />
                                             <span>{s.serverName || "Plex Server"}</span>
-                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-amber-900/60 text-slate-950 bg-amber-400' : 'border-slate-700 text-slate-400'}`}>
+                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-amber-500/60 dark:border-amber-900/60 text-slate-950 bg-amber-400' : 'border-border dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                                 {secCount} {secCount === 1 ? 'lib' : 'libs'}
                                             </Badge>
                                         </button>
@@ -2694,19 +2694,19 @@ export function AgregarrStudio() {
 
                         {/* Library Sections Static Tabs */}
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
-                                <Film className="h-4 w-4 text-sky-400" />
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                <Film className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                                 <span>Library Sections:</span>
-                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />}
+                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700 dark:text-sky-400" />}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                                 {serverSectionsLoading ? (
-                                    <div className="flex items-center gap-2 text-xs text-sky-400 py-1 font-medium">
+                                    <div className="flex items-center gap-2 text-xs text-sky-700 dark:text-sky-400 py-1 font-medium">
                                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                         <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
                                     </div>
                                 ) : currentSections.length === 0 ? (
-                                    <span className="text-xs text-slate-400 py-1">No library sections found on this server.</span>
+                                    <span className="text-xs text-slate-600 dark:text-slate-400 py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {
                                         const isSelected = String(sec.key) === selectedSectionKey;
@@ -2720,7 +2720,7 @@ export function AgregarrStudio() {
                                                 className={`flex items-center rounded-xl transition-all border shadow-sm ${
                                                     isSelected
                                                         ? 'bg-sky-600/20 border-sky-400/60 ring-1 ring-sky-400/40'
-                                                        : 'bg-slate-800/80 border-slate-700/70 hover:border-slate-600'
+                                                        : 'bg-muted/80 dark:bg-slate-800/80 border-border dark:border-slate-700/70 hover:border-slate-600'
                                                 }`}
                                             >
                                                 {/* Library Tab Selector Button */}
@@ -2729,15 +2729,15 @@ export function AgregarrStudio() {
                                                     onClick={() => handleSelectSection(String(sec.key))}
                                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-l-xl transition-all cursor-pointer ${
                                                         isSelected
-                                                            ? 'text-sky-200'
-                                                            : 'text-slate-300 hover:text-white'
+                                                            ? 'text-sky-900 dark:text-sky-200'
+                                                            : 'text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white'
                                                     }`}
                                                 >
-                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
-                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
-                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-800 dark:text-amber-300 shrink-0" />}
+                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-800 dark:text-cyan-300 shrink-0" />}
+                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-700 dark:text-slate-300 shrink-0" />}
                                                     <span>{sec.title}</span>
-                                                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${isSelected ? 'bg-sky-500/30 text-sky-100' : 'bg-slate-900 text-slate-400'}`}>
+                                                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${isSelected ? 'bg-sky-500/30 text-sky-900 dark:text-sky-100' : 'bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}>
                                                         #{sec.key}
                                                     </span>
                                                 </button>
@@ -2753,9 +2753,9 @@ export function AgregarrStudio() {
                                                     className={`px-2 py-1 text-[10px] font-extrabold transition-all border-l flex items-center gap-1 rounded-r-xl cursor-pointer ${
                                                         isSecEnabled 
                                                             ? isSelected
-                                                                ? 'bg-emerald-500/30 text-emerald-200 border-sky-400/40 hover:bg-emerald-500/40'
-                                                                : 'bg-emerald-500/20 text-emerald-300 border-slate-700 hover:bg-emerald-500/30'
-                                                            : 'bg-slate-900/90 text-slate-500 border-slate-700 hover:text-slate-300 hover:bg-slate-800'
+                                                                ? 'bg-emerald-500/30 text-emerald-900 dark:text-emerald-200 border-sky-400/40 hover:bg-emerald-500/40'
+                                                                : 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-border dark:border-slate-700 hover:bg-emerald-500/30'
+                                                            : 'bg-card/95 dark:bg-slate-900/90 text-slate-500 border-border dark:border-slate-700 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-accent dark:hover:bg-slate-800'
                                                     }`}
                                                 >
                                                     <span className={`w-1.5 h-1.5 rounded-full ${isSecEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
@@ -2770,29 +2770,29 @@ export function AgregarrStudio() {
 
                         {/* Active Library Control Bar */}
                         {currentSections.length > 0 && selectedSectionKey && (
-                            <div className="mt-3 pt-4 border-t border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-slate-950/70 p-4 sm:p-5 rounded-2xl border border-slate-800/90 min-w-0">
+                            <div className="mt-3 pt-4 border-t border-border dark:border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-muted/70 dark:bg-slate-950/70 p-4 sm:p-5 rounded-2xl border dark:border-slate-800/90 min-w-0">
                                 <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
                                     <div className={`p-2.5 rounded-xl border shrink-0 ${
                                         isSectionEnabled(selectedServerId, selectedSectionKey)
-                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-950/30'
-                                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-950/30'
+                                            : 'bg-muted dark:bg-slate-800 border-border dark:border-slate-700 text-slate-600 dark:text-slate-400'
                                     }`}>
                                         {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
                                     </div>
                                     <div className="space-y-1 min-w-0 flex-1">
                                         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-                                            <span className="text-xs sm:text-sm font-black text-white tracking-tight break-words">
+                                            <span className="text-xs sm:text-sm font-black text-foreground dark:text-white tracking-tight break-words">
                                                 {currentServer?.serverName} &rarr; {currentSections.find(s => String(s.key) === selectedSectionKey)?.title || `Library #${selectedSectionKey}`}
                                             </span>
                                             <Badge className={`text-[10px] font-bold px-2 py-0.5 shrink-0 ${
                                                 isSectionEnabled(selectedServerId, selectedSectionKey)
                                                     ? 'bg-emerald-600 text-white'
-                                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                                    : 'bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-border dark:border-slate-700'
                                             }`}>
                                                 {isSectionEnabled(selectedServerId, selectedSectionKey) ? '🟢 COLLECTIONS ACTIVE' : '⚪ EXCLUDED / DISABLED'}
                                             </Badge>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey)
                                                 ? 'This library section will automatically sync collections & Coming Soon hubs to Plex Home.'
                                                 : 'This library section is excluded and will be skipped during all collection sync operations.'}
@@ -2802,15 +2802,15 @@ export function AgregarrStudio() {
 
                                 <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto justify-start xl:justify-end min-w-0">
                                     {/* Primary Switch */}
-                                    <div className="flex items-center gap-2.5 bg-slate-900 px-3.5 py-1.5 rounded-xl border border-slate-800 shadow-sm shrink-0">
-                                        <Label htmlFor="sec-master-toggle-agregarr" className="text-xs font-bold text-slate-300 cursor-pointer select-none">
+                                    <div className="flex items-center gap-2.5 bg-card/95 dark:bg-slate-900 px-3.5 py-1.5 rounded-xl border border-border dark:border-slate-800 shadow-sm shrink-0">
+                                        <Label htmlFor="sec-master-toggle-agregarr" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey) ? (
-                                                <span className="text-emerald-400 font-extrabold flex items-center gap-1.5">
+                                                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center gap-1.5">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                                     Enabled
                                                 </span>
                                             ) : (
-                                                <span className="text-slate-400 font-semibold">Disabled</span>
+                                                <span className="text-slate-600 dark:text-slate-400 font-semibold">Disabled</span>
                                             )}
                                         </Label>
                                         <Switch
@@ -2821,8 +2821,8 @@ export function AgregarrStudio() {
                                     </div>
 
                                     {/* Batch Server Controls */}
-                                    <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-sm shrink-0">
-                                        <span className="text-[10px] font-extrabold text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
+                                    <div className="flex items-center bg-card/95 dark:bg-slate-900/90 p-1 rounded-xl border border-border dark:border-slate-800 shadow-sm shrink-0">
+                                        <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
                                             Server:
                                         </span>
                                         <Button
@@ -2830,22 +2830,22 @@ export function AgregarrStudio() {
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleToggleAllSectionsOnServer(true)}
-                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-300 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
                                             title="Enable collections sync for all library sections on this server"
                                         >
-                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-400" />
+                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-700 dark:text-emerald-400" />
                                             Enable All
                                         </Button>
-                                        <div className="w-[1px] h-4 bg-slate-800 my-auto" />
+                                        <div className="w-[1px] h-4 bg-muted dark:bg-slate-800 my-auto" />
                                         <Button
                                             type="button"
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleToggleAllSectionsOnServer(false)}
-                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
                                             title="Disable collections sync for all library sections on this server"
                                         >
-                                            <XCircle className="h-3 w-3 mr-1 text-rose-400" />
+                                            <XCircle className="h-3 w-3 mr-1 text-rose-700 dark:text-rose-400" />
                                             Disable All
                                         </Button>
                                     </div>
@@ -2872,28 +2872,28 @@ export function AgregarrStudio() {
             {(() => {
                 const nextRunInfo = calculateNextRunTime(curationSyncSchedule, curationLastRunAt);
                 return (
-                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
-                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                    <Card className={`bg-card/95 dark:bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-border dark:border-slate-800'}`}>
+                        <CardHeader className="p-5 pb-3 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2.5 flex-wrap">
-                                        <Clock className="h-5 w-5 text-amber-400" />
-                                        <CardTitle className="text-base sm:text-lg font-bold text-white">Collections &amp; Smart Hubs Automation Schedule</CardTitle>
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                        <Clock className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+                                        <CardTitle className="text-base sm:text-lg font-bold text-foreground dark:text-white">Collections &amp; Smart Hubs Automation Schedule</CardTitle>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30' : 'border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-muted/40 dark:bg-slate-800/40'}`}>
                                             {curationSyncCollections ? `Active (${formatScheduleLabel(curationSyncSchedule)})` : 'Paused'}
                                         </Badge>
                                         {curationSyncCollections && (
-                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30"}`}>
                                                 ⏱️ Next: {nextRunInfo.relativeText}
                                             </Badge>
                                         )}
                                         {isScheduleDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
+                                            <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
                                                 ● Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
-                                    <CardDescription className="text-xs text-slate-400">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                         Automatically synchronizes dynamic TMDb/Trakt collections, evaluates seasonal date schedules, updates Plex Home screen ranking (#1-#99), and creates Coming Soon release placeholders across enabled libraries.
                                     </CardDescription>
                                 </div>
@@ -2916,15 +2916,15 @@ export function AgregarrStudio() {
                         <CardContent className="p-5 space-y-4">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {/* Pillar 1: Dynamic Smart Collections & Home Screen Ranking */}
-                                <div className="bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                <div className="bg-muted/60 dark:bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2">
-                                                <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
-                                                <span className="font-bold text-slate-100 text-sm">🌟 Dynamic Collections &amp; Home Hubs</span>
+                                                <Trophy className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
+                                                <span className="font-bold text-foreground dark:text-slate-100 text-sm">🌟 Dynamic Collections &amp; Home Hubs</span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30' : 'border-border dark:border-slate-700 text-slate-500 bg-muted/70 dark:bg-slate-900/40'}`}>
                                                     {curationSyncCollections ? formatScheduleLabel(curationSyncSchedule) : 'Disabled'}
                                                 </Badge>
                                                 <Switch 
@@ -2933,23 +2933,23 @@ export function AgregarrStudio() {
                                                 />
                                             </div>
                                         </div>
-                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Fetches TMDb/Trakt/MDBList trending items, user lists, and applies Plex Home &amp; Recommended hub ordering (#1-#99) across enabled libraries.
                                         </p>
                                     </div>
 
                                     <div className="space-y-3 pt-1">
                                         <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
+                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Trigger Frequency</label>
                                             <Select 
                                                 value={curationSyncSchedule || "every_6_hours"} 
                                                 onValueChange={val => setCurationSyncSchedule(val)}
                                                 disabled={!curationSyncCollections}
                                             >
-                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
+                                                <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8 text-foreground dark:text-slate-200 truncate">
                                                     <SelectValue placeholder="Select Frequency" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs max-w-sm">
+                                                <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs max-w-sm">
                                                     {SCHEDULE_OPTIONS.map(opt => (
                                                         <SelectItem key={opt.value} value={opt.value}>
                                                             {opt.label}
@@ -2960,43 +2960,43 @@ export function AgregarrStudio() {
                                         </div>
 
                                         {/* Target Libraries Banner */}
-                                        <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
+                                        <div className="space-y-1.5 pt-1 border-t border-border dark:border-slate-800/80">
                                             <div className="flex items-center justify-between">
-                                                <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-                                                    <Layers className="h-3 w-3 text-amber-400" />
+                                                <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                    <Layers className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                                     <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
                                                 </label>
                                                 <button
                                                     type="button"
                                                     onClick={() => setManageLibrariesModalOpen(true)}
-                                                    className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
+                                                    className="text-[10px] text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 font-bold underline cursor-pointer"
                                                 >
                                                     Manage All &rarr;
                                                 </button>
                                             </div>
-                                            <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                            <div className="min-h-[32px] p-1.5 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
                                                 {activeEnabledSections.length > 0 ? (
                                                     activeEnabledSections.map(sec => (
                                                         <Badge 
                                                             key={`${sec.serverId}-${sec.sectionKey}`}
-                                                            className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                            className="bg-emerald-500/15 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-500/15 dark:hover:bg-emerald-900/80 transition-colors shadow-sm"
                                                             onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
                                                             title={`Click to disable/exclude "${sec.title}" from collections`}
                                                         >
                                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
                                                             {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
                                                             <span>{sec.title}</span>
-                                                            {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                            {servers.length > 1 && <span className="text-[9px] text-slate-600 dark:text-slate-400 font-normal">({sec.serverName})</span>}
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-[11px] text-slate-400 px-1">No libraries active (Collections paused)</span>
+                                                    <span className="text-[11px] text-slate-600 dark:text-slate-400 px-1">No libraries active (Collections paused)</span>
                                                 )}
                                                 {excludedSections.length > 0 && (
                                                     <Badge
                                                         variant="outline"
                                                         onClick={() => setManageLibrariesModalOpen(true)}
-                                                        className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                                        className="border-border dark:border-slate-700/80 bg-muted/80 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
                                                     >
                                                         +{excludedSections.length} excluded
                                                     </Badge>
@@ -3005,10 +3005,10 @@ export function AgregarrStudio() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                                            <Clock3 className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border dark:border-slate-800/80">
+                                        <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                            <Clock3 className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                                            <span>Last run: <strong className="text-foreground dark:text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
                                         </div>
                                         <Button 
                                             size="sm"
@@ -3023,15 +3023,15 @@ export function AgregarrStudio() {
                                 </div>
 
                                 {/* Pillar 2: Seasonal Schedules & Coming Soon Placeholders */}
-                                <div className="bg-slate-950/60 border border-sky-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                <div className="bg-muted/60 dark:bg-slate-950/60 border border-sky-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2">
-                                                <Calendar className="h-4 w-4 text-sky-400 shrink-0" />
-                                                <span className="font-bold text-slate-100 text-sm">🗓️ Seasonal Dates &amp; Release Placeholders</span>
+                                                <Calendar className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
+                                                <span className="font-bold text-foreground dark:text-slate-100 text-sm">🗓️ Seasonal Dates &amp; Release Placeholders</span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncReleases ? 'border-sky-500/40 text-sky-300 bg-sky-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncReleases ? 'border-sky-500/40 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/30' : 'border-border dark:border-slate-700 text-slate-500 bg-muted/70 dark:bg-slate-900/40'}`}>
                                                     {curationSyncReleases ? 'Active' : 'Disabled'}
                                                 </Badge>
                                                 <Switch 
@@ -3040,36 +3040,36 @@ export function AgregarrStudio() {
                                                 />
                                             </div>
                                         </div>
-                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Evaluates monitored unreleased media from Radarr/Sonarr, generates 1080p dummy video stubs with countdown banner overlays, and automatically cleans up placeholders once downloaded.
                                         </p>
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                                         <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Seasonal Schedules</label>
-                                            <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
+                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Seasonal Schedules</label>
+                                            <div className="h-8 px-2.5 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-700/80 rounded-lg flex items-center text-xs text-sky-800 dark:text-sky-300 font-semibold truncate">
                                                 {collections.filter(c => c.isSeasonal).length} Active Date Windows
                                             </div>
                                         </div>
 
                                         <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Monitored Queue</label>
-                                            <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
+                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Monitored Queue</label>
+                                            <div className="h-8 px-2.5 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-700/80 rounded-lg flex items-center text-xs text-sky-800 dark:text-sky-300 font-semibold truncate">
                                                 Radarr &amp; Sonarr Monitored
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
-                                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border dark:border-slate-800/80">
+                                        <div className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
                                             <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
                                             <span>Auto-Syncs with Radarr &amp; Sonarr Monitored</span>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => setSubTab("coming_soon")}
-                                            className="text-[11px] font-bold text-sky-400 hover:text-sky-300 transition-colors cursor-pointer"
+                                            className="text-[11px] font-bold text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 transition-colors cursor-pointer"
                                         >
                                             Configure Placeholders &rarr;
                                         </button>
@@ -3079,8 +3079,8 @@ export function AgregarrStudio() {
                         </CardContent>
 
                         {collectionSyncResult && (
-                            <div className={`p-3 text-xs border-t ${collectionSyncResult.success ? 'bg-amber-950/60 border-amber-800 text-amber-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
-                                {collectionSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-400" />}
+                            <div className={`p-3 text-xs border-t ${collectionSyncResult.success ? 'bg-amber-500/10 dark:bg-amber-950/60 border-amber-500/40 dark:border-amber-800 text-amber-800 dark:text-amber-300' : 'bg-rose-500/10 dark:bg-rose-950/60 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300'} flex items-start gap-2`}>
+                                {collectionSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-amber-700 dark:text-amber-400" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-700 dark:text-rose-400" />}
                                 <div className="space-y-0.5">
                                     <span className="font-bold">{collectionSyncResult.text}</span>
                                     {collectionSyncResult.details && collectionSyncResult.details.length > 0 && (
@@ -3095,34 +3095,34 @@ export function AgregarrStudio() {
 
             {/* Background Syncing Status Banner */}
             {Object.keys(syncingCollIds).length > 0 && (
-                <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-950/40 border border-amber-500/40 rounded-2xl text-amber-300 text-xs shadow-md backdrop-blur-md">
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/40 rounded-2xl text-amber-800 dark:text-amber-300 text-xs shadow-md backdrop-blur-md">
                     <div className="flex items-center gap-2.5">
-                        <Loader2 className="h-4 w-4 animate-spin text-amber-400 shrink-0" />
+                        <Loader2 className="h-4 w-4 animate-spin text-amber-700 dark:text-amber-400 shrink-0" />
                         <div>
-                            <span className="font-bold text-white">Syncing {Object.keys(syncingCollIds).length} collection{Object.keys(syncingCollIds).length > 1 ? "s" : ""} to Plex in the background...</span>
-                            <p className="text-[11px] text-amber-400/80">You can continue browsing, configuring, and installing other presets freely without waiting.</p>
+                            <span className="font-bold text-foreground dark:text-white">Syncing {Object.keys(syncingCollIds).length} collection{Object.keys(syncingCollIds).length > 1 ? "s" : ""} to Plex in the background...</span>
+                            <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">You can continue browsing, configuring, and installing other presets freely without waiting.</p>
                         </div>
                     </div>
-                    <Badge variant="outline" className="border-amber-500/50 bg-amber-950/80 text-amber-300 text-[10px] font-mono px-2 py-0.5 animate-pulse shrink-0">
+                    <Badge variant="outline" className="border-amber-500/50 bg-amber-500/15 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 text-[10px] font-mono px-2 py-0.5 animate-pulse shrink-0">
                         BACKGROUND SYNC ACTIVE
                     </Badge>
                 </div>
             )}
 
             {/* Agregarr Top Navigation Sub-Tabs */}
-            <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
+            <div className="flex items-center gap-2 p-1.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-md backdrop-blur-md">
                 <button
                     type="button"
                     onClick={() => setSubTab("collections")}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "collections"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <Trophy className="h-4 w-4 shrink-0" />
                     <span>Collections &amp; Hubs</span>
-                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "collections" ? "border-amber-900 text-slate-950 bg-amber-400" : "border-slate-700 text-slate-400"}`}>
+                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "collections" ? "border-amber-500/40 dark:border-amber-900 text-slate-950 bg-amber-400" : "border-border dark:border-slate-700 text-slate-600 dark:text-slate-400"}`}>
                         {collections.length}
                     </Badge>
                 </button>
@@ -3133,12 +3133,12 @@ export function AgregarrStudio() {
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "presets"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <Sparkles className="h-4 w-4 shrink-0" />
                     <span>Curated Presets</span>
-                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "presets" ? "border-amber-900 text-slate-950 bg-amber-400" : "border-slate-700 text-slate-400"}`}>
+                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "presets" ? "border-amber-500/40 dark:border-amber-900 text-slate-950 bg-amber-400" : "border-border dark:border-slate-700 text-slate-600 dark:text-slate-400"}`}>
                         {COLLECTION_PRESETS.length}
                     </Badge>
                 </button>
@@ -3149,7 +3149,7 @@ export function AgregarrStudio() {
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "coming_soon"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <Settings2 className="h-4 w-4 shrink-0" />
@@ -3163,13 +3163,13 @@ export function AgregarrStudio() {
             {subTab === "collections" && (
                 <div className="space-y-6">
                     {/* Actions Bar */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-xl">
                         <div className="space-y-0.5">
-                            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                                <Trophy className="h-4 w-4 text-amber-400" />
+                            <h2 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <Trophy className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                 <span>Plex Home Screen Collections &amp; Hubs Manager</span>
                             </h2>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-slate-600 dark:text-slate-400">
                                 Reorder collection ranking (#1-#99), inspect collection media, toggle Home/Shared visibility, and sync hubs directly to Plex.
                             </p>
                         </div>
@@ -3188,10 +3188,10 @@ export function AgregarrStudio() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => setFilteredHubsModalOpen(true)}
-                                className="border-cyan-500/40 hover:bg-cyan-950/40 text-cyan-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                className="border-cyan-500/40 hover:bg-cyan-500/10 dark:hover:bg-cyan-950/40 text-cyan-900 dark:text-cyan-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
                                 title="Deploy Filtered Smart Collections (Recently Added, Recently Released, Top Unwatched) with strict placeholder exclusion"
                             >
-                                <Clapperboard className="h-3.5 w-3.5 text-cyan-400" />
+                                <Clapperboard className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
                                 <span>Filtered Smart Hubs...</span>
                             </Button>
                             <Button
@@ -3200,10 +3200,10 @@ export function AgregarrStudio() {
                                 variant="outline"
                                 disabled={taggingPlaceholders}
                                 onClick={handleTagAllPlaceholders}
-                                className="border-emerald-500/40 hover:bg-emerald-950/40 text-emerald-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                className="border-emerald-500/40 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
                                 title="Scans Plex library sections, detects placeholder files & trailers, and applies the 'trailer-placeholder' label so they never pollute Recently Added carousels"
                             >
-                                {taggingPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" /> : <Tag className="h-3.5 w-3.5 text-emerald-400" />}
+                                {taggingPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700 dark:text-emerald-400" /> : <Tag className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />}
                                 <span>Tag Placeholders</span>
                             </Button>
                             <Button
@@ -3212,10 +3212,10 @@ export function AgregarrStudio() {
                                 variant="outline"
                                 disabled={importingPlexCollections}
                                 onClick={handleImportPlexCollections}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
                                 title="Import active collections and hubs from Plex (skips dismissed/ignored hubs)"
                             >
-                                {importingPlexCollections ? <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" /> : <RefreshCw className="h-3.5 w-3.5 text-sky-400" />}
+                                {importingPlexCollections ? <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700 dark:text-sky-400" /> : <RefreshCw className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />}
                                 <span>Import from Plex</span>
                             </Button>
                             <Button
@@ -3223,10 +3223,10 @@ export function AgregarrStudio() {
                                 size="sm"
                                 variant="outline"
                                 onClick={handleOpenDismissedHubs}
-                                className="border-amber-500/30 hover:bg-amber-950/30 text-amber-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                className="border-amber-500/30 hover:bg-amber-500/10 dark:hover:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
                                 title="View and restore deleted/ignored Plex hubs and collections so they stay gone permanently"
                             >
-                                <EyeOff className="h-3.5 w-3.5 text-amber-400" />
+                                <EyeOff className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                 <span>Ignored Hubs</span>
                             </Button>
                             <Button
@@ -3235,9 +3235,9 @@ export function AgregarrStudio() {
                                 variant="outline"
                                 disabled={syncingSeasonal}
                                 onClick={handleSyncSeasonal}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
                             >
-                                {syncingSeasonal ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Calendar className="h-3.5 w-3.5 text-amber-400" />}
+                                {syncingSeasonal ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" /> : <Calendar className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                                 <span>Evaluate Seasonal</span>
                             </Button>
                             <Button
@@ -3246,10 +3246,10 @@ export function AgregarrStudio() {
                                 variant="outline"
                                 disabled={savingOrder}
                                 onClick={() => handleSaveCollectionOrder()}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3.5 gap-1.5 cursor-pointer"
+                                className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200 text-xs h-8 px-3.5 gap-1.5 cursor-pointer"
                                 title="Commit Home and Recommended Hub numerical rank ordering and sort prefixes to Plex"
                             >
-                                {savingOrder ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Save className="h-3.5 w-3.5 text-amber-400" />}
+                                {savingOrder ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" /> : <Save className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                                 <span>Save Hub Ordering</span>
                             </Button>
                             <Button
@@ -3268,38 +3268,38 @@ export function AgregarrStudio() {
 
                     {recentlyAddedDeployMsg && (
                         <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in-50 ${
-                            recentlyAddedDeployMsg.success ? "bg-cyan-950/80 border-cyan-800 text-cyan-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                            recentlyAddedDeployMsg.success ? "bg-cyan-500/15 dark:bg-cyan-950/80 border-cyan-500/40 dark:border-cyan-800 text-cyan-800 dark:text-cyan-300" : "bg-rose-500/15 dark:bg-rose-950/80 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                         }`}>
-                            {recentlyAddedDeployMsg.success ? <CheckCircle2 className="h-4 w-4 text-cyan-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                            {recentlyAddedDeployMsg.success ? <CheckCircle2 className="h-4 w-4 text-cyan-700 dark:text-cyan-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
                             <span>{recentlyAddedDeployMsg.text}</span>
                         </div>
                     )}
 
                     {orderSavedMsg && (
-                        <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <div className="p-3 rounded-xl bg-emerald-500/15 dark:bg-emerald-950/80 border border-emerald-500/40 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                             <span>{orderSavedMsg}</span>
                         </div>
                     )}
 
                     {plexImportMsg && (
                         <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in-50 ${
-                            plexImportMsg.success ? "bg-sky-950/80 border-sky-800 text-sky-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                            plexImportMsg.success ? "bg-sky-500/15 dark:bg-sky-950/80 border-sky-500/40 dark:border-sky-800 text-sky-800 dark:text-sky-300" : "bg-rose-500/15 dark:bg-rose-950/80 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                         }`}>
-                            {plexImportMsg.success ? <CheckCircle2 className="h-4 w-4 text-sky-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                            {plexImportMsg.success ? <CheckCircle2 className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
                             <span>{plexImportMsg.text}</span>
                         </div>
                     )}
 
                     {seasonalSyncMsg && (
-                        <div className="p-3 rounded-xl bg-amber-950/80 border border-amber-800 text-xs text-amber-300 flex items-center gap-2 animate-in fade-in-50">
-                            <Calendar className="h-4 w-4 text-amber-400 shrink-0" />
+                        <div className="p-3 rounded-xl bg-amber-500/15 dark:bg-amber-950/80 border border-amber-500/40 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2 animate-in fade-in-50">
+                            <Calendar className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                             <span>{seasonalSyncMsg.text}</span>
                         </div>
                     )}
 
                     {/* Filter & Search Bar */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-900/90 rounded-2xl border border-slate-800">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800">
                         <div className="flex flex-wrap items-center gap-1.5">
                             <button
                                 type="button"
@@ -3307,7 +3307,7 @@ export function AgregarrStudio() {
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                     collectionsFilter === "all"
                                         ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                                        : "bg-slate-800 text-slate-300 hover:text-white"
+                                        : "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                 }`}
                             >
                                 All Collections ({collections.length})
@@ -3318,7 +3318,7 @@ export function AgregarrStudio() {
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                                     collectionsFilter === "home"
                                         ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                                        : "bg-slate-800 text-slate-300 hover:text-white"
+                                        : "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                 }`}
                             >
                                 <Home className="h-3.5 w-3.5" />
@@ -3330,7 +3330,7 @@ export function AgregarrStudio() {
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                                     collectionsFilter === "recommended"
                                         ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                                        : "bg-slate-800 text-slate-300 hover:text-white"
+                                        : "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                 }`}
                             >
                                 <Star className="h-3.5 w-3.5" />
@@ -3342,7 +3342,7 @@ export function AgregarrStudio() {
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                                     collectionsFilter === "library"
                                         ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                                        : "bg-slate-800 text-slate-300 hover:text-white"
+                                        : "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                 }`}
                             >
                                 <Layers className="h-3.5 w-3.5" />
@@ -3351,27 +3351,27 @@ export function AgregarrStudio() {
                         </div>
 
                         <div className="relative w-full sm:w-64">
-                            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400" />
                             <Input
                                 placeholder="Filter collections..."
                                 value={collectionSearchQuery}
                                 onChange={(e) => setCollectionSearchQuery(e.target.value)}
-                                className="h-8 text-xs bg-slate-950 border-slate-800 pl-8 w-full"
+                                className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800 pl-8 w-full"
                             />
                         </div>
                     </div>
 
                     {/* Active Collections List */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                        <CardHeader className="p-4 border-b border-slate-800/80">
+                    <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                        <CardHeader className="p-4 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <div>
-                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                        <Layers className="h-4 w-4 text-amber-400" />
+                                    <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                        <Layers className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                         <span>Active Collections ({filteredCollections.length})</span>
                                     </CardTitle>
-                                    <span className="text-xs text-slate-400">
-                                        Click <span className="text-amber-300 font-bold">Inspect Media</span> (👁️) to preview live items, release dates, and trailer stubs
+                                    <span className="text-xs text-slate-600 dark:text-slate-400">
+                                        Click <span className="text-amber-800 dark:text-amber-300 font-bold">Inspect Media</span> (👁️) to preview live items, release dates, and trailer stubs
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -3380,10 +3380,10 @@ export function AgregarrStudio() {
                                         size="sm"
                                         variant="outline"
                                         onClick={handleImportPlexCollections}
-                                        className="border-slate-700 hover:bg-slate-800 text-xs h-7 gap-1 text-slate-300 hover:text-white cursor-pointer"
+                                        className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-xs h-7 gap-1 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white cursor-pointer"
                                         title="Import existing native Plex collections and hubs into DomsHomeLab Agregarr Studio"
                                     >
-                                        <RefreshCw className="h-3 w-3 text-sky-400" />
+                                        <RefreshCw className="h-3 w-3 text-sky-700 dark:text-sky-400" />
                                         <span>Import from Plex</span>
                                     </Button>
                                     <Button
@@ -3391,10 +3391,10 @@ export function AgregarrStudio() {
                                         size="sm"
                                         variant="outline"
                                         onClick={handleOpenDismissedHubs}
-                                        className="border-amber-500/30 hover:bg-amber-950/30 text-xs h-7 gap-1 text-amber-200 hover:text-amber-100 cursor-pointer"
+                                        className="border-amber-500/30 hover:bg-amber-500/10 dark:hover:bg-amber-950/30 text-xs h-7 gap-1 text-amber-900 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100 cursor-pointer"
                                         title="View deleted and ignored hubs blacklist"
                                     >
-                                        <EyeOff className="h-3 w-3 text-amber-400" />
+                                        <EyeOff className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                         <span>Ignored Hubs</span>
                                     </Button>
                                     {collections.length > 0 && (
@@ -3404,10 +3404,10 @@ export function AgregarrStudio() {
                                             variant="outline"
                                             disabled={deletingAllCollections}
                                             onClick={handleDeleteAllCollections}
-                                            className="border-rose-800/60 hover:bg-rose-950/40 text-xs h-7 gap-1 text-rose-300 hover:text-rose-200 cursor-pointer"
+                                            className="border-rose-500/60 dark:border-rose-800/60 hover:bg-rose-500/10 dark:hover:bg-rose-950/40 text-xs h-7 gap-1 text-rose-800 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-200 cursor-pointer"
                                             title="Delete ALL collections and hubs in this section from Plex and DomsHomeLab to start fresh"
                                         >
-                                            {deletingAllCollections ? <Loader2 className="h-3 w-3 animate-spin text-rose-400" /> : <Trash2 className="h-3 w-3 text-rose-400" />}
+                                            {deletingAllCollections ? <Loader2 className="h-3 w-3 animate-spin text-rose-700 dark:text-rose-400" /> : <Trash2 className="h-3 w-3 text-rose-700 dark:text-rose-400" />}
                                             <span>Reset &amp; Delete All</span>
                                         </Button>
                                     )}
@@ -3416,9 +3416,9 @@ export function AgregarrStudio() {
                         </CardHeader>
                         {deleteAllMsg && (
                             <div className={`p-3 text-xs border-b flex items-center gap-2 ${
-                                deleteAllMsg.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                                deleteAllMsg.success ? "bg-emerald-500/15 dark:bg-emerald-950/80 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/15 dark:bg-rose-950/80 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                             }`}>
-                                {deleteAllMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                                {deleteAllMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
                                 <span>{deleteAllMsg.text}</span>
                             </div>
                         )}
@@ -3426,7 +3426,7 @@ export function AgregarrStudio() {
                             {filteredCollections.length === 0 ? (
                                 <div className="text-center py-12 text-slate-500 space-y-3">
                                     <Trophy className="h-10 w-10 mx-auto text-slate-700" />
-                                    <p className="text-xs font-bold text-slate-400">No collections found matching your current filter.</p>
+                                    <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No collections found matching your current filter.</p>
                                     <div className="flex items-center justify-center gap-2 pt-1">
                                         <Button
                                             type="button"
@@ -3442,7 +3442,7 @@ export function AgregarrStudio() {
                                             size="sm"
                                             variant="outline"
                                             onClick={handleImportPlexCollections}
-                                            className="border-slate-700 text-xs h-7 gap-1"
+                                            className="border-border dark:border-slate-700 text-xs h-7 gap-1"
                                         >
                                             <RefreshCw className="h-3 w-3" />
                                             <span>Import from Plex</span>
@@ -3460,7 +3460,7 @@ export function AgregarrStudio() {
                                     return (
                                         <div
                                             key={coll.id}
-                                            className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors shadow-sm"
+                                            className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 p-3.5 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 hover:border-border dark:hover:border-slate-700 transition-colors shadow-sm"
                                         >
                                             <div className="flex items-center gap-3 min-w-0 flex-1">
                                                 {/* Reorder Buttons */}
@@ -3469,7 +3469,7 @@ export function AgregarrStudio() {
                                                         type="button"
                                                         disabled={idx === 0}
                                                         onClick={() => handleMoveCollection(coll.id, "up")}
-                                                        className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                                                        className="p-1 rounded hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white disabled:opacity-20 cursor-pointer"
                                                         title="Move Up on Home Screen"
                                                     >
                                                         <ChevronUp className="h-3.5 w-3.5" />
@@ -3478,7 +3478,7 @@ export function AgregarrStudio() {
                                                         type="button"
                                                         disabled={idx === filteredCollections.length - 1}
                                                         onClick={() => handleMoveCollection(coll.id, "down")}
-                                                        className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                                                        className="p-1 rounded hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white disabled:opacity-20 cursor-pointer"
                                                         title="Move Down on Home Screen"
                                                     >
                                                         <ChevronDown className="h-3.5 w-3.5" />
@@ -3487,20 +3487,20 @@ export function AgregarrStudio() {
 
                                                 {/* Position Ranking Pill / Inline Quick Position Editor */}
                                                 {savingPositionCollId === coll.id ? (
-                                                    <div className="flex items-center gap-1 bg-amber-950/60 border border-amber-500/50 rounded-md px-2 py-0.5 text-xs font-mono font-bold text-amber-300 shrink-0">
-                                                        <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
+                                                    <div className="flex items-center gap-1 bg-amber-500/10 dark:bg-amber-950/60 border border-amber-500/50 rounded-md px-2 py-0.5 text-xs font-mono font-bold text-amber-800 dark:text-amber-300 shrink-0">
+                                                        <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-400" />
                                                         <span>#{coll.orderIndex || idx + 1}</span>
                                                     </div>
                                                 ) : (
                                                     <div
                                                         className={`flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-mono font-bold transition-all shrink-0 border ${
                                                             editingPositionId === coll.id
-                                                                ? "bg-slate-900 border-amber-400 ring-1 ring-amber-400/50 shadow-sm"
-                                                                : "bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300"
+                                                                ? "bg-card/95 dark:bg-slate-900 border-amber-400 ring-1 ring-amber-400/50 shadow-sm"
+                                                                : "bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-800 dark:text-amber-300"
                                                         }`}
                                                         title="Click to change Home & Recommended position (1-99). Press Enter to apply."
                                                     >
-                                                        <span className="text-amber-400 font-black text-xs select-none">#</span>
+                                                        <span className="text-amber-700 dark:text-amber-400 font-black text-xs select-none">#</span>
                                                         <input
                                                             type="number"
                                                             min={1}
@@ -3534,7 +3534,7 @@ export function AgregarrStudio() {
                                                                     setTempPositionValue("");
                                                                 }
                                                             }}
-                                                            className="w-7 h-5 bg-transparent text-center font-mono font-bold text-xs text-amber-300 focus:text-white outline-none p-0 cursor-text selection:bg-amber-500 selection:text-slate-950 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                            className="w-7 h-5 bg-transparent text-center font-mono font-bold text-xs text-amber-800 dark:text-amber-300 focus:text-foreground dark:focus:text-white outline-none p-0 cursor-text selection:bg-amber-500 selection:text-slate-950 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                         />
                                                         {editingPositionId === coll.id && tempPositionValue !== "" && parseInt(tempPositionValue, 10) !== (coll.orderIndex || idx + 1) && (
                                                             <div className="flex items-center gap-0.5 ml-0.5">
@@ -3544,7 +3544,7 @@ export function AgregarrStudio() {
                                                                         e.preventDefault();
                                                                         handleQuickChangePosition(coll.id, parseInt(tempPositionValue, 10));
                                                                     }}
-                                                                    className="p-0.5 rounded hover:bg-emerald-950 text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                                                                    className="p-0.5 rounded hover:bg-emerald-500/15 dark:hover:bg-emerald-950 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 cursor-pointer"
                                                                     title="Apply new position"
                                                                 >
                                                                     <Check className="h-3 w-3" />
@@ -3556,7 +3556,7 @@ export function AgregarrStudio() {
                                                                         setEditingPositionId(null);
                                                                         setTempPositionValue("");
                                                                     }}
-                                                                    className="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                                                                    className="p-0.5 rounded hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 cursor-pointer"
                                                                     title="Cancel"
                                                                 >
                                                                     <X className="h-3 w-3" />
@@ -3569,10 +3569,10 @@ export function AgregarrStudio() {
                                                 {/* Collection Details */}
                                                 <div className="space-y-1 min-w-0 flex-1">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="font-bold text-white text-xs sm:text-sm tracking-tight" title={coll.title}>
+                                                        <span className="font-bold text-foreground dark:text-white text-xs sm:text-sm tracking-tight" title={coll.title}>
                                                             {coll.title}
                                                         </span>
-                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400 shrink-0 capitalize">
+                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 shrink-0 capitalize">
                                                             {coll.category || coll.sourceType || "Curated"}
                                                         </Badge>
                                                         {coll.isSeasonal && (() => {
@@ -3588,56 +3588,56 @@ export function AgregarrStudio() {
                                                                 ? (curVal >= startVal && curVal <= endVal)
                                                                 : (curVal >= startVal || curVal <= endVal);
                                                             return inSeason ? (
-                                                                <Badge className="text-[9px] px-1.5 py-0 bg-emerald-950/80 text-emerald-300 border-emerald-500/40 gap-1 shrink-0 font-medium">
+                                                                <Badge className="text-[9px] px-1.5 py-0 bg-emerald-500/15 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 gap-1 shrink-0 font-medium">
                                                                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                                                    <Calendar className="h-2.5 w-2.5 text-emerald-400" />
+                                                                    <Calendar className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400" />
                                                                     <span>Active In-Season ({startM}/{startD} - {endM}/{endD})</span>
                                                                 </Badge>
                                                             ) : (
-                                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-slate-900/60 text-slate-400 border-slate-700/60 gap-1 shrink-0 font-normal">
+                                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-muted/70 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-border dark:border-slate-700/60 gap-1 shrink-0 font-normal">
                                                                     <Calendar className="h-2.5 w-2.5 text-slate-500" />
                                                                     <span>Out of Season ({startM}/{startD} - {endM}/{endD})</span>
                                                                 </Badge>
                                                             );
                                                         })()}
                                                         {coll.activeDays && coll.activeDays !== "all" && (
-                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-900/60 bg-amber-950/40 text-amber-300 gap-1 font-mono shrink-0">
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/60 dark:border-amber-900/60 bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 gap-1 font-mono shrink-0">
                                                                 <CalendarClock className="h-2.5 w-2.5" />
                                                                 <span>{coll.activeDays.toUpperCase()}</span>
                                                             </Badge>
                                                         )}
                                                         {coll.activeTimeRange && coll.activeTimeRange !== "all_day" && (
-                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-sky-900/60 bg-sky-950/40 text-sky-300 gap-1 font-mono shrink-0">
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-sky-500/60 dark:border-sky-900/60 bg-sky-500/10 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 gap-1 font-mono shrink-0">
                                                                 <Clock className="h-2.5 w-2.5" />
                                                                 <span className="capitalize">{coll.activeTimeRange.replace("_", " ")}</span>
                                                             </Badge>
                                                         )}
                                                         {coll.maxItems && coll.maxItems > 0 && (
-                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-900/60 bg-amber-950/40 text-amber-300 gap-1 font-mono shrink-0">
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/60 dark:border-amber-900/60 bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 gap-1 font-mono shrink-0">
                                                                 <span>Limit: {coll.maxItems}</span>
                                                             </Badge>
                                                         )}
                                                         {coll.includePlaceholders && (
-                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/60 bg-amber-950/40 text-amber-300 gap-1 font-mono shrink-0" title="Coming Soon placeholders and trailer stubs enabled">
-                                                                <Sparkles className="h-2.5 w-2.5 text-amber-400" />
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/60 bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 gap-1 font-mono shrink-0" title="Coming Soon placeholders and trailer stubs enabled">
+                                                                <Sparkles className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />
                                                                 <span>Placeholders: ON</span>
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <p className="text-[11px] text-slate-400 line-clamp-1" title={coll.summary || coll.sourceQuery}>
+                                                    <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-1" title={coll.summary || coll.sourceQuery}>
                                                         {coll.summary || coll.sourceQuery || "No summary configured."}
                                                     </p>
                                                     {coll.excludedLabels && (
                                                         <div className="flex flex-wrap items-center gap-1 pt-0.5">
                                                             <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-0.5">
-                                                                <Tag className="h-2.5 w-2.5 text-rose-400" /> Excluded:
+                                                                <Tag className="h-2.5 w-2.5 text-rose-700 dark:text-rose-400" /> Excluded:
                                                             </span>
                                                             {String(coll.excludedLabels).split(",").map((s: string) => s.trim().replace(/^exclude\s+/i, "")).filter(Boolean).map((tag: string) => (
                                                                 <button
                                                                     key={tag}
                                                                     type="button"
                                                                     onClick={() => handleOpenQuickLabelsModal(coll)}
-                                                                    className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0 rounded border border-rose-900/60 bg-rose-950/40 text-rose-300 font-mono hover:bg-rose-900/60 transition-colors cursor-pointer"
+                                                                    className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0 rounded border border-rose-500/60 dark:border-rose-900/60 bg-rose-500/10 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-mono hover:bg-rose-500/10 dark:hover:bg-rose-900/60 transition-colors cursor-pointer"
                                                                     title={`Click to edit excluded labels for "${coll.title}"`}
                                                                 >
                                                                     <span>{tag}</span>
@@ -3647,9 +3647,9 @@ export function AgregarrStudio() {
                                                     )}
                                                     {collPlaceholderMsg && collPlaceholderMsg.id === coll.id && (
                                                         <div className={`mt-1 p-1.5 rounded-md text-[10px] font-semibold flex items-center gap-1.5 ${
-                                                            collPlaceholderMsg.success ? "bg-emerald-950/60 text-emerald-300 border border-emerald-800/60" : "bg-rose-950/60 text-rose-300 border border-rose-800/60"
+                                                            collPlaceholderMsg.success ? "bg-emerald-500/10 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-500/60 dark:border-emerald-800/60" : "bg-rose-500/10 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-500/60 dark:border-rose-800/60"
                                                         }`}>
-                                                            {collPlaceholderMsg.success ? <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" /> : <XCircle className="h-3 w-3 text-rose-400 shrink-0" />}
+                                                            {collPlaceholderMsg.success ? <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" /> : <XCircle className="h-3 w-3 text-rose-700 dark:text-rose-400 shrink-0" />}
                                                             <span className="truncate">{collPlaceholderMsg.text}</span>
                                                         </div>
                                                     )}
@@ -3671,7 +3671,7 @@ export function AgregarrStudio() {
                                                 </Button>
 
                                                 {/* Screen Visibility Targets */}
-                                                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+                                                <div className="flex items-center gap-1 bg-card/95 dark:bg-slate-900/90 p-1 rounded-lg border border-border dark:border-slate-800">
                                                     {/* Home Screen Toggle */}
                                                     <button
                                                         type="button"
@@ -3679,8 +3679,8 @@ export function AgregarrStudio() {
                                                         title={isHomeActive ? "Visible on Server Owner's Home Screen (Click to hide)" : "Hidden from Server Owner's Home Screen (Click to show)"}
                                                         className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
                                                             isHomeActive
-                                                                ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm"
-                                                                : "bg-slate-950/60 text-slate-500 border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-300"
+                                                                ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/50 shadow-sm"
+                                                                : "bg-muted/60 dark:bg-slate-950/60 text-slate-500 border-border dark:border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-700 dark:hover:text-slate-300"
                                                         }`}
                                                     >
                                                         <Home className="h-3 w-3" />
@@ -3694,8 +3694,8 @@ export function AgregarrStudio() {
                                                         title={isSharedActive ? "Visible on Shared Friends & Users' Home Screens (Click to hide)" : "Hidden from Shared Users' Home Screens (Click to show)"}
                                                         className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
                                                             isSharedActive
-                                                                ? "bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm"
-                                                                : "bg-slate-950/60 text-slate-500 border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-300"
+                                                                ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/50 shadow-sm"
+                                                                : "bg-muted/60 dark:bg-slate-950/60 text-slate-500 border-border dark:border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-700 dark:hover:text-slate-300"
                                                         }`}
                                                     >
                                                         <Users className="h-3 w-3" />
@@ -3709,8 +3709,8 @@ export function AgregarrStudio() {
                                                         title={isRecsActive ? "Visible on Library Recommended Page (Click to hide)" : "Hidden from Library Recommended Page (Click to show)"}
                                                         className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
                                                             isRecsActive
-                                                                ? "bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm"
-                                                                : "bg-slate-950/60 text-slate-500 border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-300"
+                                                                ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/50 shadow-sm"
+                                                                : "bg-muted/60 dark:bg-slate-950/60 text-slate-500 border-border dark:border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-700 dark:hover:text-slate-300"
                                                         }`}
                                                     >
                                                         <Star className="h-3 w-3" />
@@ -3726,22 +3726,22 @@ export function AgregarrStudio() {
                                                             : "Coming Soon Placeholders: DISABLED (Click to enable). When enabled, missing items generate trailer stubs & banners in your Coming Soon share."}
                                                         className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
                                                             coll.includePlaceholders
-                                                                ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm"
-                                                                : "bg-slate-950/60 text-slate-500 border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-300"
+                                                                ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/50 shadow-sm"
+                                                                : "bg-muted/60 dark:bg-slate-950/60 text-slate-500 border-border dark:border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-700 dark:hover:text-slate-300"
                                                         }`}
                                                     >
-                                                        <Sparkles className="h-3 w-3 text-amber-400" />
+                                                        <Sparkles className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                                         <span>{coll.includePlaceholders ? "Placeholders" : "No Stubs"}</span>
                                                     </button>
 
                                                     {/* Library Browsing Mode Selector */}
-                                                    <div className="flex items-center gap-1 pl-1 border-l border-slate-800" title="Library Tab Display Mode">
-                                                        <span className="text-[10px] text-slate-400 font-semibold px-1">Lib:</span>
+                                                    <div className="flex items-center gap-1 pl-1 border-l border-border dark:border-slate-800" title="Library Tab Display Mode">
+                                                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold px-1">Lib:</span>
                                                         <Select
                                                             value={currentMode || "default"}
                                                             onValueChange={(val) => handleUpdateCollectionMode(coll.id, val)}
                                                         >
-                                                            <SelectTrigger className="h-6 text-[10px] font-medium bg-slate-950 border-slate-800 px-2 py-0 w-24 text-slate-200">
+                                                            <SelectTrigger className="h-6 text-[10px] font-medium bg-muted dark:bg-slate-950 border-border dark:border-slate-800 px-2 py-0 w-24 text-foreground dark:text-slate-200">
                                                                 <SelectValue placeholder="Default" />
                                                             </SelectTrigger>
                                                             <SelectContent>
@@ -3762,13 +3762,13 @@ export function AgregarrStudio() {
                                                         variant="outline"
                                                         disabled={generatingCollPlaceholdersId === coll.id}
                                                         onClick={() => handleGenerateCollectionPlaceholders(coll.id)}
-                                                        className="text-[11px] h-8 px-2.5 gap-1 border-amber-500/40 bg-amber-950/20 hover:bg-amber-900/40 text-amber-300"
+                                                        className="text-[11px] h-8 px-2.5 gap-1 border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/20 hover:bg-amber-500/10 dark:hover:bg-amber-900/40 text-amber-800 dark:text-amber-300"
                                                         title="Generate / update Coming Soon placeholder trailers and banners in share folder now"
                                                     >
                                                         {generatingCollPlaceholdersId === coll.id ? (
-                                                            <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
+                                                            <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-400" />
                                                         ) : (
-                                                            <Tag className="h-3 w-3 text-amber-400" />
+                                                            <Tag className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                                         )}
                                                         <span className="hidden sm:inline">Gen Stubs</span>
                                                     </Button>
@@ -3782,12 +3782,12 @@ export function AgregarrStudio() {
                                                     onClick={() => handleOpenQuickLabelsModal(coll)}
                                                     className={`text-[11px] h-8 px-2.5 gap-1 border transition-all cursor-pointer ${
                                                         coll.excludedLabels
-                                                            ? "border-rose-900/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 hover:text-rose-100 shadow-sm"
-                                                            : "border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white"
+                                                            ? "border-rose-500/60 dark:border-rose-900/60 bg-rose-500/10 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 hover:bg-rose-500/10 dark:hover:bg-rose-900/60 hover:text-rose-900 dark:hover:text-rose-100 shadow-sm"
+                                                            : "border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                                     }`}
                                                     title={`Quick-exclude Plex labels, content advisories, or trailers for "${coll.title}"`}
                                                 >
-                                                    <Tag className="h-3.5 w-3.5 text-rose-400" />
+                                                    <Tag className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                                     <span>Exclude Labels</span>
                                                 </Button>
 
@@ -3797,14 +3797,14 @@ export function AgregarrStudio() {
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={() => handleOpenPlacementModal(coll)}
-                                                    className="text-[11px] h-8 px-2.5 gap-1 border-slate-700 hover:bg-slate-800 text-amber-300 hover:text-amber-200 cursor-pointer"
+                                                    className="text-[11px] h-8 px-2.5 gap-1 border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-amber-800 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200 cursor-pointer"
                                                     title={`Edit collection settings, placement, schedules, and filters for "${coll.title}"`}
                                                 >
-                                                    <Edit2 className="h-3.5 w-3.5 text-amber-400" />
+                                                    <Edit2 className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                                     <span>Edit</span>
                                                 </Button>
 
-                                                <Badge variant="outline" className="text-[10px] font-mono border-slate-800 text-slate-400 h-8 px-2 flex items-center">
+                                                <Badge variant="outline" className="text-[10px] font-mono border-border dark:border-slate-800 text-slate-600 dark:text-slate-400 h-8 px-2 flex items-center">
                                                     {coll.itemCount || 0} items
                                                 </Badge>
 
@@ -3814,9 +3814,9 @@ export function AgregarrStudio() {
                                                     variant="outline"
                                                     disabled={isSyncing}
                                                     onClick={() => handleSyncCollection(coll.id)}
-                                                    className="text-[11px] h-8 px-2.5 gap-1 border-slate-700 hover:bg-slate-800 text-slate-200"
+                                                    className="text-[11px] h-8 px-2.5 gap-1 border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200"
                                                 >
-                                                    {isSyncing ? <Loader2 className="h-3 w-3 animate-spin text-amber-400" /> : <RefreshCw className="h-3 w-3 text-amber-400" />}
+                                                    {isSyncing ? <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-400" /> : <RefreshCw className="h-3 w-3 text-amber-700 dark:text-amber-400" />}
                                                     <span>Sync</span>
                                                 </Button>
 
@@ -3830,7 +3830,7 @@ export function AgregarrStudio() {
                                                             loadCollections();
                                                         }
                                                     }}
-                                                    className="text-slate-500 hover:text-rose-400 h-8 w-8 p-0 cursor-pointer"
+                                                    className="text-slate-500 hover:text-rose-700 dark:hover:text-rose-400 h-8 w-8 p-0 cursor-pointer"
                                                     title="Delete Collection"
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -3851,30 +3851,30 @@ export function AgregarrStudio() {
             {subTab === "presets" && (
                 <div className="space-y-6">
                     {/* Header & Description */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-xl">
                         <div className="space-y-0.5">
-                            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                                <Sparkles className="h-4 w-4 text-amber-400" />
+                            <h2 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                 <span>Curated Agregarr Preset Blueprints ({filteredPresets.length})</span>
                             </h2>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-slate-600 dark:text-slate-400">
                                 Ready-to-install smart collections for trending streaming drops, top-rated award winners, studio hubs, decades, and seasonal calendars.
                             </p>
                         </div>
                     </div>
 
                     {/* Presets Filter & Search Toolbar */}
-                    <div className="flex flex-col gap-3 p-3 bg-slate-900/90 rounded-2xl border border-slate-800">
+                    <div className="flex flex-col gap-3 p-3 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                             {/* Media Type Scope Buttons */}
-                            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-950/80 rounded-xl border border-slate-800">
+                            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800">
                                 <button
                                     type="button"
                                     onClick={() => setPresetsMediaTypeFilter("auto")}
                                     className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                                         presetsMediaTypeFilter === "auto"
                                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                                            : "text-slate-400 hover:text-white"
+                                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                                     }`}
                                 >
                                     <Filter className="h-3 w-3" />
@@ -3886,10 +3886,10 @@ export function AgregarrStudio() {
                                     className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                                         presetsMediaTypeFilter === "movie"
                                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                                            : "text-slate-400 hover:text-white"
+                                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                                     }`}
                                 >
-                                    <Film className="h-3 w-3 text-amber-400" />
+                                    <Film className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                     <span>Movies</span>
                                 </button>
                                 <button
@@ -3898,10 +3898,10 @@ export function AgregarrStudio() {
                                     className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                                         presetsMediaTypeFilter === "show"
                                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                                            : "text-slate-400 hover:text-white"
+                                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                                     }`}
                                 >
-                                    <Tv className="h-3 w-3 text-sky-400" />
+                                    <Tv className="h-3 w-3 text-sky-700 dark:text-sky-400" />
                                     <span>TV Shows</span>
                                 </button>
                                 <button
@@ -3910,7 +3910,7 @@ export function AgregarrStudio() {
                                     className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                                         presetsMediaTypeFilter === "all"
                                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                                            : "text-slate-400 hover:text-white"
+                                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                                     }`}
                                 >
                                     <Layers className="h-3 w-3" />
@@ -3919,18 +3919,18 @@ export function AgregarrStudio() {
                             </div>
 
                             <div className="relative w-full sm:w-64">
-                                <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400" />
                                 <Input
                                     placeholder="Search presets..."
                                     value={presetsSearchQuery}
                                     onChange={(e) => setPresetsSearchQuery(e.target.value)}
-                                    className="h-8 text-xs bg-slate-950 border-slate-800 pl-8 w-full"
+                                    className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800 pl-8 w-full"
                                 />
                             </div>
                         </div>
 
                         {/* Category Filter Chips */}
-                        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/60">
+                        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border dark:border-slate-800/60">
                             {presetCategories.map(cat => (
                                 <button
                                     key={cat.id}
@@ -3938,8 +3938,8 @@ export function AgregarrStudio() {
                                     onClick={() => setPresetsCategoryFilter(cat.id)}
                                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                                         presetsCategoryFilter === cat.id
-                                            ? "bg-slate-700 text-amber-300 shadow-sm font-black border border-amber-500/40"
-                                            : "bg-slate-950/60 text-slate-400 hover:text-white border border-slate-800"
+                                            ? "bg-slate-700 text-amber-800 dark:text-amber-300 shadow-sm font-black border border-amber-500/40"
+                                            : "bg-muted/60 dark:bg-slate-950/60 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white border border-border dark:border-slate-800"
                                     }`}
                                 >
                                     {cat.label}
@@ -3964,10 +3964,10 @@ export function AgregarrStudio() {
                                     onClick={() => handleInspectPreset(preset)}
                                     className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 group shadow-xl flex flex-col justify-between ${
                                         isPresetSyncing
-                                            ? "bg-slate-900/90 border-amber-500/60 ring-1 ring-amber-500/40"
+                                            ? "bg-card/95 dark:bg-slate-900/90 border-amber-500/60 ring-1 ring-amber-500/40"
                                             : isInstalled
-                                            ? "bg-slate-900/90 border-emerald-500/40 hover:border-emerald-500/70"
-                                            : "bg-slate-900/90 hover:bg-slate-800/90 border-slate-800 hover:border-amber-500/50"
+                                            ? "bg-card/95 dark:bg-slate-900/90 border-emerald-500/40 hover:border-emerald-500/70"
+                                            : "bg-card/95 dark:bg-slate-900/90 hover:bg-accent dark:hover:bg-slate-800/90 border-border dark:border-slate-800 hover:border-amber-500/50"
                                     }`}
                                 >
                                     <div className="space-y-2">
@@ -3975,59 +3975,59 @@ export function AgregarrStudio() {
                                             <div className="flex items-center gap-2">
                                                 <div className={`p-2 rounded-xl border ${
                                                     isPresetSyncing
-                                                        ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                                                        ? "bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40"
                                                         : isInstalled
-                                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                                                        : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                                                        ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40"
+                                                        : "bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30"
                                                 }`}>
                                                     {isPresetSyncing ? (
-                                                        <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                                                        <Loader2 className="h-4 w-4 animate-spin text-amber-700 dark:text-amber-400" />
                                                     ) : isInstalled ? (
-                                                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                                        <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                                     ) : (
                                                         <Trophy className="h-4 w-4" />
                                                     )}
                                                 </div>
                                                 <span className={`font-bold text-xs transition-colors ${
                                                     isPresetSyncing
-                                                        ? "text-amber-300"
+                                                        ? "text-amber-800 dark:text-amber-300"
                                                         : isInstalled
-                                                        ? "text-emerald-300 group-hover:text-emerald-200"
-                                                        : "text-white group-hover:text-amber-300"
+                                                        ? "text-emerald-800 dark:text-emerald-300 group-hover:text-emerald-900 dark:group-hover:text-emerald-200"
+                                                        : "text-foreground dark:text-white group-hover:text-amber-800 dark:group-hover:text-amber-300"
                                                 }`}>
                                                     {preset.title}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-1">
                                                 {isPresetSyncing ? (
-                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/50 bg-amber-950/60 text-amber-300 font-bold gap-1 animate-pulse">
+                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/50 bg-amber-500/10 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold gap-1 animate-pulse">
                                                         <Loader2 className="h-2.5 w-2.5 animate-spin" /> SYNCING
                                                     </Badge>
                                                 ) : isInstalled ? (
-                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-500/50 bg-emerald-950/60 text-emerald-300 font-bold gap-1">
+                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-500/50 bg-emerald-500/10 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold gap-1">
                                                         <Check className="h-2.5 w-2.5" /> INSTALLED
                                                     </Badge>
                                                 ) : null}
-                                                <Badge variant="outline" className={`text-[9px] px-1.5 py-0 border-slate-700 font-mono ${
-                                                    preset.mediaType === "show" ? "text-sky-300 border-sky-800/60 bg-sky-950/40" :
-                                                    preset.mediaType === "movie" ? "text-amber-300 border-amber-800/60 bg-amber-950/40" :
-                                                    "text-teal-300 border-teal-800/60 bg-teal-950/40"
+                                                <Badge variant="outline" className={`text-[9px] px-1.5 py-0 border-border dark:border-slate-700 font-mono ${
+                                                    preset.mediaType === "show" ? "text-sky-800 dark:text-sky-300 border-sky-500/60 dark:border-sky-800/60 bg-sky-500/10 dark:bg-sky-950/40" :
+                                                    preset.mediaType === "movie" ? "text-amber-800 dark:text-amber-300 border-amber-500/60 dark:border-amber-800/60 bg-amber-500/10 dark:bg-amber-950/40" :
+                                                    "text-teal-800 dark:text-teal-300 border-teal-500/60 dark:border-teal-800/60 bg-teal-500/10 dark:bg-teal-950/40"
                                                 }`}>
                                                     {preset.mediaType === "show" ? "TV" : preset.mediaType === "movie" ? "MOVIES" : "BOTH"}
                                                 </Badge>
-                                                <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 capitalize">
+                                                <Badge variant="outline" className="text-[9px] border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 capitalize">
                                                     {preset.category}
                                                 </Badge>
                                             </div>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
                                             {preset.description}
                                         </p>
                                     </div>
 
-                                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[10px] text-slate-500">
+                                    <div className="flex items-center justify-between pt-2 border-t border-border dark:border-slate-800/80 text-[10px] text-slate-500">
                                         <div className="flex items-center gap-1.5">
-                                            <span className="font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-slate-400">
+                                            <span className="font-mono bg-muted dark:bg-slate-950 px-1.5 py-0.5 rounded border border-border dark:border-slate-800 text-slate-600 dark:text-slate-400">
                                                 {preset.sourceType.toUpperCase()}
                                             </span>
                                             {preset.isSeasonal && (() => {
@@ -4043,27 +4043,27 @@ export function AgregarrStudio() {
                                                     ? (curVal >= startVal && curVal <= endVal)
                                                     : (curVal >= startVal || curVal <= endVal);
                                                 return inSeason ? (
-                                                    <span className="text-emerald-400 font-medium flex items-center gap-1">
+                                                    <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
                                                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                                         <Calendar className="h-2.5 w-2.5" /> In-Season
                                                     </span>
                                                 ) : (
-                                                    <span className="text-slate-400 flex items-center gap-0.5">
+                                                    <span className="text-slate-600 dark:text-slate-400 flex items-center gap-0.5">
                                                         <Calendar className="h-2.5 w-2.5 text-slate-500" /> Seasonal ({startM}/{startD} - {endM}/{endD})
                                                     </span>
                                                 );
                                             })()}
                                         </div>
                                         {isPresetSyncing ? (
-                                            <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                                            <span className="text-amber-700 dark:text-amber-400 font-bold flex items-center gap-1 animate-pulse">
                                                 <Loader2 className="h-3 w-3 animate-spin" /> Syncing in Background...
                                             </span>
                                         ) : isInstalled ? (
-                                            <span className="text-emerald-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                                            <span className="text-emerald-700 dark:text-emerald-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
                                                 Installed ({installedColl?.itemCount || 0}) &rarr;
                                             </span>
                                         ) : (
-                                            <span className="text-amber-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                                            <span className="text-amber-700 dark:text-amber-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
                                                 Inspect &amp; Install &rarr;
                                             </span>
                                         )}
@@ -4085,12 +4085,12 @@ export function AgregarrStudio() {
                         {/* Left Column: Server Shares & YouTube Cookie Engine */}
                         <div className="lg:col-span-5 space-y-6">
                             {/* Server Shares & Arr Instances Mapping Setup */}
-                            <div className="space-y-4 p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
-                                <div className="space-y-1 border-b border-slate-800/80 pb-3">
-                                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <HardDrive className="h-4 w-4 text-cyan-400" /> Server Storage &amp; Arr Instance Mapping
+                            <div className="space-y-4 p-5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-xl">
+                                <div className="space-y-1 border-b border-border dark:border-slate-800/80 pb-3">
+                                <h4 className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                    <HardDrive className="h-4 w-4 text-cyan-700 dark:text-cyan-400" /> Server Storage &amp; Arr Instance Mapping
                                 </h4>
-                                <p className="text-[11px] text-slate-400">
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400">
                                     Map each Plex server (e.g. Kids Plex vs Main Plex) to its designated Radarr and Sonarr instances, and configure Coming Soon share folders.
                                 </p>
                             </div>
@@ -4105,21 +4105,21 @@ export function AgregarrStudio() {
                                 const currentSonarrId = srvConfig.sonarrId || "auto";
 
                                 return (
-                                    <div key={srv.serverId} className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3">
+                                    <div key={srv.serverId} className="p-3.5 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 space-y-3">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-1.5">
-                                                <Tv className="h-3.5 w-3.5 text-amber-400" />
-                                                <span className="font-bold text-xs text-white">{srv.serverName}</span>
+                                                <Tv className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
+                                                <span className="font-bold text-xs text-foreground dark:text-white">{srv.serverName}</span>
                                             </div>
-                                            <Badge variant="outline" className="text-[10px] border-slate-700 text-slate-400">
+                                            <Badge variant="outline" className="text-[10px] border-border dark:border-slate-700 text-slate-600 dark:text-slate-400">
                                                 {srv.sections?.length || 0} libraries
                                             </Badge>
                                         </div>
 
                                         {/* Movie Placeholder Share Path */}
                                         <div className="space-y-1">
-                                            <Label className="text-[11px] text-slate-300 font-semibold flex items-center gap-1">
-                                                <Film className="h-3 w-3 text-amber-400" /> Movie Placeholder Share Folder:
+                                            <Label className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1">
+                                                <Film className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Movie Placeholder Share Folder:
                                             </Label>
                                             <div className="flex gap-2">
                                                 <Input
@@ -4133,7 +4133,7 @@ export function AgregarrStudio() {
                                                             [srv.serverId]: { ...(prev[srv.serverId] || {}), movieSharePath: val, sharePath: val }
                                                         }));
                                                     }}
-                                                    className="text-xs bg-slate-900 border-slate-800 font-mono"
+                                                    className="text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 font-mono"
                                                 />
                                                 <Button
                                                     type="button"
@@ -4144,13 +4144,13 @@ export function AgregarrStudio() {
                                                         const res = await validateDirectoryPathAction(moviePath);
                                                         setPathCheckResults(prev => ({ ...prev, [`${srv.serverId}_movie`]: { checking: false, success: res.success, msg: res.message || res.error } }));
                                                     }}
-                                                    className="border-slate-700 text-xs shrink-0"
+                                                    className="border-border dark:border-slate-700 text-xs shrink-0"
                                                 >
                                                     Validate
                                                 </Button>
                                             </div>
                                             {checkMovieStatus && !checkMovieStatus.checking && (
-                                                <p className={`text-[10px] ${checkMovieStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
+                                                <p className={`text-[10px] ${checkMovieStatus.success ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
                                                     {checkMovieStatus.msg}
                                                 </p>
                                             )}
@@ -4158,8 +4158,8 @@ export function AgregarrStudio() {
 
                                         {/* TV Show Placeholder Share Path */}
                                         <div className="space-y-1">
-                                            <Label className="text-[11px] text-slate-300 font-semibold flex items-center gap-1">
-                                                <Tv className="h-3 w-3 text-sky-400" /> TV Show Placeholder Share Folder:
+                                            <Label className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1">
+                                                <Tv className="h-3 w-3 text-sky-700 dark:text-sky-400" /> TV Show Placeholder Share Folder:
                                             </Label>
                                             <div className="flex gap-2">
                                                 <Input
@@ -4172,7 +4172,7 @@ export function AgregarrStudio() {
                                                             [srv.serverId]: { ...(prev[srv.serverId] || {}), tvSharePath: val }
                                                         }));
                                                     }}
-                                                    className="text-xs bg-slate-900 border-slate-800 font-mono"
+                                                    className="text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 font-mono"
                                                 />
                                                 <Button
                                                     type="button"
@@ -4183,24 +4183,24 @@ export function AgregarrStudio() {
                                                         const res = await validateDirectoryPathAction(tvPath);
                                                         setPathCheckResults(prev => ({ ...prev, [`${srv.serverId}_tv`]: { checking: false, success: res.success, msg: res.message || res.error } }));
                                                     }}
-                                                    className="border-slate-700 text-xs shrink-0"
+                                                    className="border-border dark:border-slate-700 text-xs shrink-0"
                                                 >
                                                     Validate
                                                 </Button>
                                             </div>
                                             {checkTvStatus && !checkTvStatus.checking && (
-                                                <p className={`text-[10px] ${checkTvStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
+                                                <p className={`text-[10px] ${checkTvStatus.success ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
                                                     {checkTvStatus.msg}
                                                 </p>
                                             )}
                                         </div>
 
                                         {/* Radarr and Sonarr Instance Dropdowns */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-800/60 text-xs">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-border dark:border-slate-800/60 text-xs">
                                             {/* Radarr Instance */}
                                             <div className="space-y-1">
-                                                <Label className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                                                    <Film className="h-3 w-3 text-amber-400" /> Mapped Radarr (Movies):
+                                                <Label className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold flex items-center gap-1">
+                                                    <Film className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Mapped Radarr (Movies):
                                                 </Label>
                                                 <Select
                                                     value={currentRadarrId}
@@ -4211,7 +4211,7 @@ export function AgregarrStudio() {
                                                         }));
                                                     }}
                                                 >
-                                                    <SelectTrigger className="bg-slate-900 border-slate-800 text-[11px] h-7">
+                                                    <SelectTrigger className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-[11px] h-7">
                                                         <SelectValue placeholder="Select Radarr..." />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4227,8 +4227,8 @@ export function AgregarrStudio() {
 
                                             {/* Sonarr Instance */}
                                             <div className="space-y-1">
-                                                <Label className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                                                    <Tv className="h-3 w-3 text-sky-400" /> Mapped Sonarr (TV Shows):
+                                                <Label className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold flex items-center gap-1">
+                                                    <Tv className="h-3 w-3 text-sky-700 dark:text-sky-400" /> Mapped Sonarr (TV Shows):
                                                 </Label>
                                                 <Select
                                                     value={currentSonarrId}
@@ -4239,7 +4239,7 @@ export function AgregarrStudio() {
                                                         }));
                                                     }}
                                                 >
-                                                    <SelectTrigger className="bg-slate-900 border-slate-800 text-[11px] h-7">
+                                                    <SelectTrigger className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-[11px] h-7">
                                                         <SelectValue placeholder="Select Sonarr..." />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4258,16 +4258,16 @@ export function AgregarrStudio() {
                             })}
 
                             {/* Coming Soon Future Days Threshold */}
-                            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-2.5">
+                            <div className="p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800/80 space-y-2.5">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                    <Label className="text-xs text-slate-200 font-semibold flex items-center gap-1.5">
-                                        <Clock className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Future Window Threshold
+                                    <Label className="text-xs text-foreground dark:text-slate-200 font-semibold flex items-center gap-1.5">
+                                        <Clock className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Coming Soon Future Window Threshold
                                     </Label>
-                                    <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/50">
+                                    <span className="text-[11px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/50 dark:border-amber-800/50">
                                         {placeholderDaysThreshold === 0 ? "Unlimited (All Future)" : `${placeholderDaysThreshold} Days Max`}
                                     </span>
                                 </div>
-                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                                     Specify how far into the future unreleased titles can be before generating placeholder stubs and posters on disk. Titles releasing beyond this window are skipped until they enter the timeframe.
                                 </p>
                                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
@@ -4288,7 +4288,7 @@ export function AgregarrStudio() {
                                             className={`h-6 text-[10px] px-2.5 rounded-lg font-medium cursor-pointer transition-colors ${
                                                 placeholderDaysThreshold === opt.val
                                                     ? "bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold"
-                                                    : "border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300"
+                                                    : "border-border dark:border-slate-800 bg-muted/70 dark:bg-slate-900/60 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                                             }`}
                                         >
                                             {opt.label}
@@ -4301,14 +4301,14 @@ export function AgregarrStudio() {
                                             max="1825"
                                             value={placeholderDaysThreshold}
                                             onChange={(e) => setPlaceholderDaysThreshold(Math.max(0, parseInt(e.target.value) || 0))}
-                                            className="w-16 h-6 text-[10px] bg-slate-900 border-slate-800 text-center font-mono"
+                                            className="w-16 h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-center font-mono"
                                         />
                                         <span className="text-[10px] text-slate-500 font-mono">days</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80">
+                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border dark:border-slate-800/80">
                                 <Button
                                     type="button"
                                     size="sm"
@@ -4326,10 +4326,10 @@ export function AgregarrStudio() {
                                     variant="outline"
                                     disabled={cleaningPlaceholders}
                                     onClick={handleCleanupPlaceholders}
-                                    className="border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs gap-1.5 cursor-pointer"
+                                    className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white font-bold text-xs gap-1.5 cursor-pointer"
                                     title="Scans Coming Soon shares and automatically removes placeholder folders for items now acquired in Plex"
                                 >
-                                    {cleaningPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <RotateCcw className="h-3.5 w-3.5 text-amber-400" />}
+                                    {cleaningPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" /> : <RotateCcw className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                                     <span>Clean Acquired Placeholders</span>
                                 </Button>
 
@@ -4339,47 +4339,47 @@ export function AgregarrStudio() {
                                     variant="outline"
                                     disabled={fixingPermissions}
                                     onClick={handleFixPermissions}
-                                    className="border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs gap-1.5 cursor-pointer"
+                                    className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white font-bold text-xs gap-1.5 cursor-pointer"
                                     title="Recursively unlocks all Coming Soon placeholder folders on disk with 0777 (drwxrwxrwx) permissions"
                                 >
-                                    {fixingPermissions ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" /> : <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />}
+                                    {fixingPermissions ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700 dark:text-emerald-400" /> : <ShieldCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />}
                                     <span>Fix Share Permissions</span>
                                 </Button>
 
-                                {sharesSavedMsg && <span className="text-xs text-emerald-400 font-bold ml-1">✓ Saved!</span>}
+                                {sharesSavedMsg && <span className="text-xs text-emerald-700 dark:text-emerald-400 font-bold ml-1">✓ Saved!</span>}
                             </div>
 
                             {cleanupResultMsg && (
                                 <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
                                     cleanupResultMsg.success 
-                                        ? "bg-emerald-950/80 border border-emerald-800 text-emerald-300" 
-                                        : "bg-rose-950/80 border border-rose-800 text-rose-300"
+                                        ? "bg-emerald-500/15 dark:bg-emerald-950/80 border border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" 
+                                        : "bg-rose-500/15 dark:bg-rose-950/80 border border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                                 }`}>
-                                    {cleanupResultMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                                    {cleanupResultMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
                                     <span>{cleanupResultMsg.text}</span>
                                 </div>
                             )}
                         </div>
 
                         {/* YouTube Cookie Configuration & Trailer Engine Card */}
-                        <div className="p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl space-y-4">
-                            <div className="space-y-1 border-b border-slate-800/80 pb-3">
+                        <div className="p-5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-xl space-y-4">
+                            <div className="space-y-1 border-b border-border dark:border-slate-800/80 pb-3">
                                 <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <h4 className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
                                         <Video className="h-4 w-4 text-red-500" /> YouTube Cookie Configuration &amp; Trailers
                                     </h4>
                                     {youtubeCookiesStatus?.exists ? (
-                                        <Badge className="bg-emerald-950 text-emerald-300 border-emerald-800 text-[10px] font-mono">
+                                        <Badge className="bg-emerald-500/15 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 dark:border-emerald-800 text-[10px] font-mono">
                                             ✓ {youtubeCookiesStatus.fileName || "youtube-cookies.txt"} Active
                                         </Badge>
                                     ) : (
-                                        <Badge variant="outline" className="border-amber-800/80 text-amber-300 text-[10px] bg-amber-950/40">
+                                        <Badge variant="outline" className="border-amber-500/80 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 text-[10px] bg-amber-500/10 dark:bg-amber-950/40">
                                             ⚠️ No Cookies Configured
                                         </Badge>
                                     )}
                                 </div>
-                                <p className="text-[11px] text-slate-400 leading-relaxed">
-                                    Authenticate <code className="bg-slate-950 px-1 py-0.5 rounded text-red-400 font-mono text-[10px]">yt-dlp</code> with YouTube cookies to bypass bot detection, IP rate limits, and 429 errors when downloading official 1080p trailers for placeholder stubs.
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                                    Authenticate <code className="bg-muted dark:bg-slate-950 px-1 py-0.5 rounded text-red-700 dark:text-red-400 font-mono text-[10px]">yt-dlp</code> with YouTube cookies to bypass bot detection, IP rate limits, and 429 errors when downloading official 1080p trailers for placeholder stubs.
                                 </p>
                             </div>
 
@@ -4387,13 +4387,13 @@ export function AgregarrStudio() {
                             {youtubeCookiesStatus?.exists ? (
                                 <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
                                     youtubeCookiesStatus.skipYoutubeTrailerDownloads
-                                        ? "bg-amber-950/40 border-amber-800/60 text-amber-200"
-                                        : "bg-emerald-950/40 border-emerald-800/60 text-emerald-200"
+                                        ? "bg-amber-500/10 dark:bg-amber-950/40 border-amber-500/60 dark:border-amber-800/60 text-amber-900 dark:text-amber-200"
+                                        : "bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500/60 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200"
                                 }`}>
                                     {youtubeCookiesStatus.skipYoutubeTrailerDownloads ? (
-                                        <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                        <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                                     ) : (
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                                     )}
                                     <div className="space-y-1 flex-1">
                                         <p className="font-bold">
@@ -4409,24 +4409,24 @@ export function AgregarrStudio() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="p-3 rounded-xl border bg-amber-950/40 border-amber-800/60 text-xs text-amber-200 flex items-start gap-2.5">
-                                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                <div className="p-3 rounded-xl border bg-amber-500/10 dark:bg-amber-950/40 border-amber-500/60 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+                                    <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                                     <div className="space-y-1 flex-1">
                                         <p className="font-bold">No YouTube cookies file detected</p>
-                                        <p className="text-[10px] text-amber-300/80 leading-relaxed">
-                                            Without <code className="bg-slate-950 px-1 py-0.2 rounded font-mono text-amber-200">youtube-cookies.txt</code> in your data folder, YouTube trailer downloads may fail due to bot verification. The bundled <code className="bg-slate-950 px-1 py-0.2 rounded font-mono text-amber-200">placeholder.mp4</code> is automatically used as a reliable fallback.
+                                        <p className="text-[10px] text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                                            Without <code className="bg-muted dark:bg-slate-950 px-1 py-0.2 rounded font-mono text-amber-900 dark:text-amber-200">youtube-cookies.txt</code> in your data folder, YouTube trailer downloads may fail due to bot verification. The bundled <code className="bg-muted dark:bg-slate-950 px-1 py-0.2 rounded font-mono text-amber-900 dark:text-amber-200">placeholder.mp4</code> is automatically used as a reliable fallback.
                                         </p>
                                     </div>
                                 </div>
                             )}
 
                             {/* Skip YouTube Trailer Downloads Toggle */}
-                            <div className="flex items-center justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800 gap-3">
+                            <div className="flex items-center justify-between p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 gap-3">
                                 <div className="space-y-0.5 flex-1">
-                                    <Label className="text-xs text-slate-200 font-semibold cursor-pointer" onClick={() => handleToggleSkipYtDownloads(!youtubeCookiesStatus?.skipYoutubeTrailerDownloads)}>
+                                    <Label className="text-xs text-foreground dark:text-slate-200 font-semibold cursor-pointer" onClick={() => handleToggleSkipYtDownloads(!youtubeCookiesStatus?.skipYoutubeTrailerDownloads)}>
                                         Skip YouTube Trailer Downloads
                                     </Label>
-                                    <p className="text-[10px] text-slate-400">
+                                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                         Use only the fast bundled placeholder video instead of downloading YouTube trailers. Dramatically speeds up placeholder generation.
                                     </p>
                                 </div>
@@ -4455,18 +4455,18 @@ export function AgregarrStudio() {
                             </div>
 
                             {/* Step-by-step Setup Instructions */}
-                            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 text-xs space-y-2">
-                                <p className="font-bold text-slate-300 text-[11px] flex items-center gap-1.5">
-                                    <FileText className="h-3.5 w-3.5 text-red-400" /> Setup Instructions:
+                            <div className="p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800/80 text-xs space-y-2">
+                                <p className="font-bold text-slate-700 dark:text-slate-300 text-[11px] flex items-center gap-1.5">
+                                    <FileText className="h-3.5 w-3.5 text-red-700 dark:text-red-400" /> Setup Instructions:
                                 </p>
-                                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-400 pl-1">
+                                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 dark:text-slate-400 pl-1">
                                     <li>
                                         Install a browser extension to export cookies:{" "}
                                         <a
                                             href="https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/"
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-amber-400 hover:underline inline-flex items-center gap-0.5 font-semibold"
+                                            className="text-amber-700 dark:text-amber-400 hover:underline inline-flex items-center gap-0.5 font-semibold"
                                         >
                                             Firefox (Export Cookies) <ExternalLink className="h-2.5 w-2.5" />
                                         </a>{" "}
@@ -4475,26 +4475,26 @@ export function AgregarrStudio() {
                                             href="https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-amber-400 hover:underline inline-flex items-center gap-0.5 font-semibold"
+                                            className="text-amber-700 dark:text-amber-400 hover:underline inline-flex items-center gap-0.5 font-semibold"
                                         >
                                             Chrome (Get cookies.txt locally) <ExternalLink className="h-2.5 w-2.5" />
                                         </a>.
                                     </li>
                                     <li>Visit YouTube in your browser while logged into your account.</li>
-                                    <li>Export cookies in Netscape format and click <span className="text-white font-bold">Paste / Upload Cookies</span> above (or save as <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-amber-300">youtube-cookies.txt</code> in your data folder).</li>
+                                    <li>Export cookies in Netscape format and click <span className="text-foreground dark:text-white font-bold">Paste / Upload Cookies</span> above (or save as <code className="bg-card/95 dark:bg-slate-900 px-1 py-0.2 rounded font-mono text-amber-800 dark:text-amber-300">youtube-cookies.txt</code> in your data folder).</li>
                                 </ol>
                             </div>
                         </div>
                     </div>
 
                         {/* Agregarr Banner & Poster Live Simulator Studio */}
-                        <div className="lg:col-span-7 space-y-4 p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                        <div className="lg:col-span-7 space-y-4 p-5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-xl">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-border dark:border-slate-800/80 pb-3">
                                 <div>
-                                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                                        <Sparkles className="h-4 w-4 text-amber-400" /> Agregarr Banner &amp; Poster Live Simulator
+                                    <h4 className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                        <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Agregarr Banner &amp; Poster Live Simulator
                                     </h4>
-                                    <p className="text-[11px] text-slate-400">
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
                                         Variable-driven dynamic banner renderer with TrueType vector glyph bezier typography.
                                     </p>
                                 </div>
@@ -4504,31 +4504,31 @@ export function AgregarrStudio() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => setPosterPickerModalOpen(true)}
-                                        className="h-7 text-[11px] gap-1.5 border-amber-500/40 hover:bg-amber-950/40 text-amber-200 hover:text-amber-100 shrink-0 cursor-pointer"
+                                        className="h-7 text-[11px] gap-1.5 border-amber-500/40 hover:bg-amber-500/10 dark:hover:bg-amber-950/40 text-amber-900 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100 shrink-0 cursor-pointer"
                                     >
-                                        <ImageIcon className="h-3.5 w-3.5 text-amber-400" /> Pull Poster from Plex
+                                        <ImageIcon className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Pull Poster from Plex
                                     </Button>
                                 </div>
                             </div>
 
                             {/* Real Media Item Telemetry Badge */}
                             {simSelectedRealItem && (
-                                <div className="p-2.5 bg-amber-950/30 border border-amber-800/50 rounded-xl text-xs flex items-center justify-between gap-2">
+                                <div className="p-2.5 bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/50 dark:border-amber-800/50 rounded-xl text-xs flex items-center justify-between gap-2">
                                     <div className="space-y-0.5 min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                            <span className="font-bold text-white truncate">{simSelectedRealItem.title}</span>
+                                            <span className="font-bold text-foreground dark:text-white truncate">{simSelectedRealItem.title}</span>
                                             {simSelectedRealItem.year && (
-                                                <span className="text-[10px] text-amber-300 font-mono">({simSelectedRealItem.year})</span>
+                                                <span className="text-[10px] text-amber-800 dark:text-amber-300 font-mono">({simSelectedRealItem.year})</span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-amber-200/80">
+                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-amber-900/80 dark:text-amber-200/80">
                                             {(simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution) && (
-                                                <span className="px-1.5 py-0.2 bg-amber-900/40 rounded text-amber-300 font-mono">
+                                                <span className="px-1.5 py-0.2 bg-amber-500/10 dark:bg-amber-900/40 rounded text-amber-800 dark:text-amber-300 font-mono">
                                                     {simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution}
                                                 </span>
                                             )}
                                             {(simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec) && (
-                                                <span className="px-1.5 py-0.2 bg-slate-800 rounded text-slate-300 uppercase">
+                                                <span className="px-1.5 py-0.2 bg-muted dark:bg-slate-800 rounded text-slate-700 dark:text-slate-300 uppercase">
                                                     {simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec}
                                                 </span>
                                             )}
@@ -4562,7 +4562,7 @@ export function AgregarrStudio() {
                                                 templateVarNetwork
                                             );
                                         }}
-                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white shrink-0"
+                                        className="h-6 px-2 text-[10px] text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white shrink-0"
                                     >
                                         Reset Sample
                                     </Button>
@@ -4572,17 +4572,17 @@ export function AgregarrStudio() {
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
                                 {/* Left: Composite Poster Preview */}
                                 <div className="sm:col-span-5 flex flex-col items-center space-y-2">
-                                    <div className="relative aspect-[2/3] w-full max-w-[200px] rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-700/80 shadow-2xl">
+                                    <div className="relative aspect-[2/3] w-full max-w-[200px] rounded-2xl overflow-hidden bg-muted dark:bg-slate-950 border-2 border-border dark:border-slate-700/80 shadow-2xl">
                                         {placeholderPreviewDataUrl ? (
                                             <img src={placeholderPreviewDataUrl} alt="Composite Preview" className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="flex items-center justify-center h-full text-slate-500 text-xs gap-1.5">
-                                                <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                                                <Loader2 className="h-4 w-4 animate-spin text-amber-700 dark:text-amber-400" />
                                                 <span>Rendering...</span>
                                             </div>
                                         )}
                                     </div>
-                                    <span className="text-[10px] text-slate-400 font-mono">Live Composite Preview</span>
+                                    <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">Live Composite Preview</span>
                                 </div>
 
                                 {/* Right: Banner Controls & Variable Chips */}
@@ -4590,9 +4590,9 @@ export function AgregarrStudio() {
                                     {/* Template Presets Selector */}
                                     <div className="space-y-1.5">
                                         <div className="flex items-center justify-between">
-                                            <Label className="text-[11px] text-slate-300 font-semibold">Agregarr Banner Preset:</Label>
+                                            <Label className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">Agregarr Banner Preset:</Label>
                                             {bannerTemplates[placeholderModalBannerType] && (
-                                                <span className="text-[9px] font-mono text-amber-400 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-800/60 flex items-center gap-1">
+                                                <span className="text-[9px] font-mono text-amber-700 dark:text-amber-400 bg-amber-500/15 dark:bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-500/60 dark:border-amber-800/60 flex items-center gap-1">
                                                     ✨ Custom Template Saved
                                                 </span>
                                             )}
@@ -4601,7 +4601,7 @@ export function AgregarrStudio() {
                                             value={placeholderModalBannerType}
                                             onValueChange={handleSelectBannerPreset}
                                         >
-                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
+                                            <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-8">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="max-h-64">
@@ -4612,7 +4612,7 @@ export function AgregarrStudio() {
                                                             <div className="flex items-center justify-between w-full gap-2">
                                                                 <span>{p.label}</span>
                                                                 {isCustom && (
-                                                                    <span className="text-[9px] font-mono text-amber-400 bg-amber-950/80 px-1 py-0.2 rounded border border-amber-800/40">
+                                                                    <span className="text-[9px] font-mono text-amber-700 dark:text-amber-400 bg-amber-500/15 dark:bg-amber-950/80 px-1 py-0.2 rounded border border-amber-500/40 dark:border-amber-800/40">
                                                                         Custom
                                                                     </span>
                                                                 )}
@@ -4627,13 +4627,13 @@ export function AgregarrStudio() {
                                     {/* Banner Text Template with Variable Insertion Chips */}
                                     <div className="space-y-1.5">
                                         <div className="flex items-center justify-between">
-                                            <Label className="text-[11px] text-slate-300 font-semibold">Banner Text Template:</Label>
-                                            <span className="text-[10px] text-amber-400 font-mono">Click chips to insert:</span>
+                                            <Label className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">Banner Text Template:</Label>
+                                            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono">Click chips to insert:</span>
                                         </div>
                                         <Input
                                             value={placeholderModalBannerText}
                                             onChange={(e) => handleBannerTextChange(e.target.value)}
-                                            className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
+                                            className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800 font-mono text-foreground dark:text-white"
                                             placeholder="e.g. DIGITAL RELEASE ON {date}"
                                         />
 
@@ -4657,7 +4657,7 @@ export function AgregarrStudio() {
                                                     key={chip.token}
                                                     type="button"
                                                     onClick={() => handleInsertToken(chip.token)}
-                                                    className="px-2 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
+                                                    className="px-2 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
                                                 >
                                                     {chip.label}
                                                 </button>
@@ -4668,12 +4668,12 @@ export function AgregarrStudio() {
                                     {/* Color Theme & Position Controls */}
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
-                                            <Label className="text-[10px] text-slate-400">Color Theme:</Label>
+                                            <Label className="text-[10px] text-slate-600 dark:text-slate-400">Color Theme:</Label>
                                             <Select
                                                 value={placeholderModalBannerTheme}
                                                 onValueChange={handleBannerThemeChange}
                                             >
-                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
+                                                <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-7">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4691,12 +4691,12 @@ export function AgregarrStudio() {
                                         </div>
 
                                         <div className="space-y-1">
-                                            <Label className="text-[10px] text-slate-400">Position:</Label>
+                                            <Label className="text-[10px] text-slate-600 dark:text-slate-400">Position:</Label>
                                             <Select
                                                 value={placeholderModalBannerPosition}
                                                 onValueChange={(val: any) => handleBannerPositionChange(val)}
                                             >
-                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
+                                                <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-7">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4709,10 +4709,10 @@ export function AgregarrStudio() {
                                     </div>
 
                                     {/* Font Size Slider & Presets */}
-                                    <div className="space-y-1.5 p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                                    <div className="space-y-1.5 p-2.5 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800/80">
                                         <div className="flex items-center justify-between">
-                                            <Label className="text-[10px] text-slate-300 font-semibold">Banner Font Size:</Label>
-                                            <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                            <Label className="text-[10px] text-slate-700 dark:text-slate-300 font-semibold">Banner Font Size:</Label>
+                                            <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                                                 {placeholderModalBannerFontSize}px
                                             </span>
                                         </div>
@@ -4725,7 +4725,7 @@ export function AgregarrStudio() {
                                                 step="2"
                                                 value={placeholderModalBannerFontSize}
                                                 onChange={(e) => handleBannerFontSizeChange(parseInt(e.target.value, 10))}
-                                                className="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
+                                                className="w-full accent-amber-500 cursor-pointer h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none"
                                             />
                                             <span className="text-[9px] text-slate-500 font-mono">72px</span>
                                         </div>
@@ -4743,7 +4743,7 @@ export function AgregarrStudio() {
                                                     className={`flex-1 py-0.5 text-[9px] font-mono rounded border transition-all cursor-pointer ${
                                                         placeholderModalBannerFontSize === preset.size
                                                             ? "bg-amber-600 text-slate-950 border-amber-500 font-bold"
-                                                            : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800"
+                                                            : "bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-white hover:bg-accent dark:hover:bg-slate-800"
                                                     }`}
                                                 >
                                                     {preset.label}
@@ -4753,8 +4753,8 @@ export function AgregarrStudio() {
                                     </div>
 
                                     {/* Live Variable Test Values */}
-                                    <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-2">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    <div className="p-2.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800/80 space-y-2">
+                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
                                             Live Test Variables (Tokens):
                                         </span>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
@@ -4784,7 +4784,7 @@ export function AgregarrStudio() {
                                                             templateVarNetwork
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -4813,7 +4813,7 @@ export function AgregarrStudio() {
                                                             templateVarNetwork
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -4842,7 +4842,7 @@ export function AgregarrStudio() {
                                                             templateVarNetwork
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -4873,7 +4873,7 @@ export function AgregarrStudio() {
                                                             templateVarNetwork
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -4902,7 +4902,7 @@ export function AgregarrStudio() {
                                                             templateVarNetwork
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -4931,7 +4931,7 @@ export function AgregarrStudio() {
                                                             e.target.value
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -4960,7 +4960,7 @@ export function AgregarrStudio() {
                                                             templateVarNetwork
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -4989,7 +4989,7 @@ export function AgregarrStudio() {
                                                             templateVarNetwork
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -5018,14 +5018,14 @@ export function AgregarrStudio() {
                                                             templateVarNetwork
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono"
                                                 />
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Action Buttons */}
-                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border dark:border-slate-800/80">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <Button
                                                 type="button"
@@ -5044,17 +5044,17 @@ export function AgregarrStudio() {
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={handleResetCurrentBannerTemplate}
-                                                    className="border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white text-xs gap-1.5 cursor-pointer"
+                                                    className="border-border dark:border-slate-800 hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white text-xs gap-1.5 cursor-pointer"
                                                     title="Reset this preset to its default text, color theme, and position"
                                                 >
-                                                    <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
+                                                    <RotateCcw className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
                                                     <span>Reset to Preset Default</span>
                                                 </Button>
                                             )}
                                         </div>
 
                                         {bannerDefaultSavedMsg && (
-                                            <span className="text-xs text-emerald-400 font-bold animate-in fade-in-50">
+                                            <span className="text-xs text-emerald-700 dark:text-emerald-400 font-bold animate-in fade-in-50">
                                                 {bannerDefaultSavedMsg}
                                             </span>
                                         )}
@@ -5070,23 +5070,23 @@ export function AgregarrStudio() {
             {/* MODAL 1: COLLECTION MEDIA INSPECTOR MODAL (Live items, dates, stubs) */}
             {/* ========================================================================= */}
             <Dialog open={mediaInspectorModalOpen} onOpenChange={setMediaInspectorModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-5xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-col gap-1.5 shrink-0">
+                <DialogContent className="w-[96vw] sm:max-w-5xl bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-border dark:border-slate-800 flex flex-col gap-1.5 shrink-0">
                         <div className="flex items-center justify-between">
-                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Eye className="h-5 w-5 text-amber-400" />
+                            <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <Eye className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                 <span>Collection Media Inspector: {inspectingCollection?.title}</span>
                             </DialogTitle>
                             <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-xs uppercase font-mono">
+                                <Badge variant="outline" className="border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/40 text-xs uppercase font-mono">
                                     {inspectingCollection?.sourceType || "TMDB"}
                                 </Badge>
-                                <Badge className="bg-slate-800 text-slate-300 border-slate-700 text-xs font-mono">
+                                <Badge className="bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-border dark:border-slate-700 text-xs font-mono">
                                     Rank #{inspectingCollection?.orderIndex || 1}
                                 </Badge>
                             </div>
                         </div>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             {inspectingCollection?.summary || inspectingCollection?.sourceQuery || "Live media items evaluated for this collection query."}
                         </DialogDescription>
                     </DialogHeader>
@@ -5095,34 +5095,34 @@ export function AgregarrStudio() {
                     <div className="space-y-3 pt-2">
                         {/* Stats Pills */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                            <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 flex items-center justify-between">
-                                <span className="text-slate-400 font-medium">Total Items:</span>
-                                <span className="font-bold font-mono text-white text-sm">{collectionMediaData?.totalCount || 0}</span>
+                            <div className="p-2.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800 flex items-center justify-between">
+                                <span className="text-slate-600 dark:text-slate-400 font-medium">Total Items:</span>
+                                <span className="font-bold font-mono text-foreground dark:text-white text-sm">{collectionMediaData?.totalCount || 0}</span>
                             </div>
-                            <div className="p-2.5 bg-emerald-950/30 rounded-xl border border-emerald-800/40 flex items-center justify-between">
-                                <span className="text-emerald-300 font-medium">In Library:</span>
-                                <span className="font-bold font-mono text-emerald-400 text-sm">{collectionMediaData?.inLibraryCount || 0}</span>
+                            <div className="p-2.5 bg-emerald-500/10 dark:bg-emerald-950/30 rounded-xl border border-emerald-500/40 dark:border-emerald-800/40 flex items-center justify-between">
+                                <span className="text-emerald-800 dark:text-emerald-300 font-medium">In Library:</span>
+                                <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400 text-sm">{collectionMediaData?.inLibraryCount || 0}</span>
                             </div>
-                            <div className="p-2.5 bg-rose-950/30 rounded-xl border border-rose-800/40 flex items-center justify-between">
-                                <span className="text-rose-300 font-medium">Missing / Unacquired:</span>
-                                <span className="font-bold font-mono text-rose-400 text-sm">{collectionMediaData?.missingCount || 0}</span>
+                            <div className="p-2.5 bg-rose-500/10 dark:bg-rose-950/30 rounded-xl border border-rose-500/40 dark:border-rose-800/40 flex items-center justify-between">
+                                <span className="text-rose-800 dark:text-rose-300 font-medium">Missing / Unacquired:</span>
+                                <span className="font-bold font-mono text-rose-700 dark:text-rose-400 text-sm">{collectionMediaData?.missingCount || 0}</span>
                             </div>
-                            <div className="p-2.5 bg-amber-950/30 rounded-xl border border-amber-800/40 flex items-center justify-between">
-                                <span className="text-amber-300 font-medium">Coming Soon (Arr):</span>
-                                <span className="font-bold font-mono text-amber-400 text-sm">
+                            <div className="p-2.5 bg-amber-500/10 dark:bg-amber-950/30 rounded-xl border border-amber-500/40 dark:border-amber-800/40 flex items-center justify-between">
+                                <span className="text-amber-800 dark:text-amber-300 font-medium">Coming Soon (Arr):</span>
+                                <span className="font-bold font-mono text-amber-700 dark:text-amber-400 text-sm">
                                     {(collectionMediaData?.items || []).filter(i => !i.inLibrary && i.isMonitored).length}
                                 </span>
                             </div>
                         </div>
 
                         {/* Search & Filter Buttons */}
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-2 bg-slate-950/80 rounded-xl border border-slate-800">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-2 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800">
                             <div className="flex flex-wrap items-center gap-1">
                                 <button
                                     type="button"
                                     onClick={() => setCollectionMediaFilter("all")}
                                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                                        collectionMediaFilter === "all" ? "bg-amber-500 text-slate-950 font-black" : "text-slate-400 hover:text-white"
+                                        collectionMediaFilter === "all" ? "bg-amber-500 text-slate-950 font-black" : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                                     }`}
                                 >
                                     All ({collectionMediaData?.items?.length || 0})
@@ -5131,7 +5131,7 @@ export function AgregarrStudio() {
                                     type="button"
                                     onClick={() => setCollectionMediaFilter("in_library")}
                                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                                        collectionMediaFilter === "in_library" ? "bg-emerald-600 text-white font-black" : "text-slate-400 hover:text-emerald-300"
+                                        collectionMediaFilter === "in_library" ? "bg-emerald-600 text-white font-black" : "text-slate-600 dark:text-slate-400 hover:text-emerald-800 dark:hover:text-emerald-300"
                                     }`}
                                 >
                                     <CheckCircle2 className="h-3 w-3" />
@@ -5141,7 +5141,7 @@ export function AgregarrStudio() {
                                     type="button"
                                     onClick={() => setCollectionMediaFilter("missing")}
                                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                                        collectionMediaFilter === "missing" ? "bg-rose-600 text-white font-black" : "text-slate-400 hover:text-rose-300"
+                                        collectionMediaFilter === "missing" ? "bg-rose-600 text-white font-black" : "text-slate-600 dark:text-slate-400 hover:text-rose-800 dark:hover:text-rose-300"
                                     }`}
                                 >
                                     <XCircle className="h-3 w-3" />
@@ -5151,7 +5151,7 @@ export function AgregarrStudio() {
                                     type="button"
                                     onClick={() => setCollectionMediaFilter("coming_soon")}
                                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                                        collectionMediaFilter === "coming_soon" ? "bg-amber-500 text-slate-950 font-black" : "text-slate-400 hover:text-amber-300"
+                                        collectionMediaFilter === "coming_soon" ? "bg-amber-500 text-slate-950 font-black" : "text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-300"
                                     }`}
                                 >
                                     <Clock className="h-3 w-3" />
@@ -5161,7 +5161,7 @@ export function AgregarrStudio() {
                                     type="button"
                                     onClick={() => setCollectionMediaFilter("not_requested")}
                                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                                        collectionMediaFilter === "not_requested" ? "bg-rose-900 text-rose-200 font-black" : "text-slate-400 hover:text-rose-300"
+                                        collectionMediaFilter === "not_requested" ? "bg-rose-500/15 dark:bg-rose-900 text-rose-900 dark:text-rose-200 font-black" : "text-slate-600 dark:text-slate-400 hover:text-rose-800 dark:hover:text-rose-300"
                                     }`}
                                 >
                                     <Flame className="h-3 w-3" />
@@ -5175,7 +5175,7 @@ export function AgregarrStudio() {
                                     placeholder="Search items..."
                                     value={collectionMediaSearch}
                                     onChange={(e) => setCollectionMediaSearch(e.target.value)}
-                                    className="h-7 text-xs bg-slate-900 border-slate-800 pl-7 w-full"
+                                    className="h-7 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 pl-7 w-full"
                                 />
                             </div>
                         </div>
@@ -5184,14 +5184,14 @@ export function AgregarrStudio() {
                     {/* Media Items Grid */}
                     <div className="flex-1 overflow-y-auto py-3 text-xs pr-1">
                         {collectionMediaLoading ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
-                                <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
-                                <p className="text-xs font-bold text-slate-300">Querying and evaluating collection items from {inspectingCollection?.sourceType?.toUpperCase()}...</p>
+                            <div className="flex flex-col items-center justify-center py-20 text-slate-600 dark:text-slate-400 gap-3">
+                                <Loader2 className="h-8 w-8 animate-spin text-amber-700 dark:text-amber-400" />
+                                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Querying and evaluating collection items from {inspectingCollection?.sourceType?.toUpperCase()}...</p>
                                 <p className="text-[11px] text-slate-500">Checking Plex library and media indexers concurrently...</p>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="mt-2 text-xs border-slate-700 hover:bg-slate-800 text-slate-300"
+                                    className="mt-2 text-xs border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                                     onClick={() => setMediaInspectorModalOpen(false)}
                                 >
                                     Cancel
@@ -5199,18 +5199,18 @@ export function AgregarrStudio() {
                             </div>
                         ) : collectionMediaError ? (
                             <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 px-4">
-                                <div className="p-3 bg-red-500/10 rounded-full border border-red-500/20 text-red-400">
+                                <div className="p-3 bg-red-500/10 rounded-full border border-red-500/20 text-red-700 dark:text-red-400">
                                     <AlertTriangle className="h-8 w-8" />
                                 </div>
                                 <div>
-                                    <h4 className="text-sm font-semibold text-red-300">Unable to Load Media Preview</h4>
-                                    <p className="text-xs text-slate-400 mt-1 max-w-md">{collectionMediaError}</p>
+                                    <h4 className="text-sm font-semibold text-red-800 dark:text-red-300">Unable to Load Media Preview</h4>
+                                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-md">{collectionMediaError}</p>
                                 </div>
                                 <div className="flex items-center gap-2 pt-2">
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+                                        className="text-xs border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-accent dark:hover:bg-slate-800"
                                         onClick={() => setMediaInspectorModalOpen(false)}
                                     >
                                         Close
@@ -5228,7 +5228,7 @@ export function AgregarrStudio() {
                         ) : filteredCollectionItems.length === 0 ? (
                             <div className="text-center py-16 text-slate-500 space-y-2">
                                 <Film className="h-10 w-10 mx-auto text-slate-700" />
-                                <p className="text-xs font-bold text-slate-400">No media items found matching this filter.</p>
+                                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No media items found matching this filter.</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
@@ -5236,10 +5236,10 @@ export function AgregarrStudio() {
                                     return (
                                         <div
                                             key={item.id}
-                                            className="group relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 hover:border-amber-500/50 transition-all flex flex-col shadow-lg"
+                                            className="group relative rounded-xl overflow-hidden bg-muted dark:bg-slate-950 border border-border dark:border-slate-800 hover:border-amber-500/50 transition-all flex flex-col shadow-lg"
                                         >
                                             {/* Poster Image & Smart Status Badge */}
-                                            <div className="relative aspect-[2/3] overflow-hidden bg-slate-900">
+                                            <div className="relative aspect-[2/3] overflow-hidden bg-card/95 dark:bg-slate-900">
                                                 {getMediaItemPosterSrc(item.posterPath) ? (
                                                     <img
                                                         src={getMediaItemPosterSrc(item.posterPath)!}
@@ -5253,9 +5253,9 @@ export function AgregarrStudio() {
                                                         }}
                                                     />
                                                 ) : null}
-                                                <div className={`w-full h-full flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/20 text-slate-500 ${getMediaItemPosterSrc(item.posterPath) ? 'hidden' : 'flex'}`}>
+                                                <div className={`w-full h-full flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-muted/60 dark:from-slate-900 via-card dark:via-slate-950 to-amber-500/10 dark:to-amber-950/20 text-slate-500 ${getMediaItemPosterSrc(item.posterPath) ? 'hidden' : 'flex'}`}>
                                                     <Film className="h-8 w-8 text-slate-700 mb-1" />
-                                                    <span className="text-[10px] font-bold text-slate-400 line-clamp-2">{item.title}</span>
+                                                    <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 line-clamp-2">{item.title}</span>
                                                 </div>
                                                 <div className="absolute top-2 left-2 z-10">
                                                     <Badge className={`${
@@ -5263,7 +5263,7 @@ export function AgregarrStudio() {
                                                         item.arrStatus === "COMING_SOON" ? "bg-amber-600" :
                                                         item.arrStatus === "MONITORED_RELEASED" ? "bg-cyan-600" :
                                                         "bg-rose-600"
-                                                    }/95 text-white text-[9px] font-black px-1.5 py-0.5 border-none shadow-md gap-1 flex items-center`}>
+                                                    }/95 text-foreground dark:text-white text-[9px] font-black px-1.5 py-0.5 border-none shadow-md gap-1 flex items-center`}>
                                                         {item.arrStatus === "COMING_SOON" && <Clock className="h-2.5 w-2.5" />}
                                                         {item.arrStatus === "MONITORED_RELEASED" && <Zap className="h-2.5 w-2.5" />}
                                                         {item.arrStatus === "NOT_REQUESTED" && <Flame className="h-2.5 w-2.5" />}
@@ -5275,14 +5275,14 @@ export function AgregarrStudio() {
                                             {/* Media Info & Action Buttons */}
                                             <div className="p-2.5 space-y-1.5 flex-1 flex flex-col justify-between">
                                                 <div>
-                                                    <h4 className="font-bold text-white text-xs truncate" title={item.title}>
+                                                    <h4 className="font-bold text-foreground dark:text-white text-xs truncate" title={item.title}>
                                                         {item.title}
                                                     </h4>
-                                                    <p className="text-[10px] text-slate-400">
+                                                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                                         {item.year || item.releaseDate?.split("-")[0] || "Upcoming"}
                                                     </p>
                                                     {item.digitalReleaseDate && (
-                                                        <p className="text-[9px] text-cyan-300 font-mono truncate mt-0.5" title={`Digital: ${item.digitalReleaseDate}`}>
+                                                        <p className="text-[9px] text-cyan-800 dark:text-cyan-300 font-mono truncate mt-0.5" title={`Digital: ${item.digitalReleaseDate}`}>
                                                             ⚡ Dig: {item.digitalReleaseDate}
                                                         </p>
                                                     )}
@@ -5293,7 +5293,7 @@ export function AgregarrStudio() {
                                                         type="button"
                                                         size="sm"
                                                         onClick={() => handleWatchTrailer(item.id, item.mediaType || "movie", item.title)}
-                                                        className="h-7 px-2 text-[10px] font-bold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 gap-1 cursor-pointer shrink-0"
+                                                        className="h-7 px-2 text-[10px] font-bold bg-card/95 dark:bg-slate-900 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200 border border-border dark:border-slate-700 gap-1 cursor-pointer shrink-0"
                                                         title="Watch Official YouTube Trailer"
                                                     >
                                                         <Play className="h-3 w-3 text-rose-500 fill-rose-500" />
@@ -5317,7 +5317,7 @@ export function AgregarrStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
                         <Button
                             type="button"
                             size="sm"
@@ -5336,9 +5336,9 @@ export function AgregarrStudio() {
                                 variant="outline"
                                 disabled={!inspectingCollection || Boolean(syncingCollIds[inspectingCollection?.id] || syncingCollId === inspectingCollection?.id)}
                                 onClick={() => inspectingCollection && handleSyncCollection(inspectingCollection.id)}
-                                className="border-slate-700 text-slate-200 text-xs h-8 gap-1"
+                                className="border-border dark:border-slate-700 text-foreground dark:text-slate-200 text-xs h-8 gap-1"
                             >
-                                <RefreshCw className="h-3.5 w-3.5 text-amber-400" />
+                                <RefreshCw className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                 <span>Sync to Plex</span>
                             </Button>
                             <Button type="button" variant="ghost" size="sm" onClick={() => setMediaInspectorModalOpen(false)}>
@@ -5353,13 +5353,13 @@ export function AgregarrStudio() {
             {/* MODAL 2: CREATE CUSTOM COLLECTION MODAL */}
             {/* ========================================================================= */}
             <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Plus className="h-5 w-5 text-amber-400" />
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <Plus className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                             <span>Create Custom Collection</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Build a custom smart collection rule connected to TMDb, Trakt, or MDBList queries.
                         </DialogDescription>
                     </DialogHeader>
@@ -5367,18 +5367,18 @@ export function AgregarrStudio() {
                     <div className="flex-1 overflow-y-auto space-y-4 py-3 text-xs pr-1">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <Label className="text-xs text-slate-300">Collection Title:</Label>
+                                <Label className="text-xs text-slate-700 dark:text-slate-300">Collection Title:</Label>
                                 <Input
                                     value={newCollTitle}
                                     onChange={(e) => setNewCollTitle(e.target.value)}
                                     placeholder="e.g. Netflix Trending Movies"
-                                    className="bg-slate-950 border-slate-800 text-xs text-white"
+                                    className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs text-foreground dark:text-white"
                                 />
                             </div>
                             <div className="space-y-1">
-                                <Label className="text-xs text-slate-300">Source Provider:</Label>
+                                <Label className="text-xs text-slate-700 dark:text-slate-300">Source Provider:</Label>
                                 <Select value={newCollSourceType} onValueChange={setNewCollSourceType}>
-                                    <SelectTrigger className="bg-slate-950 border-slate-800 text-xs">
+                                    <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -5392,12 +5392,12 @@ export function AgregarrStudio() {
                         </div>
 
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-300">Source Query / Identifier:</Label>
+                            <Label className="text-xs text-slate-700 dark:text-slate-300">Source Query / Identifier:</Label>
                             <Input
                                 value={newCollSourceQuery}
                                 onChange={(e) => setNewCollSourceQuery(e.target.value)}
                                 placeholder="e.g. provider:8 (Netflix), provider:337 (Disney+), trending, or collection:86311"
-                                className="bg-slate-950 border-slate-800 text-xs font-mono text-amber-300"
+                                className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs font-mono text-amber-800 dark:text-amber-300"
                             />
                             <p className="text-[10px] text-slate-500">
                                 Supports provider:8 (Netflix), provider:337 (Disney+), provider:350 (Apple TV+), network:213, or MDBList list slugs.
@@ -5405,41 +5405,41 @@ export function AgregarrStudio() {
                         </div>
 
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-300">Description / Summary:</Label>
+                            <Label className="text-xs text-slate-700 dark:text-slate-300">Description / Summary:</Label>
                             <Textarea
                                 value={newCollSummary}
                                 onChange={(e) => setNewCollSummary(e.target.value)}
                                 placeholder="Summary displayed inside Plex..."
-                                className="bg-slate-950 border-slate-800 text-xs resize-none h-16 text-slate-300"
+                                className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs resize-none h-16 text-slate-700 dark:text-slate-300"
                             />
                         </div>
 
                         {/* Screen Visibility Targets */}
-                        <div className="space-y-2 p-3 bg-slate-950 rounded-xl border border-slate-800">
-                            <span className="font-bold text-white text-xs block">Where It Shows Up (Plex Hubs):</span>
+                        <div className="space-y-2 p-3 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800">
+                            <span className="font-bold text-foreground dark:text-white text-xs block">Where It Shows Up (Plex Hubs):</span>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
-                                    <span className="text-xs text-slate-200">Owner Home</span>
+                                <div className="flex items-center justify-between p-2 rounded bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800">
+                                    <span className="text-xs text-foreground dark:text-slate-200">Owner Home</span>
                                     <Switch checked={newCollPromotedHome} onCheckedChange={setNewCollPromotedHome} />
                                 </div>
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
-                                    <span className="text-xs text-slate-200">Shared Home</span>
+                                <div className="flex items-center justify-between p-2 rounded bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800">
+                                    <span className="text-xs text-foreground dark:text-slate-200">Shared Home</span>
                                     <Switch checked={newCollPromotedShared} onCheckedChange={setNewCollPromotedShared} />
                                 </div>
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
-                                    <span className="text-xs text-slate-200">Library Recs</span>
+                                <div className="flex items-center justify-between p-2 rounded bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800">
+                                    <span className="text-xs text-foreground dark:text-slate-200">Library Recs</span>
                                     <Switch checked={newCollPromotedRecommended} onCheckedChange={setNewCollPromotedRecommended} />
                                 </div>
                             </div>
                         </div>
 
                         {/* Placeholders Toggle */}
-                        <div className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
+                        <div className="flex items-center justify-between p-3 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800">
                             <div>
-                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
+                                <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
                                 </Label>
-                                <p className="text-[10px] text-slate-400">
+                                <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                     Automatically generate lightweight trailer stubs and banners in Coming Soon share for missing unacquired titles.
                                 </p>
                             </div>
@@ -5447,7 +5447,7 @@ export function AgregarrStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button type="button" variant="ghost" size="sm" onClick={() => setCreateModalOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
@@ -5469,11 +5469,11 @@ export function AgregarrStudio() {
             {/* MODAL 3: INSPECT PRESET BLUEPRINT MODAL */}
             {/* ========================================================================= */}
             <Dialog open={inspectModalOpen} onOpenChange={setInspectModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
                         <div className="flex items-center justify-between">
-                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Trophy className="h-5 w-5 text-amber-400" />
+                            <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <Trophy className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                 <span>{inspectingPreset?.title}</span>
                             </DialogTitle>
                             <div className="flex items-center gap-2">
@@ -5484,64 +5484,64 @@ export function AgregarrStudio() {
                                     ) : null;
                                     if (inst) {
                                         return (
-                                            <Badge variant="outline" className="border-emerald-500/40 text-emerald-300 bg-emerald-950/40 text-xs font-mono">
+                                            <Badge variant="outline" className="border-emerald-500/40 text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-950/40 text-xs font-mono">
                                                 ✓ INSTALLED (#{inst.orderIndex || 1})
                                             </Badge>
                                         );
                                     }
                                     return (
-                                        <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-xs">
+                                        <Badge variant="outline" className="border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/40 text-xs">
                                             {inspectingPreset?.category?.toUpperCase()}
                                         </Badge>
                                     );
                                 })()}
                             </div>
                         </div>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             {inspectingPreset?.description}
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="flex-1 overflow-y-auto space-y-4 py-3 text-xs pr-1">
                         {/* Blueprint Telemetry */}
-                        <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5 font-mono text-[11px]">
-                            <div className="flex justify-between text-slate-300">
+                        <div className="p-3 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800 space-y-1.5 font-mono text-[11px]">
+                            <div className="flex justify-between text-slate-700 dark:text-slate-300">
                                 <span>Source Provider:</span>
-                                <strong className="text-amber-300">{inspectingPreset?.sourceType.toUpperCase()}</strong>
+                                <strong className="text-amber-800 dark:text-amber-300">{inspectingPreset?.sourceType.toUpperCase()}</strong>
                             </div>
-                            <div className="flex justify-between text-slate-300">
+                            <div className="flex justify-between text-slate-700 dark:text-slate-300">
                                 <span>Query Rule:</span>
-                                <span className="text-slate-400">{inspectingPreset?.sourceQuery || "Library Smart Query"}</span>
+                                <span className="text-slate-600 dark:text-slate-400">{inspectingPreset?.sourceQuery || "Library Smart Query"}</span>
                             </div>
-                            <div className="flex justify-between text-slate-300">
+                            <div className="flex justify-between text-slate-700 dark:text-slate-300">
                                 <span>Target Server:</span>
-                                <span className="text-sky-300">{currentServer?.serverName} (Section {selectedSectionKey})</span>
+                                <span className="text-sky-800 dark:text-sky-300">{currentServer?.serverName} (Section {selectedSectionKey})</span>
                             </div>
                         </div>
 
                         {/* Live Library Matching Preview */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <span className="font-bold text-white flex items-center gap-1.5">
-                                    <Eye className="h-4 w-4 text-amber-400" /> Live Library Match Evaluation
+                                <span className="font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                    <Eye className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Live Library Match Evaluation
                                 </span>
                                 {previewData && (
-                                    <Badge className="bg-amber-950 text-amber-300 border-amber-500/40 text-[10px] font-mono tabular-nums">
+                                    <Badge className="bg-amber-500/15 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-500/40 text-[10px] font-mono tabular-nums">
                                         {previewData.matchCount} / {previewData.totalEvaluated} Matches Found
                                     </Badge>
                                 )}
                             </div>
 
                             {previewLoading ? (
-                                <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
-                                    <Loader2 className="h-5 w-5 animate-spin text-amber-400" />
+                                <div className="flex items-center justify-center py-8 text-slate-600 dark:text-slate-400 gap-2">
+                                    <Loader2 className="h-5 w-5 animate-spin text-amber-700 dark:text-amber-400" />
                                     <span>Scanning Plex library for matching items...</span>
                                 </div>
                             ) : previewData?.sampleMatches && previewData.sampleMatches.length > 0 ? (
                                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                                     {previewData.sampleMatches.map((m, idx) => (
                                         <div key={idx} className="space-y-1 text-center">
-                                            <div className="aspect-[2/3] rounded-lg overflow-hidden bg-slate-950 border border-slate-800 relative">
+                                            <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted dark:bg-slate-950 border border-border dark:border-slate-800 relative">
                                                 {getPlexThumbSrc(m.thumb, selectedServerId) ? (
                                                     <img
                                                         src={getPlexThumbSrc(m.thumb, selectedServerId)!}
@@ -5555,57 +5555,57 @@ export function AgregarrStudio() {
                                                         }}
                                                     />
                                                 ) : null}
-                                                <div className={`w-full h-full flex flex-col items-center justify-center p-2 text-center bg-slate-900 text-slate-500 ${getPlexThumbSrc(m.thumb, selectedServerId) ? 'hidden' : 'flex'}`}>
+                                                <div className={`w-full h-full flex flex-col items-center justify-center p-2 text-center bg-card/95 dark:bg-slate-900 text-slate-500 ${getPlexThumbSrc(m.thumb, selectedServerId) ? 'hidden' : 'flex'}`}>
                                                     <Film className="h-6 w-6 text-slate-700 mb-1" />
-                                                    <span className="text-[9px] font-bold text-slate-400 line-clamp-2">{m.title}</span>
+                                                    <span className="text-[9px] font-bold text-slate-600 dark:text-slate-400 line-clamp-2">{m.title}</span>
                                                 </div>
                                             </div>
-                                            <p className="text-[10px] font-medium text-slate-300 truncate" title={m.title}>{m.title}</p>
+                                            <p className="text-[10px] font-medium text-slate-700 dark:text-slate-300 truncate" title={m.title}>{m.title}</p>
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <p className="text-xs text-slate-400">No media items in this library matched the preset criteria.</p>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">No media items in this library matched the preset criteria.</p>
                             )}
                         </div>
 
                         {/* Where It Shows Up: Preset Placement Configuration */}
-                        <div className="space-y-3 p-3.5 bg-slate-950 rounded-xl border border-slate-800">
-                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                                <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                                    <Monitor className="h-4 w-4 text-amber-400" /> Choose Where It Shows Up (Plex Hubs)
+                        <div className="space-y-3 p-3.5 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800">
+                            <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-2">
+                                <span className="font-bold text-foreground dark:text-white text-xs flex items-center gap-1.5">
+                                    <Monitor className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Choose Where It Shows Up (Plex Hubs)
                                 </span>
-                                <span className="text-[10px] text-slate-400">Target Screens</span>
+                                <span className="text-[10px] text-slate-600 dark:text-slate-400">Target Screens</span>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                                <div className="flex items-center justify-between p-2 rounded bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800">
                                     <div className="flex items-center gap-1.5">
-                                        <Home className="h-3.5 w-3.5 text-amber-400" />
-                                        <span className="text-xs text-slate-200">Owner Home</span>
+                                        <Home className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
+                                        <span className="text-xs text-foreground dark:text-slate-200">Owner Home</span>
                                     </div>
                                     <Switch checked={inspectHome} onCheckedChange={setInspectHome} />
                                 </div>
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                                <div className="flex items-center justify-between p-2 rounded bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800">
                                     <div className="flex items-center gap-1.5">
-                                        <Users className="h-3.5 w-3.5 text-sky-400" />
-                                        <span className="text-xs text-slate-200">Shared Home</span>
+                                        <Users className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
+                                        <span className="text-xs text-foreground dark:text-slate-200">Shared Home</span>
                                     </div>
                                     <Switch checked={inspectShared} onCheckedChange={setInspectShared} />
                                 </div>
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                                <div className="flex items-center justify-between p-2 rounded bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800">
                                     <div className="flex items-center gap-1.5">
-                                        <Star className="h-3.5 w-3.5 text-sky-400" />
-                                        <span className="text-xs text-slate-200">Library Recs</span>
+                                        <Star className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
+                                        <span className="text-xs text-foreground dark:text-slate-200">Library Recs</span>
                                     </div>
                                     <Switch checked={inspectRecommended} onCheckedChange={setInspectRecommended} />
                                 </div>
                             </div>
 
                             <div className="flex items-center justify-between pt-1">
-                                <span className="text-xs text-slate-400">Library Browsing Tab Display:</span>
+                                <span className="text-xs text-slate-600 dark:text-slate-400">Library Browsing Tab Display:</span>
                                 <Select value={inspectMode} onValueChange={setInspectMode}>
-                                    <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-7 w-48">
+                                    <SelectTrigger className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-7 w-48">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -5619,16 +5619,16 @@ export function AgregarrStudio() {
                         </div>
 
                         {/* Item Count Limit (maxItems) */}
-                        <div className="space-y-2 p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+                        <div className="space-y-2 p-3.5 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <Sliders className="h-3.5 w-3.5 text-amber-400" /> Collection Item Limit (Max Items)
+                                <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                    <Sliders className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Collection Item Limit (Max Items)
                                 </Label>
-                                <span className="text-[10px] text-slate-400 font-mono">
+                                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">
                                     {inspectMaxItems > 0 ? `${inspectMaxItems} items maximum` : "Unlimited items"}
                                 </span>
                             </div>
-                            <p className="text-[10px] text-slate-400">
+                            <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                 Control how many items appear in this collection. 0 means unlimited.
                             </p>
                             <div className="flex items-center gap-2">
@@ -5638,7 +5638,7 @@ export function AgregarrStudio() {
                                     max={500}
                                     value={inspectMaxItems}
                                     onChange={(e) => setInspectMaxItems(parseInt(e.target.value, 10) || 0)}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 w-24 font-bold font-mono text-white"
+                                    className="h-8 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 w-24 font-bold font-mono text-foreground dark:text-white"
                                 />
                                 <div className="flex flex-wrap items-center gap-1">
                                     {[
@@ -5657,7 +5657,7 @@ export function AgregarrStudio() {
                                             className={`px-2 py-1 rounded text-[10px] font-bold border transition-all cursor-pointer ${
                                                 inspectMaxItems === preset.val
                                                     ? "bg-amber-500 text-slate-950 border-amber-400 font-black shadow-sm"
-                                                    : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                                                    : "bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200 hover:border-border dark:hover:border-slate-700"
                                             }`}
                                         >
                                             {preset.label}
@@ -5678,13 +5678,13 @@ export function AgregarrStudio() {
                         />
 
                         {/* Coming Soon Placeholders & Trailer Stubs */}
-                        <div className="space-y-2 p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+                        <div className="space-y-2 p-3.5 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                        <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
+                                    <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
                                     </Label>
-                                    <p className="text-[10px] text-slate-400">
+                                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                         Automatically generate lightweight trailer stubs and composite banners in your Coming Soon share for missing unacquired titles.
                                     </p>
                                 </div>
@@ -5696,9 +5696,9 @@ export function AgregarrStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
                         {installPresetMsg ? (
-                            <div className={`text-xs font-bold px-2 py-1 rounded ${installPresetMsg.success ? "text-emerald-400 bg-emerald-950/50 border border-emerald-800/40" : "text-rose-400 bg-rose-950/50 border border-rose-800/40"}`}>
+                            <div className={`text-xs font-bold px-2 py-1 rounded ${installPresetMsg.success ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/50 border border-emerald-500/40 dark:border-emerald-800/40" : "text-rose-700 dark:text-rose-400 bg-rose-500/10 dark:bg-rose-950/50 border border-rose-500/40 dark:border-rose-800/40"}`}>
                                 {installPresetMsg.text}
                             </div>
                         ) : <div />}
@@ -5743,49 +5743,49 @@ export function AgregarrStudio() {
             {/* MODAL 4: AGREGARR COLLECTION PLACEMENT & VISIBILITY MODAL */}
             {/* ========================================================================= */}
             <Dialog open={placementModalOpen} onOpenChange={setPlacementModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-border dark:border-slate-800 shrink-0">
                         <div className="flex items-center justify-between">
-                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Edit2 className="h-5 w-5 text-amber-400" />
+                            <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <Edit2 className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                 <span>Edit Collection: {editingCollection?.title}</span>
                             </DialogTitle>
                             <div className="flex items-center gap-2">
                                 {findMatchingPreset(editingCollection) && (
-                                    <Badge variant="outline" className="border-sky-500/40 text-sky-300 bg-sky-950/40 text-[10px] hidden sm:inline-flex">
+                                    <Badge variant="outline" className="border-sky-500/40 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/40 text-[10px] hidden sm:inline-flex">
                                         Preset: {findMatchingPreset(editingCollection)?.title}
                                     </Badge>
                                 )}
-                                <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-xs">
+                                <Badge variant="outline" className="border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/40 text-xs">
                                     Rank #{placementOrderIndex}
                                 </Badge>
                             </div>
                         </div>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Configure collection settings, Plex screen visibility, home ordering, day/time schedules, and label filters.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="flex-1 overflow-y-auto space-y-4 py-3 text-xs pr-1">
                         {/* Section 1: Plex Screen Visibility Targets */}
-                        <div className="space-y-3 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
-                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                                <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                                    <Monitor className="h-4 w-4 text-amber-400" /> Plex Client Screen Targets
+                        <div className="space-y-3 p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800">
+                            <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-2">
+                                <span className="font-bold text-foreground dark:text-white text-xs flex items-center gap-1.5">
+                                    <Monitor className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Plex Client Screen Targets
                                 </span>
-                                <span className="text-[10px] text-slate-400">Where will this collection show up?</span>
+                                <span className="text-[10px] text-slate-600 dark:text-slate-400">Where will this collection show up?</span>
                             </div>
 
                             <div className="space-y-2.5 pt-1">
                                 {/* Owner Home Screen */}
-                                <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700">
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800 hover:border-border dark:hover:border-slate-700">
                                     <div className="flex items-center gap-2.5">
-                                        <div className="p-1.5 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                        <div className="p-1.5 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30">
                                             <Home className="h-4 w-4" />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-white text-xs">Server Owner Home Screen</h4>
-                                            <p className="text-[10px] text-slate-400">Display collection as a dedicated carousel row on your primary Plex Home screen.</p>
+                                            <h4 className="font-bold text-foreground dark:text-white text-xs">Server Owner Home Screen</h4>
+                                            <p className="text-[10px] text-slate-600 dark:text-slate-400">Display collection as a dedicated carousel row on your primary Plex Home screen.</p>
                                         </div>
                                     </div>
                                     <Switch
@@ -5795,14 +5795,14 @@ export function AgregarrStudio() {
                                 </div>
 
                                 {/* Shared Users' Home */}
-                                <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700">
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800 hover:border-border dark:hover:border-slate-700">
                                     <div className="flex items-center gap-2.5">
-                                        <div className="p-1.5 rounded-md bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                                        <div className="p-1.5 rounded-md bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/30">
                                             <Users className="h-4 w-4" />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-white text-xs">Shared Friends &amp; Managed Users' Home</h4>
-                                            <p className="text-[10px] text-slate-400">Promote on the Home screen for everyone with shared access to this library.</p>
+                                            <h4 className="font-bold text-foreground dark:text-white text-xs">Shared Friends &amp; Managed Users' Home</h4>
+                                            <p className="text-[10px] text-slate-600 dark:text-slate-400">Promote on the Home screen for everyone with shared access to this library.</p>
                                         </div>
                                     </div>
                                     <Switch
@@ -5812,14 +5812,14 @@ export function AgregarrStudio() {
                                 </div>
 
                                 {/* Library Recommended */}
-                                <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700">
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800 hover:border-border dark:hover:border-slate-700">
                                     <div className="flex items-center gap-2.5">
-                                        <div className="p-1.5 rounded-md bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                                        <div className="p-1.5 rounded-md bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/30">
                                             <Star className="h-4 w-4" />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-white text-xs">Library Recommended Tab</h4>
-                                            <p className="text-[10px] text-slate-400">Display collection row inside the Recommended tab of this specific library.</p>
+                                            <h4 className="font-bold text-foreground dark:text-white text-xs">Library Recommended Tab</h4>
+                                            <p className="text-[10px] text-slate-600 dark:text-slate-400">Display collection row inside the Recommended tab of this specific library.</p>
                                         </div>
                                     </div>
                                     <Switch
@@ -5833,18 +5833,18 @@ export function AgregarrStudio() {
                         {/* Section 2: Library Browsing Mode & Home Screen Ranking */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {/* Library Browsing Display Mode */}
-                            <div className="p-3.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-2">
-                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <Layers className="h-3.5 w-3.5 text-sky-400" /> Library Browsing Display Mode
+                            <div className="p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800 space-y-2">
+                                <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                    <Layers className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Library Browsing Display Mode
                                 </Label>
-                                <p className="text-[10px] text-slate-400">
+                                <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                     Controls how this collection appears inline in the main Library grid.
                                 </p>
                                 <Select
                                     value={placementMode}
                                     onValueChange={setPlacementMode}
                                 >
-                                    <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8">
+                                    <SelectTrigger className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -5857,11 +5857,11 @@ export function AgregarrStudio() {
                             </div>
 
                             {/* Home Screen Ranking Position */}
-                            <div className="p-3.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-2">
-                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <Trophy className="h-3.5 w-3.5 text-amber-400" /> Home Screen Ranking (#1 - #99)
+                            <div className="p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800 space-y-2">
+                                <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                    <Trophy className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Home Screen Ranking (#1 - #99)
                                 </Label>
-                                <p className="text-[10px] text-slate-400">
+                                <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                     Numerical position of this row on the Plex Home &amp; Recommended hubs.
                                 </p>
                                 <div className="flex gap-2">
@@ -5875,13 +5875,13 @@ export function AgregarrStudio() {
                                             setPlacementOrderIndex(val);
                                             setPlacementSortPrefix(`!${String(val).padStart(2, '0')}_`);
                                         }}
-                                        className="h-8 text-xs bg-slate-900 border-slate-700 w-20 font-bold font-mono"
+                                        className="h-8 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 w-20 font-bold font-mono"
                                     />
                                     <Input
                                         value={placementSortPrefix}
                                         onChange={(e) => setPlacementSortPrefix(e.target.value)}
                                         placeholder="!01_"
-                                        className="h-8 text-xs bg-slate-900 border-slate-700 flex-1 font-mono text-slate-300"
+                                        className="h-8 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 flex-1 font-mono text-slate-700 dark:text-slate-300"
                                         title="Plex Sort Prefix"
                                     />
                                 </div>
@@ -5889,17 +5889,17 @@ export function AgregarrStudio() {
                         </div>
 
                         {/* Section 3: Day of the Week Scheduling */}
-                        <div className="space-y-2.5 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
-                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <Calendar className="h-3.5 w-3.5 text-amber-400" /> Day of Week Visibility
+                        <div className="space-y-2.5 p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800">
+                            <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-2">
+                                <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                    <Calendar className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Day of Week Visibility
                                 </Label>
                                 <div className="flex items-center gap-1.5">
                                     <button
                                         type="button"
                                         onClick={() => setPlacementActiveDays("all")}
                                         className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
-                                            placementActiveDays === "all" ? "bg-amber-500 text-slate-950" : "bg-slate-800 text-slate-300 hover:text-white"
+                                            placementActiveDays === "all" ? "bg-amber-500 text-slate-950" : "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                         }`}
                                     >
                                         Every Day
@@ -5908,7 +5908,7 @@ export function AgregarrStudio() {
                                         type="button"
                                         onClick={() => setPlacementActiveDays("sat,sun")}
                                         className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
-                                            placementActiveDays === "sat,sun" ? "bg-amber-500 text-slate-950" : "bg-slate-800 text-slate-300 hover:text-white"
+                                            placementActiveDays === "sat,sun" ? "bg-amber-500 text-slate-950" : "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                         }`}
                                     >
                                         Weekends
@@ -5917,7 +5917,7 @@ export function AgregarrStudio() {
                                         type="button"
                                         onClick={() => setPlacementActiveDays("mon,tue,wed,thu,fri")}
                                         className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
-                                            placementActiveDays === "mon,tue,wed,thu,fri" ? "bg-amber-500 text-slate-950" : "bg-slate-800 text-slate-300 hover:text-white"
+                                            placementActiveDays === "mon,tue,wed,thu,fri" ? "bg-amber-500 text-slate-950" : "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                         }`}
                                     >
                                         Weekdays
@@ -5925,7 +5925,7 @@ export function AgregarrStudio() {
                                 </div>
                             </div>
 
-                            <p className="text-[10px] text-slate-400">
+                            <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                 Limit collection promotion on Home/Recommended to specific days of the week:
                             </p>
 
@@ -5948,7 +5948,7 @@ export function AgregarrStudio() {
                                             className={`py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                                                 isSelected
                                                     ? "bg-amber-500 text-slate-950 border-amber-400 shadow-sm"
-                                                    : "bg-slate-900 text-slate-500 border-slate-800 hover:border-slate-700"
+                                                    : "bg-card/95 dark:bg-slate-900 text-slate-500 border-border dark:border-slate-800 hover:border-border dark:hover:border-slate-700"
                                             }`}
                                         >
                                             {day.label}
@@ -5959,18 +5959,18 @@ export function AgregarrStudio() {
                         </div>
 
                         {/* Section 4: Time of Day Scheduling */}
-                        <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
-                            <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                <Clock className="h-3.5 w-3.5 text-sky-400" /> Time of Day Scheduling
+                        <div className="space-y-2 p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800">
+                            <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                <Clock className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Time of Day Scheduling
                             </Label>
-                            <p className="text-[10px] text-slate-400">
+                            <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                 Automatically rotate collection visibility on Home based on the hour of the day:
                             </p>
                             <Select
                                 value={placementActiveTimeRange}
                                 onValueChange={setPlacementActiveTimeRange}
                             >
-                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8">
+                                <SelectTrigger className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -5983,13 +5983,13 @@ export function AgregarrStudio() {
                         </div>
 
                         {/* Section 5: Seasonal Calendar Scheduling */}
-                        <div className="space-y-3 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                        <div className="space-y-3 p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
-                                        <CalendarClock className="h-3.5 w-3.5 text-amber-400" /> Seasonal Date Window
+                                    <h4 className="font-bold text-foreground dark:text-white text-xs flex items-center gap-1.5">
+                                        <CalendarClock className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Seasonal Date Window
                                     </h4>
-                                    <p className="text-[10px] text-slate-400">Enable automatic promotion only during specific months of the year.</p>
+                                    <p className="text-[10px] text-slate-600 dark:text-slate-400">Enable automatic promotion only during specific months of the year.</p>
                                 </div>
                                 <Switch
                                     checked={placementIsSeasonal}
@@ -5998,49 +5998,49 @@ export function AgregarrStudio() {
                             </div>
 
                             {placementIsSeasonal && (
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-border dark:border-slate-800/80">
                                     <div className="space-y-1">
-                                        <Label className="text-[10px] text-slate-400">Start Month:</Label>
+                                        <Label className="text-[10px] text-slate-600 dark:text-slate-400">Start Month:</Label>
                                         <Input
                                             type="number"
                                             min={1}
                                             max={12}
                                             value={placementStartMonth}
                                             onChange={(e) => setPlacementStartMonth(parseInt(e.target.value, 10) || 1)}
-                                            className="h-8 text-xs bg-slate-900 border-slate-700"
+                                            className="h-8 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700"
                                         />
                                     </div>
                                     <div className="space-y-1">
-                                        <Label className="text-[10px] text-slate-400">Start Day:</Label>
+                                        <Label className="text-[10px] text-slate-600 dark:text-slate-400">Start Day:</Label>
                                         <Input
                                             type="number"
                                             min={1}
                                             max={31}
                                             value={placementStartDay}
                                             onChange={(e) => setPlacementStartDay(parseInt(e.target.value, 10) || 1)}
-                                            className="h-8 text-xs bg-slate-900 border-slate-700"
+                                            className="h-8 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700"
                                         />
                                     </div>
                                     <div className="space-y-1">
-                                        <Label className="text-[10px] text-slate-400">End Month:</Label>
+                                        <Label className="text-[10px] text-slate-600 dark:text-slate-400">End Month:</Label>
                                         <Input
                                             type="number"
                                             min={1}
                                             max={12}
                                             value={placementEndMonth}
                                             onChange={(e) => setPlacementEndMonth(parseInt(e.target.value, 10) || 12)}
-                                            className="h-8 text-xs bg-slate-900 border-slate-700"
+                                            className="h-8 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700"
                                         />
                                     </div>
                                     <div className="space-y-1">
-                                        <Label className="text-[10px] text-slate-400">End Day:</Label>
+                                        <Label className="text-[10px] text-slate-600 dark:text-slate-400">End Day:</Label>
                                         <Input
                                             type="number"
                                             min={1}
                                             max={31}
                                             value={placementEndDay}
                                             onChange={(e) => setPlacementEndDay(parseInt(e.target.value, 10) || 31)}
-                                            className="h-8 text-xs bg-slate-900 border-slate-700"
+                                            className="h-8 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700"
                                         />
                                     </div>
                                 </div>
@@ -6048,16 +6048,16 @@ export function AgregarrStudio() {
                         </div>
 
                         {/* Section 6: Collection Item Limit (maxItems) */}
-                        <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                        <div className="space-y-2 p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <Sliders className="h-3.5 w-3.5 text-amber-400" /> Collection Item Limit (Max Items)
+                                <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                    <Sliders className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Collection Item Limit (Max Items)
                                 </Label>
-                                <span className="text-[10px] text-slate-400 font-mono">
+                                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">
                                     {placementMaxItems > 0 ? `${placementMaxItems} items maximum` : "Unlimited items"}
                                 </span>
                             </div>
-                            <p className="text-[10px] text-slate-400">
+                            <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                 Control how many items appear in this collection. 0 means unlimited.
                             </p>
                             <div className="flex items-center gap-2">
@@ -6067,7 +6067,7 @@ export function AgregarrStudio() {
                                     max={500}
                                     value={placementMaxItems}
                                     onChange={(e) => setPlacementMaxItems(parseInt(e.target.value, 10) || 0)}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 w-24 font-bold font-mono text-white"
+                                    className="h-8 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 w-24 font-bold font-mono text-foreground dark:text-white"
                                 />
                                 <div className="flex flex-wrap items-center gap-1">
                                     {[
@@ -6086,7 +6086,7 @@ export function AgregarrStudio() {
                                             className={`px-2 py-1 rounded text-[10px] font-bold border transition-all cursor-pointer ${
                                                 placementMaxItems === preset.val
                                                     ? "bg-amber-500 text-slate-950 border-amber-400 font-black shadow-sm"
-                                                    : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                                                    : "bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200 hover:border-border dark:hover:border-slate-700"
                                             }`}
                                         >
                                             {preset.label}
@@ -6107,13 +6107,13 @@ export function AgregarrStudio() {
                         />
 
                         {/* Section 8: Coming Soon Placeholders & Trailer Stubs */}
-                        <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                        <div className="space-y-2 p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                        <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
+                                    <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
                                     </Label>
-                                    <p className="text-[10px] text-slate-400">
+                                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                         When enabled, items in this collection missing from your library will automatically generate trailer stubs (.strm) and banner posters in your Coming Soon share.
                                     </p>
                                 </div>
@@ -6125,23 +6125,23 @@ export function AgregarrStudio() {
                         </div>
 
                         {placementSavedMsg && (
-                            <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                            <div className="p-3 rounded-xl bg-emerald-500/15 dark:bg-emerald-950/80 border border-emerald-500/40 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                 <span>{placementSavedMsg}</span>
                             </div>
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={handleResetToDefaults}
-                            className="bg-slate-800/80 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-700 hover:border-slate-600 text-slate-300 hover:text-amber-300 dark:text-slate-300 dark:hover:text-amber-300 text-xs gap-1.5 cursor-pointer order-2 sm:order-1"
+                            className="bg-muted/80 hover:bg-accent dark:bg-slate-800 dark:hover:bg-slate-700 border-border dark:border-slate-700 hover:border-slate-600 text-slate-700 hover:text-amber-800 dark:text-slate-300 dark:hover:text-amber-300 text-xs gap-1.5 cursor-pointer order-2 sm:order-1"
                             title={findMatchingPreset(editingCollection) ? `Reset all fields to "${findMatchingPreset(editingCollection)?.title}" preset defaults` : "Reset all fields to default settings"}
                         >
-                            <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
+                            <RotateCcw className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                             <span>Reset to Defaults</span>
                         </Button>
                         <div className="flex items-center justify-end gap-2 order-1 sm:order-2 flex-wrap">
@@ -6150,7 +6150,7 @@ export function AgregarrStudio() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => setPlacementModalOpen(false)}
-                                className="text-slate-400 hover:text-slate-200 hover:bg-slate-800 dark:hover:bg-slate-800 text-xs cursor-pointer"
+                                className="text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800 text-xs cursor-pointer"
                             >
                                 Cancel
                             </Button>
@@ -6160,10 +6160,10 @@ export function AgregarrStudio() {
                                 size="sm"
                                 disabled={savingPlacement}
                                 onClick={() => handleSavePlacement(false)}
-                                className="bg-slate-800 hover:bg-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-600 dark:border-slate-600 hover:border-slate-500 text-white dark:text-white font-bold text-xs gap-1.5 cursor-pointer shadow-sm transition-all"
+                                className="bg-muted hover:bg-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-600 dark:border-slate-600 hover:border-slate-500 text-foreground dark:text-white font-bold text-xs gap-1.5 cursor-pointer shadow-sm transition-all"
                                 title="Save collection settings instantly to database without pushing to Plex now (sync later via 'Sync All')"
                             >
-                                {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Save className="h-3.5 w-3.5 text-amber-400" />}
+                                {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" /> : <Save className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                                 <span>Save Changes</span>
                             </Button>
                             <Button
@@ -6186,13 +6186,13 @@ export function AgregarrStudio() {
             {/* QUICK EXCLUDED LABELS MODAL (DIRECT FROM COLLECTION CARD) */}
             {/* ========================================================================= */}
             <Dialog open={quickLabelsModalOpen} onOpenChange={setQuickLabelsModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-5 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-rose-400" />
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-5 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <Tag className="h-4 w-4 text-rose-700 dark:text-rose-400" />
                             <span>Exclude Plex Labels: {quickLabelsCollection?.title}</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Quick-select any label generated across DomsHomeLab curation tabs (Parental Advisories, Placeholders, Prune, Specs) or live Plex tags to exclude them from this collection.
                         </DialogDescription>
                     </DialogHeader>
@@ -6208,14 +6208,14 @@ export function AgregarrStudio() {
                         />
 
                         {quickLabelsSavedMsg && (
-                            <div className="mt-3 p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-300 flex items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                            <div className="mt-3 p-2.5 rounded-lg bg-emerald-500/15 dark:bg-emerald-950/80 border border-emerald-500/40 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                 <span>{quickLabelsSavedMsg}</span>
                             </div>
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button type="button" variant="ghost" size="sm" onClick={() => setQuickLabelsModalOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
@@ -6237,14 +6237,14 @@ export function AgregarrStudio() {
             {/* MODAL 5: PLACEHOLDER / BANNER CREATION MODAL */}
             {/* ========================================================================= */}
             <Dialog open={placeholderModalOpen} onOpenChange={setPlaceholderModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-                    <DialogHeader className="pb-2 border-b border-slate-800 flex flex-row items-center justify-between shrink-0">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 flex flex-row items-center justify-between shrink-0">
                         <div className="space-y-0.5">
-                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Tag className="h-5 w-5 text-amber-400" />
+                            <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <Tag className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                 <span>Create Coming Soon Placeholder</span>
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-slate-400 truncate">
+                            <DialogDescription className="text-xs text-slate-600 dark:text-slate-400 truncate">
                                 {selectedPlaceholderItem?.title} ({selectedPlaceholderItem?.year || "Upcoming"})
                             </DialogDescription>
                         </div>
@@ -6253,9 +6253,9 @@ export function AgregarrStudio() {
                             size="sm"
                             variant="outline"
                             onClick={() => setPosterPickerModalOpen(true)}
-                            className="h-7 text-[11px] gap-1.5 border-amber-500/40 hover:bg-amber-950/40 text-amber-200 hover:text-amber-100 shrink-0"
+                            className="h-7 text-[11px] gap-1.5 border-amber-500/40 hover:bg-amber-500/10 dark:hover:bg-amber-950/40 text-amber-900 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100 shrink-0"
                         >
-                            <ImageIcon className="h-3.5 w-3.5 text-amber-400" /> Pull Poster from Plex
+                            <ImageIcon className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Pull Poster from Plex
                         </Button>
                     </DialogHeader>
 
@@ -6263,7 +6263,7 @@ export function AgregarrStudio() {
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                             {/* Preview Poster */}
                             <div className="sm:col-span-5 flex flex-col items-center justify-center space-y-2">
-                                <div className="relative aspect-[2/3] w-36 rounded-xl overflow-hidden bg-slate-950 border-2 border-slate-700 shadow-xl select-none">
+                                <div className="relative aspect-[2/3] w-36 rounded-xl overflow-hidden bg-muted dark:bg-slate-950 border-2 border-border dark:border-slate-700 shadow-xl select-none">
                                     {placeholderPreviewDataUrl ? (
                                         <img src={placeholderPreviewDataUrl} alt="Preview" className="w-full h-full object-cover" />
                                     ) : (
@@ -6282,21 +6282,21 @@ export function AgregarrStudio() {
                                         </div>
                                     )}
                                     {placeholderPreviewLoading && placeholderPreviewDataUrl && (
-                                        <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-slate-950/80 border border-slate-800 backdrop-blur-md">
-                                            <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
+                                        <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800 backdrop-blur-md">
+                                            <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-400" />
                                         </div>
                                     )}
                                 </div>
-                                <span className="text-[10px] text-slate-400 font-mono">Live Composite Preview</span>
+                                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">Live Composite Preview</span>
                             </div>
 
                             {/* Controls */}
                             <div className="sm:col-span-7 space-y-3">
                                 <div className="space-y-1">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs text-slate-300">Banner Preset:</Label>
+                                        <Label className="text-xs text-slate-700 dark:text-slate-300">Banner Preset:</Label>
                                         {bannerTemplates[placeholderModalBannerType] && (
-                                            <span className="text-[9px] font-mono text-amber-400 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-800/60">
+                                            <span className="text-[9px] font-mono text-amber-700 dark:text-amber-400 bg-amber-500/15 dark:bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-500/60 dark:border-amber-800/60">
                                                 ✨ Custom Template
                                             </span>
                                         )}
@@ -6305,7 +6305,7 @@ export function AgregarrStudio() {
                                         value={placeholderModalBannerType}
                                         onValueChange={handleSelectBannerPreset}
                                     >
-                                        <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
+                                        <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-8">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="max-h-64">
@@ -6316,7 +6316,7 @@ export function AgregarrStudio() {
                                                         <div className="flex items-center justify-between w-full gap-2">
                                                             <span>{p.label}</span>
                                                             {isCustom && (
-                                                                <span className="text-[9px] font-mono text-amber-400 bg-amber-950/80 px-1 py-0.2 rounded border border-amber-800/40">
+                                                                <span className="text-[9px] font-mono text-amber-700 dark:text-amber-400 bg-amber-500/15 dark:bg-amber-950/80 px-1 py-0.2 rounded border border-amber-500/40 dark:border-amber-800/40">
                                                                     Custom
                                                                 </span>
                                                             )}
@@ -6330,13 +6330,13 @@ export function AgregarrStudio() {
 
                                 <div className="space-y-1">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs text-slate-300">Banner Text Template:</Label>
-                                        <span className="text-[10px] text-amber-400 font-mono">Click chips to insert:</span>
+                                        <Label className="text-xs text-slate-700 dark:text-slate-300">Banner Text Template:</Label>
+                                        <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono">Click chips to insert:</span>
                                     </div>
                                     <Input
                                         value={placeholderModalBannerText}
                                         onChange={(e) => handleBannerTextChange(e.target.value)}
-                                        className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
+                                        className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800 font-mono text-foreground dark:text-white"
                                         placeholder="e.g. DIGITAL RELEASE ON {date}"
                                     />
 
@@ -6360,7 +6360,7 @@ export function AgregarrStudio() {
                                                 key={chip.token}
                                                 type="button"
                                                 onClick={() => handleInsertToken(chip.token)}
-                                                className="px-2 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
+                                                className="px-2 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
                                             >
                                                 {chip.label}
                                             </button>
@@ -6370,12 +6370,12 @@ export function AgregarrStudio() {
 
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="space-y-1">
-                                        <Label className="text-xs text-slate-300">Color Theme:</Label>
+                                        <Label className="text-xs text-slate-700 dark:text-slate-300">Color Theme:</Label>
                                         <Select
                                             value={placeholderModalBannerTheme}
                                             onValueChange={handleBannerThemeChange}
                                         >
-                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
+                                            <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-8">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -6393,12 +6393,12 @@ export function AgregarrStudio() {
                                     </div>
 
                                     <div className="space-y-1">
-                                        <Label className="text-xs text-slate-300">Position:</Label>
+                                        <Label className="text-xs text-slate-700 dark:text-slate-300">Position:</Label>
                                         <Select
                                             value={placeholderModalBannerPosition}
                                             onValueChange={(val: any) => handleBannerPositionChange(val)}
                                         >
-                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
+                                            <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-8">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -6413,14 +6413,14 @@ export function AgregarrStudio() {
                         </div>
 
                         {placeholderSuccessMsg && (
-                            <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                            <div className="p-3 rounded-xl bg-emerald-500/15 dark:bg-emerald-950/80 border border-emerald-500/40 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                 <span>{placeholderSuccessMsg}</span>
                             </div>
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button type="button" variant="ghost" size="sm" onClick={() => setPlaceholderModalOpen(false)} className="w-full sm:w-auto">
                             Close
                         </Button>
@@ -6442,27 +6442,27 @@ export function AgregarrStudio() {
             {/* MODAL 6: YOUTUBE TRAILER PLAYER MODAL */}
             {/* ========================================================================= */}
             <Dialog open={trailerModalOpen} onOpenChange={setTrailerModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col bg-slate-950 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between shrink-0">
+                <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-100 p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-border dark:border-slate-800 flex flex-row items-center justify-between shrink-0">
                         <div className="space-y-0.5">
-                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
                                 <Play className="h-4 w-4 text-rose-500 fill-rose-500" />
                                 <span>{activeTrailerTitle || "Official Trailer"}</span>
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-slate-400">
+                            <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                                 {activeTrailer?.name || "Official YouTube Trailer / Teaser Preview"}
                             </DialogDescription>
                         </div>
                         {activeTrailer?.type && (
-                            <Badge className="bg-rose-950 text-rose-300 border border-rose-800 text-xs font-mono">
+                            <Badge className="bg-rose-500/15 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-500/40 dark:border-rose-800 text-xs font-mono">
                                 {activeTrailer.type.toUpperCase()}
                             </Badge>
                         )}
                     </DialogHeader>
 
-                    <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-2xl my-2">
+                    <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-border dark:border-slate-800 shadow-2xl my-2">
                         {trailerLoading ? (
-                            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
+                            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-600 dark:text-slate-400">
                                 <Loader2 className="h-8 w-8 animate-spin text-rose-500" />
                                 <span className="text-xs font-medium">Fetching official trailer from TMDb &amp; YouTube...</span>
                             </div>
@@ -6475,13 +6475,13 @@ export function AgregarrStudio() {
                                 allowFullScreen
                             />
                         ) : (
-                            <div className="flex flex-col items-center justify-center h-full gap-3 p-6 text-center text-slate-400">
-                                <div className="p-3 rounded-full bg-slate-900 border border-slate-800 text-rose-400">
+                            <div className="flex flex-col items-center justify-center h-full gap-3 p-6 text-center text-slate-600 dark:text-slate-400">
+                                <div className="p-3 rounded-full bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800 text-rose-700 dark:text-rose-400">
                                     <Play className="h-8 w-8" />
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-sm font-bold text-white">No Official Trailer Found</p>
-                                    <p className="text-xs text-slate-400 max-w-sm">
+                                    <p className="text-sm font-bold text-foreground dark:text-white">No Official Trailer Found</p>
+                                    <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm">
                                         TMDb does not have an official trailer registered for "{activeTrailerTitle}".
                                     </p>
                                 </div>
@@ -6497,13 +6497,13 @@ export function AgregarrStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
+                    <DialogFooter className="pt-2 border-t border-border dark:border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => setTrailerModalOpen(false)}
-                            className="border-slate-800 text-slate-300 hover:text-white"
+                            className="border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                         >
                             Close
                         </Button>
@@ -6528,32 +6528,32 @@ export function AgregarrStudio() {
             {/* MODAL 8: FILTERED SMART HUBS DEPLOYER MODAL */}
             {/* ========================================================================= */}
             <Dialog open={filteredHubsModalOpen} onOpenChange={setFilteredHubsModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden max-h-[85vh] flex flex-col">
-                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between shrink-0">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-100 p-4 sm:p-6 overflow-hidden max-h-[85vh] flex flex-col">
+                    <DialogHeader className="pb-3 border-b border-border dark:border-slate-800 flex flex-row items-center justify-between shrink-0">
                         <div className="space-y-0.5">
-                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Clapperboard className="h-5 w-5 text-cyan-400" />
+                            <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <Clapperboard className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
                                 <span>Filtered Smart Hubs (Placeholder Exclusion)</span>
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-slate-400">
-                                Deploy Plex Smart Collections that exclude Coming Soon trailer stubs (<span className="font-mono text-cyan-300">label!=trailer-placeholder</span>, <span className="font-mono text-cyan-300">editionTitle!=Trailer</span>, <span className="font-mono text-cyan-300">episode.title!=Trailer (Placeholder)</span>) and display them in your Active Collections list.
+                            <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
+                                Deploy Plex Smart Collections that exclude Coming Soon trailer stubs (<span className="font-mono text-cyan-800 dark:text-cyan-300">label!=trailer-placeholder</span>, <span className="font-mono text-cyan-800 dark:text-cyan-300">editionTitle!=Trailer</span>, <span className="font-mono text-cyan-800 dark:text-cyan-300">episode.title!=Trailer (Placeholder)</span>) and display them in your Active Collections list.
                             </DialogDescription>
                         </div>
                     </DialogHeader>
 
                     <div className="overflow-y-auto py-3 space-y-3 flex-1 pr-1">
                         {/* Recently Added */}
-                        <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center justify-between gap-4">
+                        <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 flex items-center justify-between gap-4">
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                    <Clapperboard className="h-4 w-4 text-cyan-400" />
-                                    <span className="text-xs font-bold text-white">Recently Added (Curated)</span>
-                                    <Badge variant="outline" className="text-[9px] border-cyan-800/60 text-cyan-300 bg-cyan-950/40">
+                                    <Clapperboard className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
+                                    <span className="text-xs font-bold text-foreground dark:text-white">Recently Added (Curated)</span>
+                                    <Badge variant="outline" className="text-[9px] border-cyan-500/60 dark:border-cyan-800/60 text-cyan-800 dark:text-cyan-300 bg-cyan-500/10 dark:bg-cyan-950/40">
                                         {isTvSection ? "TV Shows" : "Movies"}
                                     </Badge>
                                 </div>
-                                <p className="text-[11px] text-slate-400">
-                                    Sorts by Date Added (<span className="font-mono text-slate-300">addedAt:desc</span>). Replaces the native un-filtered Plex Recently Added hub on Home &amp; Recommended.
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                    Sorts by Date Added (<span className="font-mono text-slate-700 dark:text-slate-300">addedAt:desc</span>). Replaces the native un-filtered Plex Recently Added hub on Home &amp; Recommended.
                                 </p>
                             </div>
                             <Button
@@ -6569,17 +6569,17 @@ export function AgregarrStudio() {
                         </div>
 
                         {/* Recently Released */}
-                        <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center justify-between gap-4">
+                        <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 flex items-center justify-between gap-4">
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                    <Sparkles className="h-4 w-4 text-amber-400" />
-                                    <span className="text-xs font-bold text-white">Recently Released (Curated)</span>
-                                    <Badge variant="outline" className="text-[9px] border-amber-800/60 text-amber-300 bg-amber-950/40">
+                                    <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                                    <span className="text-xs font-bold text-foreground dark:text-white">Recently Released (Curated)</span>
+                                    <Badge variant="outline" className="text-[9px] border-amber-500/60 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/40">
                                         {isTvSection ? "TV Series Air Date" : "Movie Release Date"}
                                     </Badge>
                                 </div>
-                                <p className="text-[11px] text-slate-400">
-                                    Sorts strictly by official release date (<span className="font-mono text-slate-300">originallyAvailableAt:desc</span>) to showcase fresh drops while excluding upcoming placeholders.
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                    Sorts strictly by official release date (<span className="font-mono text-slate-700 dark:text-slate-300">originallyAvailableAt:desc</span>) to showcase fresh drops while excluding upcoming placeholders.
                                 </p>
                             </div>
                             <Button
@@ -6596,17 +6596,17 @@ export function AgregarrStudio() {
 
                         {/* Recently Released Episodes (TV Only) */}
                         {isTvSection && (
-                            <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center justify-between gap-4">
+                            <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 flex items-center justify-between gap-4">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
-                                        <Radio className="h-4 w-4 text-sky-400" />
-                                        <span className="text-xs font-bold text-white">Recently Released Episodes (Curated)</span>
-                                        <Badge variant="outline" className="text-[9px] border-sky-800/60 text-sky-300 bg-sky-950/40">
+                                        <Radio className="h-4 w-4 text-sky-700 dark:text-sky-400" />
+                                        <span className="text-xs font-bold text-foreground dark:text-white">Recently Released Episodes (Curated)</span>
+                                        <Badge variant="outline" className="text-[9px] border-sky-500/60 dark:border-sky-800/60 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/40">
                                             TV Only
                                         </Badge>
                                     </div>
-                                    <p className="text-[11px] text-slate-400">
-                                        Sorts TV shows by latest episode added (<span className="font-mono text-slate-300">episode.addedAt:desc</span>) while strictly filtering out placeholder episodes.
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                        Sorts TV shows by latest episode added (<span className="font-mono text-slate-700 dark:text-slate-300">episode.addedAt:desc</span>) while strictly filtering out placeholder episodes.
                                     </p>
                                 </div>
                                 <Button
@@ -6623,17 +6623,17 @@ export function AgregarrStudio() {
                         )}
 
                         {/* Top Unwatched */}
-                        <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center justify-between gap-4">
+                        <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 flex items-center justify-between gap-4">
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                    <Eye className="h-4 w-4 text-emerald-400" />
-                                    <span className="text-xs font-bold text-white">Top Unwatched (Curated)</span>
-                                    <Badge variant="outline" className="text-[9px] border-emerald-800/60 text-emerald-300 bg-emerald-950/40">
+                                    <Eye className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                                    <span className="text-xs font-bold text-foreground dark:text-white">Top Unwatched (Curated)</span>
+                                    <Badge variant="outline" className="text-[9px] border-emerald-500/60 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-950/40">
                                         Per-User Filter
                                     </Badge>
                                 </div>
-                                <p className="text-[11px] text-slate-400">
-                                    Configured with <span className="font-mono text-slate-300">collectionFilterBasedOnUser=1</span> so each user only sees movies/shows they haven't watched yet.
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                    Configured with <span className="font-mono text-slate-700 dark:text-slate-300">collectionFilterBasedOnUser=1</span> so each user only sees movies/shows they haven't watched yet.
                                 </p>
                             </div>
                             <Button
@@ -6649,13 +6649,13 @@ export function AgregarrStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => setFilteredHubsModalOpen(false)}
-                            className="border-slate-800 text-slate-300 hover:text-white w-full sm:w-auto order-last sm:order-first"
+                            className="border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white w-full sm:w-auto order-last sm:order-first"
                         >
                             Close
                         </Button>
@@ -6677,24 +6677,24 @@ export function AgregarrStudio() {
             {/* MODAL 9: IGNORIED & DISMISSED HUBS MANAGER MODAL */}
             {/* ========================================================================= */}
             <Dialog open={dismissedHubsModalOpen} onOpenChange={setDismissedHubsModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden max-h-[85vh] flex flex-col">
-                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between shrink-0">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-100 p-4 sm:p-6 overflow-hidden max-h-[85vh] flex flex-col">
+                    <DialogHeader className="pb-3 border-b border-border dark:border-slate-800 flex flex-row items-center justify-between shrink-0">
                         <div className="space-y-0.5">
-                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <EyeOff className="h-5 w-5 text-amber-400" />
+                            <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <EyeOff className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                 <span>Ignored &amp; Dismissed Hubs ({dismissedHubsList.length})</span>
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-slate-400">
-                                Collections and Plex-native auto-generated hubs (like <span className="text-slate-300">&quot;Top Movies by Vicky Jenson&quot;</span>) that you deleted. They are blacklisted so clicking <span className="font-bold text-sky-300">Import from Plex</span> will NOT bring them back.
+                            <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
+                                Collections and Plex-native auto-generated hubs (like <span className="text-slate-700 dark:text-slate-300">&quot;Top Movies by Vicky Jenson&quot;</span>) that you deleted. They are blacklisted so clicking <span className="font-bold text-sky-800 dark:text-sky-300">Import from Plex</span> will NOT bring them back.
                             </DialogDescription>
                         </div>
                     </DialogHeader>
 
                     {dismissedActionMsg && (
                         <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 my-2 ${
-                            dismissedActionMsg.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                            dismissedActionMsg.success ? "bg-emerald-500/15 dark:bg-emerald-950/80 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/15 dark:bg-rose-950/80 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                         }`}>
-                            {dismissedActionMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                            {dismissedActionMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
                             <span>{dismissedActionMsg.text}</span>
                         </div>
                     )}
@@ -6702,13 +6702,13 @@ export function AgregarrStudio() {
                     <div className="overflow-y-auto py-2 space-y-2 flex-1 pr-1">
                         {dismissedHubsLoading ? (
                             <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-500 text-xs">
-                                <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+                                <Loader2 className="h-6 w-6 animate-spin text-amber-700 dark:text-amber-400" />
                                 <span>Loading ignored hubs blacklist...</span>
                             </div>
                         ) : dismissedHubsList.length === 0 ? (
                             <div className="py-12 text-center text-slate-500 space-y-2">
                                 <EyeOff className="h-8 w-8 mx-auto text-slate-700" />
-                                <p className="text-xs font-medium text-slate-400">No hubs or collections are currently blacklisted.</p>
+                                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">No hubs or collections are currently blacklisted.</p>
                                 <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
                                     When you delete collections or auto-generated Plex hubs in DomsHomeLab, they are registered here so they stay permanently gone.
                                 </p>
@@ -6717,13 +6717,13 @@ export function AgregarrStudio() {
                             dismissedHubsList.map((item, idx) => (
                                 <div
                                     key={`${item.ratingKey || item.title}_${idx}`}
-                                    className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex items-center justify-between gap-3 hover:border-slate-700 transition-all"
+                                    className="p-3 bg-card/95 dark:bg-slate-900/90 rounded-xl border border-border dark:border-slate-800 flex items-center justify-between gap-3 hover:border-border dark:hover:border-slate-700 transition-all"
                                 >
                                     <div className="space-y-0.5">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-xs font-bold text-white">{item.title}</span>
+                                            <span className="text-xs font-bold text-foreground dark:text-white">{item.title}</span>
                                             {item.ratingKey && (
-                                                <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 font-mono">
+                                                <Badge variant="outline" className="text-[9px] border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 font-mono">
                                                     #{item.ratingKey}
                                                 </Badge>
                                             )}
@@ -6739,10 +6739,10 @@ export function AgregarrStudio() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => handleRestoreDismissedHub(item)}
-                                        className="border-emerald-700/60 hover:bg-emerald-950/40 text-emerald-300 text-xs h-7 px-2.5 gap-1 shrink-0 cursor-pointer"
+                                        className="border-emerald-700/60 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 text-xs h-7 px-2.5 gap-1 shrink-0 cursor-pointer"
                                         title="Allow this hub to be re-imported from Plex"
                                     >
-                                        <RefreshCw className="h-3 w-3 text-emerald-400" />
+                                        <RefreshCw className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                                         <span>Restore</span>
                                     </Button>
                                 </div>
@@ -6750,16 +6750,16 @@ export function AgregarrStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         {dismissedHubsList.length > 0 ? (
                             <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
                                 onClick={handleClearAllDismissedHubs}
-                                className="border-rose-900/60 hover:bg-rose-950/50 text-rose-300 text-xs h-8 px-3 gap-1 cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
+                                className="border-rose-500/60 dark:border-rose-900/60 hover:bg-rose-500/10 dark:hover:bg-rose-950/50 text-rose-800 dark:text-rose-300 text-xs h-8 px-3 gap-1 cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
                             >
-                                <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                                <Trash2 className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                 <span>Clear All Ignored</span>
                             </Button>
                         ) : <div />}
@@ -6768,7 +6768,7 @@ export function AgregarrStudio() {
                             variant="outline"
                             size="sm"
                             onClick={() => setDismissedHubsModalOpen(false)}
-                            className="border-slate-800 text-slate-300 hover:text-white w-full sm:w-auto"
+                            className="border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white w-full sm:w-auto"
                         >
                             Close
                         </Button>
@@ -6780,49 +6780,49 @@ export function AgregarrStudio() {
             {/* MODAL 10: YOUTUBE COOKIES PASTE / UPLOAD MODAL */}
             {/* ========================================================================= */}
             <Dialog open={cookieModalOpen} onOpenChange={setCookieModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-xl max-h-[85vh] flex flex-col bg-slate-950 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                <DialogContent className="w-[96vw] sm:max-w-xl max-h-[85vh] flex flex-col bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-100 p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
                             <FileText className="h-5 w-5 text-red-500" />
                             <span>Configure YouTube Cookies (youtube-cookies.txt)</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400 leading-relaxed">
-                            Paste the contents of your exported Netscape format cookies text below. DomsHomeLab will save this to <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-red-400">data/youtube-cookies.txt</code> and pass it to <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-amber-300">yt-dlp --cookies</code> for authenticated 1080p trailer downloads.
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            Paste the contents of your exported Netscape format cookies text below. DomsHomeLab will save this to <code className="bg-card/95 dark:bg-slate-900 px-1 py-0.2 rounded font-mono text-red-700 dark:text-red-400">data/youtube-cookies.txt</code> and pass it to <code className="bg-card/95 dark:bg-slate-900 px-1 py-0.2 rounded font-mono text-amber-800 dark:text-amber-300">yt-dlp --cookies</code> for authenticated 1080p trailer downloads.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="py-3 space-y-3 flex-1 overflow-y-auto min-h-0">
                         <div className="space-y-1.5">
-                            <Label className="text-xs text-slate-300 font-semibold flex items-center justify-between">
+                            <Label className="text-xs text-slate-700 dark:text-slate-300 font-semibold flex items-center justify-between">
                                 <span>Netscape Cookie Text:</span>
-                                <span className="text-[10px] text-slate-400 font-mono">Format: .youtube.com TRUE / ...</span>
+                                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">Format: .youtube.com TRUE / ...</span>
                             </Label>
                             <Textarea
                                 placeholder={`# Netscape HTTP Cookie File\n# http://curl.haxx.se/rfc/cookie_spec.html\n# This file is generated by cookies.txt extension\n.youtube.com\tTRUE\t/\tTRUE\t1790000000\tPREF\tf4=4000000\n.youtube.com\tTRUE\t/\tTRUE\t1790000000\tSAPISID\t...`}
                                 value={cookieContent}
                                 onChange={(e) => setCookieContent(e.target.value)}
                                 rows={9}
-                                className="font-mono text-[11px] bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-400"
+                                className="font-mono text-[11px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-400"
                             />
                         </div>
 
                         {cookieActionMsg && (
                             <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
-                                cookieActionMsg.success ? "bg-emerald-950/80 border border-emerald-800 text-emerald-300" : "bg-rose-950/80 border border-rose-800 text-rose-300"
+                                cookieActionMsg.success ? "bg-emerald-500/15 dark:bg-emerald-950/80 border border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/15 dark:bg-rose-950/80 border border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                             }`}>
-                                {cookieActionMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                                {cookieActionMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
                                 <span>{cookieActionMsg.text}</span>
                             </div>
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => setCookieModalOpen(false)}
-                            className="border-slate-800 text-slate-300 hover:text-white w-full sm:w-auto"
+                            className="border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
@@ -6856,13 +6856,13 @@ export function AgregarrStudio() {
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col bg-slate-900 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden">
-                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Layers className="h-5 w-5 text-amber-400" />
+                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <Layers className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                             <span>Configure Target Collection Libraries</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Select which Plex library sections should receive automated collections, smart hubs, and seasonal playlists. Excluded sections are completely protected and will be skipped.
                         </DialogDescription>
                     </DialogHeader>
@@ -6871,11 +6871,11 @@ export function AgregarrStudio() {
                         {servers.map(srv => {
                             const srvSections = srv.sections || [];
                             return (
-                                <div key={srv.serverId} className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
-                                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <div key={srv.serverId} className="p-3.5 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800 space-y-3">
+                                    <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-2">
                                         <div className="flex items-center gap-2">
-                                            <HardDrive className="h-4 w-4 text-cyan-400" />
-                                            <span className="text-xs font-bold text-white">{srv.serverName}</span>
+                                            <HardDrive className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
+                                            <span className="text-xs font-bold text-foreground dark:text-white">{srv.serverName}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <Button
@@ -6883,17 +6883,17 @@ export function AgregarrStudio() {
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, true)}
-                                                className="h-6 text-[10px] px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"
+                                                className="h-6 text-[10px] px-2 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/40"
                                             >
                                                 Enable All
                                             </Button>
-                                            <span className="text-slate-400">•</span>
+                                            <span className="text-slate-600 dark:text-slate-400">•</span>
                                             <Button
                                                 type="button"
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, false)}
-                                                className="h-6 text-[10px] px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                                                className="h-6 text-[10px] px-2 text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10 dark:hover:bg-rose-950/40"
                                             >
                                                 Disable All
                                             </Button>
@@ -6909,19 +6909,19 @@ export function AgregarrStudio() {
                                                         key={String(sec.key)}
                                                         className={`p-2.5 rounded-lg border flex items-center justify-between transition-all ${
                                                             enabled
-                                                                ? "bg-emerald-950/20 border-emerald-600/40 text-emerald-200"
-                                                                : "bg-slate-900/60 border-slate-800 text-slate-400"
+                                                                ? "bg-emerald-500/10 dark:bg-emerald-950/20 border-emerald-600/40 text-emerald-900 dark:text-emerald-200"
+                                                                : "bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-800 text-slate-600 dark:text-slate-400"
                                                         }`}
                                                     >
                                                         <div className="flex items-center gap-2.5 min-w-0">
                                                             {sec.type === "movie" ? (
-                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`} />
                                                             ) : (
-                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`} />
                                                             )}
                                                             <div className="min-w-0">
-                                                                <span className="text-xs font-bold text-white block truncate">{sec.title}</span>
-                                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                                <span className="text-xs font-bold text-foreground dark:text-white block truncate">{sec.title}</span>
+                                                                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">
                                                                     Section #{sec.key} • {sec.type === "movie" ? "Movies" : "TV Shows"}
                                                                 </span>
                                                             </div>
@@ -6929,7 +6929,7 @@ export function AgregarrStudio() {
 
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             <Badge className={`text-[10px] font-bold ${
-                                                                enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
+                                                                enabled ? "bg-emerald-600 text-white" : "bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-border dark:border-slate-700"
                                                             }`}>
                                                                 {enabled ? "Active" : "Excluded"}
                                                             </Badge>
@@ -6943,14 +6943,14 @@ export function AgregarrStudio() {
                                             })}
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-slate-400 py-1">No library sections loaded for this server.</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 py-1">No library sections loaded for this server.</p>
                                     )}
                                 </div>
                             );
                         })}
                     </div>
 
-                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
+                    <DialogFooter className="pt-2 border-t border-border dark:border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             size="sm"
@@ -6978,19 +6978,19 @@ export function AgregarrStudio() {
                 <div className="fixed bottom-6 left-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300 max-w-md">
                     <div className={`flex items-center gap-3 p-3.5 sm:px-4 sm:py-3 rounded-2xl shadow-2xl backdrop-blur-xl border ${
                         floatingToast.type === "success"
-                            ? "bg-slate-950/95 border-emerald-500/60 text-emerald-200 shadow-emerald-950/40"
+                            ? "bg-muted/80 dark:bg-slate-950/95 border-emerald-500/60 text-emerald-900 dark:text-emerald-200 shadow-emerald-950/40"
                             : floatingToast.type === "error"
-                            ? "bg-slate-950/95 border-rose-500/60 text-rose-200 shadow-rose-950/40"
-                            : "bg-slate-950/95 border-amber-500/60 text-amber-200 shadow-amber-950/40"
+                            ? "bg-muted/80 dark:bg-slate-950/95 border-rose-500/60 text-rose-900 dark:text-rose-200 shadow-rose-950/40"
+                            : "bg-muted/80 dark:bg-slate-950/95 border-amber-500/60 text-amber-900 dark:text-amber-200 shadow-amber-950/40"
                     }`}>
-                        {floatingToast.type === "success" && <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />}
-                        {floatingToast.type === "error" && <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
-                        {floatingToast.type === "info" && <Loader2 className="h-4 w-4 animate-spin text-amber-400 shrink-0" />}
+                        {floatingToast.type === "success" && <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />}
+                        {floatingToast.type === "error" && <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
+                        {floatingToast.type === "info" && <Loader2 className="h-4 w-4 animate-spin text-amber-700 dark:text-amber-400 shrink-0" />}
                         <span className="text-xs font-bold leading-snug">{floatingToast.text}</span>
                         <button
                             type="button"
                             onClick={() => setFloatingToast(null)}
-                            className="ml-auto p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                            className="ml-auto p-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white hover:bg-accent dark:hover:bg-white/10 cursor-pointer"
                         >
                             <X className="h-3.5 w-3.5" />
                         </button>

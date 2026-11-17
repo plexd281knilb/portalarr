@@ -261,10 +261,10 @@ export function SuggestFixModal({ open, onOpenChange, userRole = "USER", usernam
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-xl md:max-w-2xl bg-[#0e0e14] border-border/60 text-foreground p-0 overflow-hidden shadow-2xl rounded-xl max-h-[92vh] flex flex-col">
-                <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/40 bg-gradient-to-r from-amber-500/10 via-slate-900/90 to-slate-900/95">
+            <DialogContent className="sm:max-w-xl md:max-w-2xl bg-popover dark:bg-[#0e0e14] border-border/60 text-foreground p-0 overflow-hidden shadow-2xl rounded-xl max-h-[92vh] flex flex-col">
+                <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/40 bg-gradient-to-r from-amber-500/10 via-card dark:via-slate-900/90 to-muted/60 dark:to-slate-900/95">
                     <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0">
                             <Wrench className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
@@ -281,7 +281,7 @@ export function SuggestFixModal({ open, onOpenChange, userRole = "USER", usernam
                 <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                     {submittedTicketId ? (
                         <div className="py-8 px-4 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                            <div className="h-16 w-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
+                            <div className="h-16 w-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
                                 <CheckCircle2 className="h-8 w-8" />
                             </div>
                             <div className="space-y-1.5">
@@ -301,8 +301,8 @@ export function SuggestFixModal({ open, onOpenChange, userRole = "USER", usernam
                         <form id="suggest-fix-form" onSubmit={handleSubmit} className="space-y-4">
                             {/* ERROR BANNER */}
                             {submitError && (
-                                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2">
-                                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2">
+                                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />
                                     <span>{submitError}</span>
                                 </div>
                             )}
@@ -403,7 +403,7 @@ export function SuggestFixModal({ open, onOpenChange, userRole = "USER", usernam
                                     <span className="flex items-center gap-1.5">
                                         <Monitor className="h-3 w-3 text-primary" /> Auto-Captured Context
                                     </span>
-                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">
                                         Auto-Attached
                                     </Badge>
                                 </div>

@@ -156,19 +156,19 @@ export default async function UserLandingPage() {
                             </h1>
                             <BuildBadge variant="full" isAdmin={isAdmin} />
                             {isTrial ? (
-                                <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-xs font-semibold">
+                                <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-xs font-semibold">
                                     Free Trial
                                 </Badge>
                             ) : isSuperUser ? (
-                                <Badge variant="outline" className="bg-cyan-500/15 text-cyan-300 border-cyan-500/30 text-xs font-semibold">
+                                <Badge variant="outline" className="bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30 text-xs font-semibold">
                                     Super User
                                 </Badge>
                             ) : isAdmin ? (
-                                <Badge variant="outline" className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-xs font-semibold">
+                                <Badge variant="outline" className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30 text-xs font-semibold">
                                     Admin Mission Control
                                 </Badge>
                             ) : (
-                                <Badge variant="outline" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-xs font-semibold">
+                                <Badge variant="outline" className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-xs font-semibold">
                                     Full Member
                                 </Badge>
                             )}
@@ -274,10 +274,10 @@ export default async function UserLandingPage() {
                         />
 
                         {/* 4. MEDIA REQUESTS SECTION (BUILT-IN IS MAIN, SEERR, OMBI AT BOTTOM WITH NOTE) */}
-                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
+                        <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-foreground">
-                                    <Compass className="h-5 w-5 text-rose-400" /> Media Requests
+                                    <Compass className="h-5 w-5 text-rose-700 dark:text-rose-400" /> Media Requests
                                 </CardTitle>
                                 <CardDescription className="text-xs">
                                     Browse trending releases, watch high-definition trailers, and request movies & TV shows.
@@ -308,7 +308,7 @@ export default async function UserLandingPage() {
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 
-                                                        className="w-full text-xs h-9 justify-between font-semibold border-border/60 hover:bg-white/[0.04]"
+                                                        className="w-full text-xs h-9 justify-between font-semibold border-border/60 hover:bg-accent dark:hover:bg-white/[0.04]"
                                                     >
                                                         <span>{app.name}</span>
                                                         <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
@@ -323,11 +323,11 @@ export default async function UserLandingPage() {
                                 {ombiApps.length > 0 && (
                                     <div className="space-y-2 pt-1">
                                         {ombiApps.map((ombiApp) => (
-                                            <div key={ombiApp.id} className="p-2.5 rounded-xl bg-white/[0.02] border border-amber-500/20 flex items-center justify-between gap-3 text-xs">
+                                            <div key={ombiApp.id} className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-amber-500/20 flex items-center justify-between gap-3 text-xs">
                                                 <div className="space-y-0.5 min-w-0">
                                                     <div className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
                                                         <span>{ombiApp.name || "Alternative Media Requests"}</span>
-                                                        <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                        <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                              Support Ending Soon
                                                         </Badge>
                                                     </div>
@@ -356,19 +356,19 @@ export default async function UserLandingPage() {
                         )}
 
                         {/* 7. PROMINENT BOOK LIBRARY ACCESS CARD */}
-                        <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-[#121218]/90 to-[#0d0d12] backdrop-blur-md shadow-md relative overflow-hidden">
+                        <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 dark:from-emerald-950/20 via-card dark:via-[#121218]/90 to-muted/60 dark:to-[#0d0d12] backdrop-blur-md shadow-md relative overflow-hidden">
                             <CardHeader className="pb-3">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                     <div className="space-y-0.5">
                                         <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-foreground">
-                                            <BookOpen className="h-5 w-5 text-emerald-400" />
+                                            <BookOpen className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                                             Book & Audiobook Library
                                         </CardTitle>
                                         <CardDescription className="text-xs">
                                             Read ebooks, stream audiobooks with built-in chapters, and deliver directly to your Amazon Kindle.
                                         </CardDescription>
                                     </div>
-                                    <Badge variant="outline" className={`text-[10px] font-semibold w-fit ${hasAccess ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border-amber-500/30"}`}>
+                                    <Badge variant="outline" className={`text-[10px] font-semibold w-fit ${hasAccess ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"}`}>
                                         {hasAccess ? "Access Unlocked" : "Setup Required"}
                                     </Badge>
                                 </div>
@@ -385,7 +385,7 @@ export default async function UserLandingPage() {
                                 )}
                                 <div className="text-[11px] text-muted-foreground pt-1 border-t border-border/30 flex items-center justify-between">
                                     <span>Supports Send-to-Kindle delivery or direct browser downloads/reading.</span>
-                                    <Link href="/profile#kindle" className="text-emerald-400 hover:underline">
+                                    <Link href="/profile#kindle" className="text-emerald-700 dark:text-emerald-400 hover:underline">
                                         Configure in Account &gt;
                                     </Link>
                                 </div>
@@ -428,57 +428,57 @@ export default async function UserLandingPage() {
                         {/* QUICK ACCESS ADMIN TOOL MATRIX */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-2.5">
                             <Link href="/discover" className="block group">
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
-                                    <Compass className="h-5 w-5 mx-auto text-rose-400" />
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
+                                    <Compass className="h-5 w-5 mx-auto text-rose-700 dark:text-rose-400" />
                                     <span className="text-xs font-bold block text-foreground truncate">Requests</span>
                                 </div>
                             </Link>
 
                             <Link href="/admin/tautulli" className="block group">
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-cyan-500/50 text-center space-y-1.5 transition-all">
-                                    <Activity className="h-5 w-5 mx-auto text-cyan-400" />
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 group-hover:border-cyan-500/50 text-center space-y-1.5 transition-all">
+                                    <Activity className="h-5 w-5 mx-auto text-cyan-700 dark:text-cyan-400" />
                                     <span className="text-xs font-bold block text-foreground truncate">Streams</span>
                                 </div>
                             </Link>
 
                             <Link href="/admin/monitoring" className="block group">
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-emerald-500/50 text-center space-y-1.5 transition-all">
-                                    <Layers className="h-5 w-5 mx-auto text-emerald-400" />
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 group-hover:border-emerald-500/50 text-center space-y-1.5 transition-all">
+                                    <Layers className="h-5 w-5 mx-auto text-emerald-700 dark:text-emerald-400" />
                                     <span className="text-xs font-bold block text-foreground truncate">Fleet &amp; Uptime</span>
                                 </div>
                             </Link>
 
                             <Link href="/library" className="block group">
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-emerald-500/50 text-center space-y-1.5 transition-all">
-                                    <BookOpen className="h-5 w-5 mx-auto text-emerald-400" />
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 group-hover:border-emerald-500/50 text-center space-y-1.5 transition-all">
+                                    <BookOpen className="h-5 w-5 mx-auto text-emerald-700 dark:text-emerald-400" />
                                     <span className="text-xs font-bold block text-foreground truncate">Book Library</span>
                                 </div>
                             </Link>
 
                             <Link href="/radarr" className="block group">
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-amber-500/50 text-center space-y-1.5 transition-all">
-                                    <Film className="h-5 w-5 mx-auto text-amber-400" />
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 group-hover:border-amber-500/50 text-center space-y-1.5 transition-all">
+                                    <Film className="h-5 w-5 mx-auto text-amber-700 dark:text-amber-400" />
                                     <span className="text-xs font-bold block text-foreground truncate">Radarr</span>
                                 </div>
                             </Link>
 
                             <Link href="/sonarr" className="block group">
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-sky-500/50 text-center space-y-1.5 transition-all">
-                                    <Tv className="h-5 w-5 mx-auto text-sky-400" />
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 group-hover:border-sky-500/50 text-center space-y-1.5 transition-all">
+                                    <Tv className="h-5 w-5 mx-auto text-sky-700 dark:text-sky-400" />
                                     <span className="text-xs font-bold block text-foreground truncate">Sonarr</span>
                                 </div>
                             </Link>
 
                             <Link href="/tickets" className="block group">
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
-                                    <LifeBuoy className="h-5 w-5 mx-auto text-rose-400" />
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
+                                    <LifeBuoy className="h-5 w-5 mx-auto text-rose-700 dark:text-rose-400" />
                                     <span className="text-xs font-bold block text-foreground truncate">Tickets</span>
                                 </div>
                             </Link>
 
                             <Link href="/settings" className="block group">
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-amber-500/50 text-center space-y-1.5 transition-all">
-                                    <Settings className="h-5 w-5 mx-auto text-amber-400" />
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 group-hover:border-amber-500/50 text-center space-y-1.5 transition-all">
+                                    <Settings className="h-5 w-5 mx-auto text-amber-700 dark:text-amber-400" />
                                     <span className="text-xs font-bold block text-foreground truncate">Settings</span>
                                 </div>
                             </Link>

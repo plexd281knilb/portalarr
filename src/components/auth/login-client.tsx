@@ -236,8 +236,8 @@ function LoginForm({ initialIsSetupMode }: { initialIsSetupMode?: boolean }) {
         <CardContent className="grid gap-4">
           
           {infoMessage && (
-            <div className="text-xs font-medium text-sky-400 bg-sky-950/40 border border-sky-800/40 p-3 rounded-md flex items-center gap-2">
-              <Info className="h-4 w-4 shrink-0 text-sky-400" />
+            <div className="text-xs font-medium text-sky-700 dark:text-sky-400 bg-sky-500/10 dark:bg-sky-950/40 border border-sky-500/40 dark:border-sky-800/40 p-3 rounded-md flex items-center gap-2">
+              <Info className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-400" />
               <span>{infoMessage}</span>
             </div>
           )}
@@ -376,11 +376,11 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
 
         {forgotSuccess ? (
           <div className="space-y-3">
-            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3.5 rounded-xl flex items-start gap-2.5 leading-relaxed">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3.5 rounded-xl flex items-start gap-2.5 leading-relaxed">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400 mt-0.5" />
               <div>
                 <strong>Temporary Password Dispatched!</strong>
-                <p className="mt-1 text-emerald-300/80">{forgotSuccess}</p>
+                <p className="mt-1 text-emerald-800/80 dark:text-emerald-300/80">{forgotSuccess}</p>
               </div>
             </div>
 
@@ -397,7 +397,7 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
         ) : (
           <>
             {forgotError && (
-              <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-start gap-2">
+              <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{forgotError}</span>
               </div>
@@ -504,7 +504,7 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
           </button>
         </div>
         {isCapsLock && (
-          <div className="text-[11px] text-amber-400 flex items-center gap-1 font-medium animate-in fade-in">
+          <div className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1 font-medium animate-in fade-in">
             <AlertCircle className="h-3 w-3 shrink-0" />
             <span>Caps Lock is ON</span>
           </div>

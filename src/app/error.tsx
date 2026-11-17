@@ -21,7 +21,7 @@ export default function GlobalError({
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 space-y-4 text-center">
-            <div className="p-3.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
+            <div className="p-3.5 rounded-lg bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
                 <AlertCircle className="h-8 w-8" />
             </div>
             <div className="space-y-2">

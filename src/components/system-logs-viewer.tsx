@@ -28,7 +28,7 @@ interface LogCategoryMeta {
 }
 
 const LOG_CATEGORIES: LogCategoryMeta[] = [
-    { id: "ALL", label: "ALL", icon: FileText, badgeStyle: "bg-slate-500/20 text-slate-300 border-slate-500/30", activeStyle: "bg-slate-700 text-white border-slate-500 font-bold" },
+    { id: "ALL", label: "ALL", icon: FileText, badgeStyle: "bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/30", activeStyle: "bg-slate-700 text-white border-slate-500 font-bold" },
     { id: "PLEX", label: "PLEX", icon: Tv, badgeStyle: "bg-amber-500/20 text-amber-300 border-amber-500/30", activeStyle: "bg-amber-500/25 text-amber-300 border-amber-500/60 font-bold ring-1 ring-amber-500/30" },
     { id: "TAUTULLI", label: "TAUTULLI", icon: BarChart3, badgeStyle: "bg-teal-500/20 text-teal-300 border-teal-500/30", activeStyle: "bg-teal-500/25 text-teal-300 border-teal-500/60 font-bold ring-1 ring-teal-500/30" },
     { id: "SEERR", label: "SEERR", icon: Film, badgeStyle: "bg-orange-600/20 text-orange-300 border-orange-600/30", activeStyle: "bg-orange-600/25 text-orange-300 border-orange-600/60 font-bold ring-1 ring-orange-600/30" },
@@ -46,7 +46,7 @@ const LOG_CATEGORIES: LogCategoryMeta[] = [
     { id: "API", label: "API", icon: Globe, badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30", activeStyle: "bg-cyan-500/25 text-cyan-300 border-cyan-500/60 font-bold ring-1 ring-cyan-500/30" },
     { id: "MONITORING", label: "MONITORING", icon: Activity, badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", activeStyle: "bg-emerald-500/25 text-emerald-300 border-emerald-500/60 font-bold ring-1 ring-emerald-500/30" },
     { id: "CURATION", label: "CURATION", icon: Palette, badgeStyle: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30", activeStyle: "bg-fuchsia-500/25 text-fuchsia-300 border-fuchsia-500/60 font-bold ring-1 ring-fuchsia-500/30" },
-    { id: "SYSTEM", label: "SYSTEM", icon: Settings, badgeStyle: "bg-slate-500/20 text-slate-300 border-slate-500/30", activeStyle: "bg-slate-500/25 text-slate-300 border-slate-500/60 font-bold ring-1 ring-slate-500/30" },
+    { id: "SYSTEM", label: "SYSTEM", icon: Settings, badgeStyle: "bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/30", activeStyle: "bg-slate-500/25 text-slate-700 dark:text-slate-300 border-slate-500/60 font-bold ring-1 ring-slate-500/30" },
 ];
 
 export function normalizeCategory(cat: string): string {
@@ -285,7 +285,7 @@ export default function SystemLogsViewer() {
                     id: cat,
                     label: cat,
                     icon: Terminal,
-                    badgeStyle: "bg-slate-600/20 text-slate-300 border-slate-600/30",
+                    badgeStyle: "bg-slate-600/20 text-slate-700 dark:text-slate-300 border-slate-600/30",
                     activeStyle: "bg-slate-600/30 text-white border-slate-500 font-bold"
                 });
             }
@@ -333,13 +333,13 @@ export default function SystemLogsViewer() {
     const getLevelBadge = (level: string) => {
         switch (level) {
             case "SUCCESS":
-                return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1"><CheckCircle2 className="h-3 w-3" /> SUCCESS</Badge>;
+                return <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1"><CheckCircle2 className="h-3 w-3" /> SUCCESS</Badge>;
             case "WARN":
-                return <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 gap-1"><AlertTriangle className="h-3 w-3" /> WARN</Badge>;
+                return <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1"><AlertTriangle className="h-3 w-3" /> WARN</Badge>;
             case "ERROR":
-                return <Badge className="bg-red-500/20 text-red-400 border-red-500/30 gap-1"><XCircle className="h-3 w-3" /> ERROR</Badge>;
+                return <Badge className="bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30 gap-1"><XCircle className="h-3 w-3" /> ERROR</Badge>;
             default:
-                return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 gap-1"><Info className="h-3 w-3" /> INFO</Badge>;
+                return <Badge className="bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30 gap-1"><Info className="h-3 w-3" /> INFO</Badge>;
         }
     };
 
@@ -349,7 +349,7 @@ export default function SystemLogsViewer() {
             id: cat,
             label: cat,
             icon: Settings,
-            badgeStyle: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+            badgeStyle: "bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/30",
             activeStyle: ""
         };
         const CatIcon = meta.icon;
@@ -362,17 +362,17 @@ export default function SystemLogsViewer() {
     };
 
     return (
-        <Card className="border-slate-800 bg-slate-950/80 backdrop-blur shadow-2xl">
-            <CardHeader className="border-b border-slate-800/80 pb-4">
+        <Card className="border-border dark:border-slate-800 bg-muted/80 dark:bg-slate-950/80 backdrop-blur shadow-2xl">
+            <CardHeader className="border-b border-border dark:border-slate-800/80 pb-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2.5">
-                            <CardTitle className="text-xl font-bold flex items-center gap-2 text-slate-100">
-                                <Terminal className="h-5 w-5 text-emerald-400" />
+                            <CardTitle className="text-xl font-bold flex items-center gap-2 text-foreground dark:text-slate-100">
+                                <Terminal className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                                 Live System & Diagnostic Activity Stream
                             </CardTitle>
                             {autoRefresh && (
-                                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
                                     <span className="relative flex h-2 w-2">
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -381,12 +381,12 @@ export default function SystemLogsViewer() {
                                 </span>
                             )}
                             {newLogsCount > 0 && (
-                                <Badge className="bg-blue-500/25 text-blue-300 border-blue-500/40 text-[10px] animate-pulse">
+                                <Badge className="bg-blue-500/25 text-blue-800 dark:text-blue-300 border-blue-500/40 text-[10px] animate-pulse">
                                     +{newLogsCount} new
                                 </Badge>
                             )}
                         </div>
-                        <CardDescription className="text-slate-400 text-xs mt-1 flex items-center gap-3">
+                        <CardDescription className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-3">
                             <span>Real-time streaming audit log for Plex, Tautulli, download indexers, library scanners, AI agents, and system health.</span>
                             {lastPolledTime && (
                                 <span className="text-slate-500 text-[11px] font-mono hidden md:inline">
@@ -397,20 +397,20 @@ export default function SystemLogsViewer() {
                     </div>
 
                     <div className="flex items-center gap-2.5 flex-wrap">
-                        <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
+                        <div className="flex items-center gap-2 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-800 px-3 py-1.5 rounded-lg text-xs">
                             <Switch
                                 id="auto-refresh"
                                 checked={autoRefresh}
                                 onCheckedChange={setAutoRefresh}
                             />
-                            <Label htmlFor="auto-refresh" className="cursor-pointer text-slate-300 font-medium flex items-center gap-1.5">
+                            <Label htmlFor="auto-refresh" className="cursor-pointer text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1.5">
                                 {autoRefresh ? (
                                     <>
-                                        <RefreshCw className="h-3.5 w-3.5 text-emerald-400 animate-spin" /> Live Polling
+                                        <RefreshCw className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 animate-spin" /> Live Polling
                                     </>
                                 ) : (
                                     <>
-                                        <Pause className="h-3.5 w-3.5 text-slate-400" /> Paused
+                                        <Pause className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" /> Paused
                                     </>
                                 )}
                             </Label>
@@ -421,7 +421,7 @@ export default function SystemLogsViewer() {
                             size="sm" 
                             onClick={() => fetchLogs(false)} 
                             disabled={loading}
-                            className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
+                            className="border-border dark:border-slate-700 bg-card/95 dark:bg-slate-900 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200"
                         >
                             <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
                             Refresh
@@ -431,10 +431,10 @@ export default function SystemLogsViewer() {
                             variant="outline" 
                             size="sm" 
                             onClick={handleCopy}
-                            className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 cursor-pointer"
+                            className="border-border dark:border-slate-700 bg-card/95 dark:bg-slate-900 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200 cursor-pointer"
                             title="Copy displayed activity logs to clipboard"
                         >
-                            {copied ? <Check className="h-3.5 w-3.5 text-emerald-400 mr-1.5" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+                            {copied ? <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 mr-1.5" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
                             {copied ? "Copied!" : `Copy (${filteredLogs.length || logs.length})`}
                         </Button>
 
@@ -442,10 +442,10 @@ export default function SystemLogsViewer() {
                             variant="outline" 
                             size="sm" 
                             onClick={handleDownload}
-                            className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
+                            className="border-border dark:border-slate-700 bg-card/95 dark:bg-slate-900 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200"
                             title="Download complete system log file as a text document"
                         >
-                            <Download className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
+                            <Download className="h-3.5 w-3.5 mr-1.5 text-blue-700 dark:text-blue-400" />
                             Download
                         </Button>
 
@@ -454,10 +454,10 @@ export default function SystemLogsViewer() {
                             size="sm" 
                             onClick={handleRunPlexDiagnostics}
                             disabled={runningPlexDiag}
-                            className="border-amber-700 bg-amber-950/80 hover:bg-amber-900 text-amber-200 font-medium"
+                            className="border-amber-700 bg-amber-500/15 dark:bg-amber-950/80 hover:bg-amber-500/15 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 font-medium"
                             title="Run a deep audit of your Plex Token, Server connections, library sections, and user shares"
                         >
-                            <Tv className={`h-3.5 w-3.5 mr-1.5 text-amber-400 ${runningPlexDiag ? "animate-spin" : ""}`} />
+                            <Tv className={`h-3.5 w-3.5 mr-1.5 text-amber-700 dark:text-amber-400 ${runningPlexDiag ? "animate-spin" : ""}`} />
                             {runningPlexDiag ? "Auditing Plex..." : "Plex Diagnostics"}
                         </Button>
 
@@ -466,9 +466,9 @@ export default function SystemLogsViewer() {
                             size="sm" 
                             onClick={handleDumpDatabase}
                             disabled={dumping}
-                            className="border-cyan-700 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200"
+                            className="border-cyan-700 bg-cyan-500/15 dark:bg-cyan-950/80 hover:bg-cyan-500/15 dark:hover:bg-cyan-900 text-cyan-900 dark:text-cyan-200"
                         >
-                            <Database className={`h-3.5 w-3.5 mr-1.5 text-cyan-400 ${dumping ? "animate-spin" : ""}`} />
+                            <Database className={`h-3.5 w-3.5 mr-1.5 text-cyan-700 dark:text-cyan-400 ${dumping ? "animate-spin" : ""}`} />
                             {dumping ? "Dumping..." : "Dump Database"}
                         </Button>
 
@@ -476,7 +476,7 @@ export default function SystemLogsViewer() {
                             variant="destructive" 
                             size="sm" 
                             onClick={handleClear}
-                            className="bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-200"
+                            className="bg-red-500/15 dark:bg-red-950/80 hover:bg-red-500/15 dark:hover:bg-red-900 border border-red-500/80 dark:border-red-800/80 text-red-200"
                         >
                             <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                             Clear
@@ -485,7 +485,7 @@ export default function SystemLogsViewer() {
                 </div>
 
                 {/* Filter Controls Bar */}
-                <div className="space-y-3 mt-4 pt-3 border-t border-slate-800/60">
+                <div className="space-y-3 mt-4 pt-3 border-t border-border dark:border-slate-800/60">
                     <div className="flex flex-wrap items-center gap-3">
                         <div className="relative flex-1 min-w-0 sm:min-w-[240px]">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
@@ -493,12 +493,12 @@ export default function SystemLogsViewer() {
                                 placeholder="Filter logs by keyword, Plex user, book title, error message..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="pl-9 bg-slate-900/90 border-slate-800 text-xs text-slate-200 placeholder:text-slate-500"
+                                className="pl-9 bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 text-xs text-foreground dark:text-slate-200 placeholder:text-slate-500"
                             />
                         </div>
 
                         {/* Level Filters with Circle Count Badges */}
-                        <div className="flex items-center gap-1.5 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs">
+                        <div className="flex items-center gap-1.5 bg-card/95 dark:bg-slate-900/80 p-1 rounded-xl border border-border dark:border-slate-800 text-xs">
                             {["ALL", "INFO", "SUCCESS", "WARN", "ERROR"].map(lvl => {
                                 const isSelected = levelFilter === lvl;
                                 const lvlCount = levelCounts[lvl] || 0;
@@ -508,17 +508,17 @@ export default function SystemLogsViewer() {
                                         onClick={() => setLevelFilter(lvl)}
                                         className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border ${
                                             isSelected
-                                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm"
-                                                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                                                ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/50 shadow-sm"
+                                                : "border-transparent text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/50"
                                         }`}
                                     >
                                         <span>{lvl}</span>
                                         <span className={`text-[10px] px-1.5 py-0.5 min-w-[18px] text-center rounded-full font-mono tabular-nums transition-all ${
                                             isSelected 
-                                                ? 'bg-emerald-500/30 text-emerald-200 font-bold' 
+                                                ? 'bg-emerald-500/30 text-emerald-900 dark:text-emerald-200 font-bold' 
                                                 : lvlCount > 0 
-                                                ? 'bg-slate-800 text-slate-300' 
-                                                : 'bg-slate-800/40 text-slate-500'
+                                                ? 'bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300' 
+                                                : 'bg-muted/40 dark:bg-slate-800/40 text-slate-500'
                                         }`}>
                                             {lvlCount}
                                         </span>
@@ -529,7 +529,7 @@ export default function SystemLogsViewer() {
                     </div>
 
                     {/* Dedicated Category Buttons with Uniform Circle Counts & Icons */}
-                    <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5 bg-card/95 dark:bg-slate-900/80 p-1.5 rounded-xl border border-border dark:border-slate-800 text-xs">
                         {activeCategories.map(cat => {
                             const isSelected = categoryFilter === cat.id;
                             const count = categoryCounts[cat.id] || 0;
@@ -542,18 +542,18 @@ export default function SystemLogsViewer() {
                                         isSelected
                                             ? cat.activeStyle
                                             : count > 0 
-                                            ? "border-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-800/60" 
-                                            : "border-slate-800/40 text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+                                            ? "border-border dark:border-slate-800/80 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white hover:bg-accent dark:hover:bg-slate-800/60" 
+                                            : "border-border dark:border-slate-800/40 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/30"
                                     }`}
                                 >
                                     <CatIcon className="h-3 w-3 shrink-0" />
                                     <span>{cat.label}</span>
                                     <span className={`text-[10px] px-1.5 py-0.5 min-w-[20px] text-center rounded-full font-mono tabular-nums transition-all ${
                                         isSelected 
-                                            ? 'bg-black/40 text-white font-bold' 
+                                            ? 'bg-muted/60 dark:bg-black/40 text-foreground dark:text-white font-bold' 
                                             : count > 0 
-                                            ? 'bg-slate-800/90 text-slate-300 font-semibold' 
-                                            : 'bg-slate-800/40 text-slate-500'
+                                            ? 'bg-muted/80 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 font-semibold' 
+                                            : 'bg-muted/40 dark:bg-slate-800/40 text-slate-500'
                                     }`}>
                                         {count}
                                     </span>
@@ -567,24 +567,24 @@ export default function SystemLogsViewer() {
             <CardContent className="p-0">
                 <div 
                     ref={scrollRef} 
-                    className="max-h-[550px] min-h-[350px] overflow-y-auto font-mono text-xs p-4 space-y-2 bg-slate-950 divide-y divide-slate-900/50"
+                    className="max-h-[550px] min-h-[350px] overflow-y-auto font-mono text-xs p-4 space-y-2 bg-muted dark:bg-slate-950 divide-y divide-slate-900/50"
                 >
                     {filteredLogs.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-slate-500 text-center">
-                            <Terminal className="h-10 w-10 mb-2 opacity-30 text-emerald-400" />
-                            <p className="font-semibold text-slate-300">No diagnostic logs found</p>
-                            <p className="text-xs text-slate-400 mt-1">Logs update automatically when system tasks, Plex calls, or library scans run.</p>
+                            <Terminal className="h-10 w-10 mb-2 opacity-30 text-emerald-700 dark:text-emerald-400" />
+                            <p className="font-semibold text-slate-700 dark:text-slate-300">No diagnostic logs found</p>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Logs update automatically when system tasks, Plex calls, or library scans run.</p>
                         </div>
                     ) : (
                         filteredLogs.map(log => (
-                            <div key={log.id} className="group pt-2 first:pt-0 flex flex-wrap items-start justify-between gap-2 hover:bg-slate-900/60 p-2 rounded-lg transition-colors relative">
+                            <div key={log.id} className="group pt-2 first:pt-0 flex flex-wrap items-start justify-between gap-2 hover:bg-accent dark:hover:bg-slate-900/60 p-2 rounded-lg transition-colors relative">
                                 <div className="flex items-start gap-2.5 flex-1 min-w-0">
                                     <span className="text-slate-500 text-[11px] select-none whitespace-nowrap pt-0.5" title={new Date(log.timestamp).toLocaleString()}>
                                         {formatLogTimestamp(log.timestamp)}
                                     </span>
                                     {getCategoryBadge(log.category)}
                                     {getLevelBadge(log.level)}
-                                    <span className="text-slate-200 break-words flex-1 font-sans text-xs pt-0.5">
+                                    <span className="text-foreground dark:text-slate-200 break-words flex-1 font-sans text-xs pt-0.5">
                                         {log.message}
                                     </span>
                                 </div>
@@ -592,14 +592,14 @@ export default function SystemLogsViewer() {
                                     <button
                                         type="button"
                                         onClick={() => handleCopySingle(log)}
-                                        className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
+                                        className="p-1 hover:bg-accent dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 cursor-pointer transition-colors"
                                         title="Copy this log entry"
                                     >
-                                        {copiedLogId === log.id ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                        {copiedLogId === log.id ? <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3 w-3" />}
                                     </button>
                                 </div>
                                 {log.details && (
-                                    <div className="w-full pl-6 md:pl-16 text-[11px] text-slate-300 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800/90 mt-1 font-mono whitespace-pre-wrap break-all shadow-inner">
+                                    <div className="w-full pl-6 md:pl-16 text-[11px] text-slate-700 dark:text-slate-300 bg-card/95 dark:bg-slate-900/80 p-2.5 rounded-lg border border-border dark:border-slate-800/90 mt-1 font-mono whitespace-pre-wrap break-all shadow-inner">
                                         {log.details}
                                     </div>
                                 )}

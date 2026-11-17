@@ -546,42 +546,42 @@ export function ExcludedLabelsSelector({
     // Color theme helper for chips
     const getChipColorClasses = (color: string, isSelected: boolean) => {
         if (isSelected) {
-            return "bg-rose-950/90 text-rose-200 border-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.3)] ring-1 ring-rose-500/50 font-black";
+            return "bg-rose-500/15 dark:bg-rose-950/90 text-rose-900 dark:text-rose-200 border-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.3)] ring-1 ring-rose-500/50 font-black";
         }
         switch (color) {
             case "rose":
-                return "bg-slate-900/80 text-rose-300 border-rose-900/40 hover:border-rose-500/60 hover:bg-rose-950/30";
+                return "bg-card/95 dark:bg-slate-900/80 text-rose-800 dark:text-rose-300 border-rose-500/40 dark:border-rose-900/40 hover:border-rose-500/60 hover:bg-rose-500/10 dark:hover:bg-rose-950/30";
             case "orange":
-                return "bg-slate-900/80 text-orange-300 border-orange-900/40 hover:border-orange-500/60 hover:bg-orange-950/30";
+                return "bg-card/95 dark:bg-slate-900/80 text-orange-800 dark:text-orange-300 border-orange-500/40 dark:border-orange-900/40 hover:border-orange-500/60 hover:bg-orange-500/10 dark:hover:bg-orange-950/30";
             case "amber":
-                return "bg-slate-900/80 text-amber-300 border-amber-900/40 hover:border-amber-500/60 hover:bg-amber-950/30";
+                return "bg-card/95 dark:bg-slate-900/80 text-amber-800 dark:text-amber-300 border-amber-500/40 dark:border-amber-900/40 hover:border-amber-500/60 hover:bg-amber-500/10 dark:hover:bg-amber-950/30";
             case "sky":
-                return "bg-slate-900/80 text-sky-300 border-sky-900/40 hover:border-sky-500/60 hover:bg-sky-950/30";
+                return "bg-card/95 dark:bg-slate-900/80 text-sky-800 dark:text-sky-300 border-sky-500/40 dark:border-sky-900/40 hover:border-sky-500/60 hover:bg-sky-500/10 dark:hover:bg-sky-950/30";
             case "cyan":
-                return "bg-slate-900/80 text-cyan-300 border-cyan-900/40 hover:border-cyan-500/60 hover:bg-cyan-950/30";
+                return "bg-card/95 dark:bg-slate-900/80 text-cyan-800 dark:text-cyan-300 border-cyan-500/40 dark:border-cyan-900/40 hover:border-cyan-500/60 hover:bg-cyan-500/10 dark:hover:bg-cyan-950/30";
             case "emerald":
-                return "bg-slate-900/80 text-emerald-300 border-emerald-900/40 hover:border-emerald-500/60 hover:bg-emerald-950/30";
+                return "bg-card/95 dark:bg-slate-900/80 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 dark:border-emerald-900/40 hover:border-emerald-500/60 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/30";
             default:
-                return "bg-slate-900/80 text-slate-300 border-slate-800 hover:border-slate-600 hover:bg-slate-800";
+                return "bg-card/95 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-border dark:border-slate-800 hover:border-slate-600 hover:bg-accent dark:hover:bg-slate-800";
         }
     };
 
     return (
-        <div className="space-y-3 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+        <div className="space-y-3 p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800">
             {/* Header & Description */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                 <div className="space-y-0.5">
-                    <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <Tag className="h-3.5 w-3.5 text-rose-400" />
+                    <Label className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                        <Tag className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                         <span>{title}</span>
                     </Label>
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
                         {description}
                     </p>
                 </div>
                 {activeTokens.length > 0 && (
                     <div className="flex items-center gap-1.5 self-start sm:self-auto shrink-0">
-                        <Badge className="bg-rose-950 text-rose-300 border-rose-800 text-[10px] font-mono px-2 py-0.5">
+                        <Badge className="bg-rose-500/15 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border-rose-500/40 dark:border-rose-800 text-[10px] font-mono px-2 py-0.5">
                             {activeTokens.length} Excluded
                         </Badge>
                         <Button
@@ -589,7 +589,7 @@ export function ExcludedLabelsSelector({
                             size="sm"
                             variant="ghost"
                             onClick={handleClearAll}
-                            className="h-6 px-1.5 text-[10px] text-slate-400 hover:text-rose-300 gap-1"
+                            className="h-6 px-1.5 text-[10px] text-slate-600 dark:text-slate-400 hover:text-rose-800 dark:hover:text-rose-300 gap-1"
                             title="Clear all label exclusions"
                         >
                             <Trash2 className="h-2.5 w-2.5" />
@@ -600,7 +600,7 @@ export function ExcludedLabelsSelector({
             </div>
 
             {/* Quick Macro 1-Click Action Buttons */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800/80">
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border dark:border-slate-800/80">
                 <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mr-1">
                     Quick Exclude:
                 </span>
@@ -611,13 +611,13 @@ export function ExcludedLabelsSelector({
                     onClick={handleToggleNuditySevere}
                     className={`h-6 text-[10px] px-2 gap-1 border transition-all cursor-pointer ${
                         isLabelExcluded(value, "IMDb-Nudity: Severe")
-                            ? "bg-rose-950 text-rose-200 border-rose-500 font-bold shadow-sm"
-                            : "bg-slate-900 border-slate-800 text-slate-300 hover:border-rose-500/60 hover:text-white"
+                            ? "bg-rose-500/15 dark:bg-rose-950 text-rose-900 dark:text-rose-200 border-rose-500 font-bold shadow-sm"
+                            : "bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-rose-500/60 hover:text-foreground dark:hover:text-white"
                     }`}
                     title="1-Click Exclude Severe Sex & Nudity content"
                 >
                     <span>🔞 Exclude Nudity (Severe)</span>
-                    {isLabelExcluded(value, "IMDb-Nudity: Severe") && <Check className="h-2.5 w-2.5 text-rose-400" />}
+                    {isLabelExcluded(value, "IMDb-Nudity: Severe") && <Check className="h-2.5 w-2.5 text-rose-700 dark:text-rose-400" />}
                 </Button>
 
                 <Button
@@ -625,10 +625,10 @@ export function ExcludedLabelsSelector({
                     size="sm"
                     variant="outline"
                     onClick={handleToggleAllSevereAdvisories}
-                    className="h-6 text-[10px] px-2 gap-1 border border-rose-900/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/40 hover:text-rose-100 transition-all cursor-pointer font-bold"
+                    className="h-6 text-[10px] px-2 gap-1 border border-rose-500/60 dark:border-rose-900/60 bg-rose-500/10 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 hover:bg-rose-500/10 dark:hover:bg-rose-900/40 hover:text-rose-900 dark:hover:text-rose-100 transition-all cursor-pointer font-bold"
                     title="Exclude all 5 severe advisory categories (Nudity, Violence, Profanity, Alcohol/Drugs, Frightening)"
                 >
-                    <ShieldAlert className="h-2.5 w-2.5 text-rose-400" />
+                    <ShieldAlert className="h-2.5 w-2.5 text-rose-700 dark:text-rose-400" />
                     <span>⚡ Exclude All Severe Advisories</span>
                 </Button>
 
@@ -639,14 +639,14 @@ export function ExcludedLabelsSelector({
                     onClick={handleToggleTrailerPlaceholders}
                     className={`h-6 text-[10px] px-2 gap-1 border transition-all cursor-pointer ${
                         isLabelExcluded(value, "trailer-placeholder")
-                            ? "bg-sky-950 text-sky-200 border-sky-500 font-bold shadow-sm"
-                            : "bg-slate-900 border-slate-800 text-slate-300 hover:border-sky-500/60 hover:text-white"
+                            ? "bg-sky-500/15 dark:bg-sky-950 text-sky-900 dark:text-sky-200 border-sky-500 font-bold shadow-sm"
+                            : "bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-500/60 hover:text-foreground dark:hover:text-white"
                     }`}
                     title="Exclude Coming Soon trailer video stubs and markers"
                 >
-                    <Sparkles className="h-2.5 w-2.5 text-sky-400" />
+                    <Sparkles className="h-2.5 w-2.5 text-sky-700 dark:text-sky-400" />
                     <span>Exclude Trailer Stubs</span>
-                    {isLabelExcluded(value, "trailer-placeholder") && <Check className="h-2.5 w-2.5 text-sky-400" />}
+                    {isLabelExcluded(value, "trailer-placeholder") && <Check className="h-2.5 w-2.5 text-sky-700 dark:text-sky-400" />}
                 </Button>
 
                 <Button
@@ -656,19 +656,19 @@ export function ExcludedLabelsSelector({
                     onClick={handleToggleLeavingSoon}
                     className={`h-6 text-[10px] px-2 gap-1 border transition-all cursor-pointer ${
                         isLabelExcluded(value, "leaving-soon")
-                            ? "bg-amber-950 text-amber-200 border-amber-500 font-bold shadow-sm"
-                            : "bg-slate-900 border-slate-800 text-slate-300 hover:border-amber-500/60 hover:text-white"
+                            ? "bg-amber-500/15 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border-amber-500 font-bold shadow-sm"
+                            : "bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-amber-500/60 hover:text-foreground dark:hover:text-white"
                     }`}
                     title="Exclude titles staged for deletion or flagged with leaving-soon"
                 >
-                    <Clock className="h-2.5 w-2.5 text-amber-400" />
+                    <Clock className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />
                     <span>Exclude Leaving Soon</span>
-                    {isLabelExcluded(value, "leaving-soon") && <Check className="h-2.5 w-2.5 text-amber-400" />}
+                    {isLabelExcluded(value, "leaving-soon") && <Check className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />}
                 </Button>
             </div>
 
             {/* Category Filter Chips & Search Toolbar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/80">
                 <div className="flex flex-wrap items-center gap-1">
                     {[
                         { id: "all", label: "All Labels" },
@@ -684,8 +684,8 @@ export function ExcludedLabelsSelector({
                             onClick={() => setCategoryFilter(tab.id)}
                             className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all cursor-pointer ${
                                 categoryFilter === tab.id
-                                    ? "bg-slate-800 text-amber-300 border-amber-500/50 shadow-sm"
-                                    : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                                    ? "bg-muted dark:bg-slate-800 text-amber-800 dark:text-amber-300 border-amber-500/50 shadow-sm"
+                                    : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200 hover:border-border dark:hover:border-slate-700"
                             }`}
                         >
                             {tab.label}
@@ -699,13 +699,13 @@ export function ExcludedLabelsSelector({
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search labels..."
-                        className="h-6 text-[10px] pl-6 bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-400 rounded-md"
+                        className="h-6 text-[10px] pl-6 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-400 rounded-md"
                     />
                     {searchQuery && (
                         <button
                             type="button"
                             onClick={() => setSearchQuery("")}
-                            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                         >
                             <X className="h-2.5 w-2.5" />
                         </button>
@@ -714,7 +714,7 @@ export function ExcludedLabelsSelector({
             </div>
 
             {/* Quick-Select Labels Pills Container */}
-            <div className="max-h-52 overflow-y-auto pr-1 space-y-2.5 border border-slate-800/80 rounded-lg p-2.5 bg-slate-950/60">
+            <div className="max-h-52 overflow-y-auto pr-1 space-y-2.5 border border-border dark:border-slate-800/80 rounded-lg p-2.5 bg-muted/60 dark:bg-slate-950/60">
                 {/* 1. System Preset Labels */}
                 <div className="flex flex-wrap items-center gap-1.5">
                     {filteredPresetLabels.map(item => {
@@ -730,9 +730,9 @@ export function ExcludedLabelsSelector({
                                 <span className="text-xs">{item.icon}</span>
                                 <span className="font-semibold">{item.label}</span>
                                 {isSelected ? (
-                                    <Check className="h-3 w-3 text-rose-400 ml-0.5 shrink-0" />
+                                    <Check className="h-3 w-3 text-rose-700 dark:text-rose-400 ml-0.5 shrink-0" />
                                 ) : (
-                                    <Plus className="h-2.5 w-2.5 text-slate-500 group-hover:text-slate-300 ml-0.5 shrink-0" />
+                                    <Plus className="h-2.5 w-2.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300 ml-0.5 shrink-0" />
                                 )}
                             </button>
                         );
@@ -741,10 +741,10 @@ export function ExcludedLabelsSelector({
 
                 {/* 2. Live Plex Library Tags (Audit) */}
                 {filteredAuditLabels.length > 0 && (
-                    <div className="space-y-1.5 pt-2 border-t border-slate-800/60">
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
-                            <span className="flex items-center gap-1 text-slate-300">
-                                <Tag className="h-3 w-3 text-sky-400" />
+                    <div className="space-y-1.5 pt-2 border-t border-border dark:border-slate-800/60">
+                        <div className="flex items-center justify-between text-[10px] text-slate-600 dark:text-slate-400 font-semibold px-0.5">
+                            <span className="flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                                <Tag className="h-3 w-3 text-sky-700 dark:text-sky-400" />
                                 <span>Active in this Plex Library ({filteredAuditLabels.length}):</span>
                             </span>
                             <span className="text-[9px] text-slate-500 font-mono">1-click exclude any existing tag</span>
@@ -760,15 +760,15 @@ export function ExcludedLabelsSelector({
                                         title={`Applied on ${audit.count} items in Plex`}
                                         className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] border transition-all cursor-pointer ${
                                             isSelected
-                                                ? "bg-rose-950/90 text-rose-200 border-rose-500 shadow-sm font-black ring-1 ring-rose-500/50"
-                                                : "bg-slate-900/80 text-sky-300 border-sky-900/40 hover:border-sky-500/60 hover:bg-sky-950/30"
+                                                ? "bg-rose-500/15 dark:bg-rose-950/90 text-rose-900 dark:text-rose-200 border-rose-500 shadow-sm font-black ring-1 ring-rose-500/50"
+                                                : "bg-card/95 dark:bg-slate-900/80 text-sky-800 dark:text-sky-300 border-sky-500/40 dark:border-sky-900/40 hover:border-sky-500/60 hover:bg-sky-500/10 dark:hover:bg-sky-950/30"
                                         }`}
                                     >
-                                        <Tag className="h-2.5 w-2.5 text-sky-400" />
+                                        <Tag className="h-2.5 w-2.5 text-sky-700 dark:text-sky-400" />
                                         <span>{audit.tag}</span>
                                         <span className="text-[9px] opacity-70 font-mono">({audit.count})</span>
                                         {isSelected ? (
-                                            <Check className="h-3 w-3 text-rose-400 ml-0.5 shrink-0" />
+                                            <Check className="h-3 w-3 text-rose-700 dark:text-rose-400 ml-0.5 shrink-0" />
                                         ) : (
                                             <Plus className="h-2.5 w-2.5 text-slate-500 ml-0.5 shrink-0" />
                                         )}
@@ -780,31 +780,31 @@ export function ExcludedLabelsSelector({
                 )}
 
                 {filteredPresetLabels.length === 0 && filteredAuditLabels.length === 0 && (
-                    <div className="text-center py-6 text-slate-400 space-y-1">
-                        <AlertTriangle className="h-5 w-5 mx-auto text-slate-400" />
+                    <div className="text-center py-6 text-slate-600 dark:text-slate-400 space-y-1">
+                        <AlertTriangle className="h-5 w-5 mx-auto text-slate-600 dark:text-slate-400" />
                         <p className="text-[11px]">No labels found matching "{searchQuery}".</p>
-                        <p className="text-[10px] text-slate-400">Type in the manual input below to exclude custom tags.</p>
+                        <p className="text-[10px] text-slate-600 dark:text-slate-400">Type in the manual input below to exclude custom tags.</p>
                     </div>
                 )}
             </div>
 
             {/* Active Selected Tags Display */}
             {activeTokens.length > 0 && (
-                <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
-                    <span className="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                <div className="space-y-1.5 pt-1 border-t border-border dark:border-slate-800/80">
+                    <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
                         <span>Currently Excluded ({activeTokens.length}):</span>
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
                         {activeTokens.map(token => (
                             <span
                                 key={token}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-200 border border-rose-800/80 shadow-sm"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/15 dark:bg-rose-950/80 text-rose-900 dark:text-rose-200 border border-rose-500/80 dark:border-rose-800/80 shadow-sm"
                             >
                                 <span>{token}</span>
                                 <button
                                     type="button"
                                     onClick={() => handleRemoveToken(token)}
-                                    className="p-0.5 hover:bg-rose-900/60 rounded text-rose-300 hover:text-white transition-colors"
+                                    className="p-0.5 hover:bg-rose-500/10 dark:hover:bg-rose-900/60 rounded text-rose-800 dark:text-rose-300 hover:text-foreground dark:hover:text-white transition-colors"
                                     title={`Remove "${token}" from excluded labels`}
                                 >
                                     <X className="h-2.5 w-2.5" />
@@ -816,9 +816,9 @@ export function ExcludedLabelsSelector({
             )}
 
             {/* Manual Comma-Separated Input */}
-            <div className="space-y-1 pt-1 border-t border-slate-800/80">
+            <div className="space-y-1 pt-1 border-t border-border dark:border-slate-800/80">
                 <div className="flex items-center justify-between">
-                    <Label className="text-[10px] font-semibold text-slate-400">
+                    <Label className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">
                         Raw Excluded Labels (Comma-separated)
                     </Label>
                     <span className="text-[9px] text-slate-500 font-mono">
@@ -829,7 +829,7 @@ export function ExcludedLabelsSelector({
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     placeholder="e.g. IMDb-Nudity: Severe, trailer-placeholder, trailers, coming_soon, leaving-soon"
-                    className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-400"
+                    className="h-8 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 font-mono text-rose-800 dark:text-rose-300 placeholder:text-slate-500 dark:placeholder:text-slate-400"
                 />
             </div>
         </div>

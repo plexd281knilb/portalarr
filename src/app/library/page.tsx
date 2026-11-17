@@ -854,12 +854,12 @@ function BookLibraryPageContent() {
         variant="outline"
         className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded backdrop-blur-md border shadow-xs ${
           ageRating === "Kids"
-            ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
+            ? "bg-emerald-500/25 text-emerald-800 dark:text-emerald-300 border-emerald-500/40"
             : ageRating === "YA (12+)"
-            ? "bg-sky-500/25 text-sky-300 border-sky-500/40"
+            ? "bg-sky-500/25 text-sky-800 dark:text-sky-300 border-sky-500/40"
             : ageRating === "18+ Mature"
-            ? "bg-rose-500/25 text-rose-300 border-rose-500/40"
-            : "bg-slate-900/80 text-slate-300 border-slate-700/60"
+            ? "bg-rose-500/25 text-rose-800 dark:text-rose-300 border-rose-500/40"
+            : "bg-card/95 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-border dark:border-slate-700/60"
         }`}
       >
         {ageRating}
@@ -911,7 +911,7 @@ function BookLibraryPageContent() {
             </div>
           </div>
         ) : (
-          <div className="relative aspect-[2/3] w-full bg-gradient-to-br from-slate-900 via-[#121622] to-slate-950 overflow-hidden flex flex-col justify-between p-4 border-b border-muted/40 text-center select-none group-hover:from-slate-800 group-hover:to-slate-900 transition-all duration-300">
+          <div className="relative aspect-[2/3] w-full bg-gradient-to-br from-muted/60 dark:from-slate-900 via-card dark:via-[#121622] to-muted/60 dark:to-slate-950 overflow-hidden flex flex-col justify-between p-4 border-b border-muted/40 text-center select-none group-hover:from-muted/60 dark:group-hover:from-slate-800 group-hover:to-muted/60 dark:group-hover:to-slate-900 transition-all duration-300">
             <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
               <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
                 {book.fileType?.toUpperCase()}
@@ -921,11 +921,11 @@ function BookLibraryPageContent() {
             </div>
             <div className="flex-1 flex flex-col justify-center items-center">
               <BookOpen className="h-10 w-10 text-primary/40 mb-3" />
-              <div className="font-serif text-sm font-bold text-slate-100 line-clamp-3 px-2 leading-tight">
+              <div className="font-serif text-sm font-bold text-foreground dark:text-slate-100 line-clamp-3 px-2 leading-tight">
                 {displayTitle}
               </div>
             </div>
-            <div className="text-[10px] text-slate-400 font-semibold truncate w-full">
+            <div className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold truncate w-full">
               {displayAuthor !== "Unknown Author" ? displayAuthor : ""}
             </div>
           </div>
@@ -957,7 +957,7 @@ function BookLibraryPageContent() {
                   <span>Reading Progress</span>
                   <span>{displayPercentage}%</span>
                 </div>
-                <div className="w-full bg-slate-900/80 h-1.5 rounded-full overflow-hidden">
+                <div className="w-full bg-card/95 dark:bg-slate-900/80 h-1.5 rounded-full overflow-hidden">
                   <div
                     className="bg-primary h-full transition-all duration-300 rounded-full"
                     style={{ width: `${Math.min(displayPercentage, 100)}%` }}
@@ -1005,7 +1005,7 @@ function BookLibraryPageContent() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 w-8 p-0 flex items-center justify-center border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                        className="h-8 w-8 p-0 flex items-center justify-center border-border dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white hover:bg-accent dark:hover:bg-slate-800 shrink-0"
                         title="More Actions"
                       >
                         <MoreVertical className="h-3.5 w-3.5" />
@@ -1016,7 +1016,7 @@ function BookLibraryPageContent() {
 
                       <DropdownMenuItem asChild>
                         <a href={`/api/books/${book.id}`} download className="flex items-center gap-2 w-full">
-                          <Download className="h-3.5 w-3.5 text-slate-400" />
+                          <Download className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
                           <span>Download File</span>
                         </a>
                       </DropdownMenuItem>
@@ -1026,15 +1026,15 @@ function BookLibraryPageContent() {
                         onClick={() => handleSendToPersonalEmail(book.id)}
                       >
                         {sendingToPersonalEmailId === book.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700 dark:text-emerald-400" />
                         ) : (
-                          <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                          <Mail className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                         )}
                         <span>Email to Inbox</span>
                       </DropdownMenuItem>
 
                       <DropdownMenuItem onClick={() => handleSearchAndReplaceRelease(book)}>
-                        <Search className="h-3.5 w-3.5 text-cyan-400" />
+                        <Search className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
                         <span>Search &amp; Re-Grab</span>
                       </DropdownMenuItem>
 
@@ -1043,9 +1043,9 @@ function BookLibraryPageContent() {
                         onClick={() => handleRefreshCover(book.id)}
                       >
                         {refreshingCoverId === book.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" />
                         ) : (
-                          <ImageIcon className="h-3.5 w-3.5 text-amber-400" />
+                          <ImageIcon className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                         )}
                         <span>Fetch Cover Artwork</span>
                       </DropdownMenuItem>
@@ -1059,7 +1059,7 @@ function BookLibraryPageContent() {
                           })
                         }
                       >
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                         <span>Report an Issue</span>
                       </DropdownMenuItem>
 
@@ -1069,7 +1069,7 @@ function BookLibraryPageContent() {
                           <DropdownMenuLabel>Administration</DropdownMenuLabel>
 
                           <DropdownMenuItem onClick={() => handleOpenMatchModal(book)}>
-                            <Link2 className="h-3.5 w-3.5 text-sky-400" />
+                            <Link2 className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                             <span>Match &amp; Link Series</span>
                           </DropdownMenuItem>
 
@@ -1087,9 +1087,9 @@ function BookLibraryPageContent() {
                             }}
                           >
                             {resolvingAiId === book.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700 dark:text-sky-400" />
                             ) : (
-                              <Bot className="h-3.5 w-3.5 text-sky-400" />
+                              <Bot className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                             )}
                             <span>AI Metadata Agent</span>
                           </DropdownMenuItem>
@@ -1098,9 +1098,9 @@ function BookLibraryPageContent() {
                             <DropdownMenuSub>
                               <DropdownMenuSubTrigger>
                                 {sendingToKindleId === book.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" />
                                 ) : (
-                                  <Send className="h-3.5 w-3.5 text-amber-400" />
+                                  <Send className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                 )}
                                 <span>Send to User Kindle</span>
                               </DropdownMenuSubTrigger>
@@ -1131,7 +1131,7 @@ function BookLibraryPageContent() {
                                         }
                                       }}
                                     >
-                                      <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                      <User className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400 shrink-0" />
                                       <div className="flex flex-col flex-1 min-w-0">
                                         <span className="truncate font-medium text-xs text-foreground">{u.username}</span>
                                         <span className="truncate text-[10px] text-muted-foreground">{u.kindleEmail}</span>
@@ -1143,7 +1143,7 @@ function BookLibraryPageContent() {
                           )}
 
                           <DropdownMenuItem onClick={() => handleOpenEditBookModal(book)}>
-                            <Edit3 className="h-3.5 w-3.5 text-blue-400" />
+                            <Edit3 className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
                             <span>Edit Details</span>
                           </DropdownMenuItem>
 
@@ -1151,7 +1151,7 @@ function BookLibraryPageContent() {
                             variant="destructive"
                             onClick={() => handleDeleteBook(book.id)}
                           >
-                            <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                            <Trash2 className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                             <span>Delete Book</span>
                           </DropdownMenuItem>
                         </>
@@ -1164,7 +1164,7 @@ function BookLibraryPageContent() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className={`w-full h-7.5 text-xs border-amber-500/30 text-amber-400 font-semibold px-2 gap-1.5 min-w-0 shadow-sm transition-colors cursor-pointer ${
+                  className={`w-full h-7.5 text-xs border-amber-500/30 text-amber-700 dark:text-amber-400 font-semibold px-2 gap-1.5 min-w-0 shadow-sm transition-colors cursor-pointer ${
                     isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-amber-500/10"
                   }`}
                   title={
@@ -1176,9 +1176,9 @@ function BookLibraryPageContent() {
                   onClick={() => !isComic && handleSendToKindle(book.id)}
                 >
                   {sendingToKindleId === book.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-amber-400" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-amber-700 dark:text-amber-400" />
                   ) : (
-                    <Send className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <Send className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
                   )}
                   <span className="whitespace-nowrap font-medium text-xs">
                     {sendingToKindleId === book.id ? "Sending to Kindle..." : "Send to Kindle"}
@@ -1232,7 +1232,7 @@ function BookLibraryPageContent() {
 
         <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
           <div className="space-y-1">
-            <h3 className="font-bold text-sm leading-snug group-hover:text-amber-400 transition-colors line-clamp-3 h-[60px]">
+            <h3 className="font-bold text-sm leading-snug group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors line-clamp-3 h-[60px]">
               {displayTitle}
             </h3>
             <p className="text-xs text-muted-foreground truncate">
@@ -1272,7 +1272,7 @@ function BookLibraryPageContent() {
             <Button
               variant="outline"
               size="sm"
-              className="flex-1 h-7 text-[11px] sm:text-xs border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold gap-1 sm:gap-1.5 px-1.5 sm:px-2 min-w-0"
+              className="flex-1 h-7 text-[11px] sm:text-xs border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 font-bold gap-1 sm:gap-1.5 px-1.5 sm:px-2 min-w-0"
               asChild
               title="Direct Download Audiobook"
             >
@@ -1287,7 +1287,7 @@ function BookLibraryPageContent() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 w-7 p-0 flex items-center justify-center border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                  className="h-7 w-7 p-0 flex items-center justify-center border-border dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white hover:bg-accent dark:hover:bg-slate-800 shrink-0"
                   title="More Actions"
                 >
                   <MoreVertical className="h-3.5 w-3.5" />
@@ -1301,15 +1301,15 @@ function BookLibraryPageContent() {
                   onClick={() => handleSendToPersonalEmail(book.id)}
                 >
                   {sendingToPersonalEmailId === book.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700 dark:text-emerald-400" />
                   ) : (
-                    <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                    <Mail className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                   )}
                   <span>Email to Inbox</span>
                 </DropdownMenuItem>
 
                 <DropdownMenuItem onClick={() => handleSearchAndReplaceRelease(book)}>
-                  <Search className="h-3.5 w-3.5 text-cyan-400" />
+                  <Search className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
                   <span>Search &amp; Re-Grab</span>
                 </DropdownMenuItem>
 
@@ -1318,9 +1318,9 @@ function BookLibraryPageContent() {
                   onClick={() => handleRefreshCover(book.id)}
                 >
                   {refreshingCoverId === book.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" />
                   ) : (
-                    <ImageIcon className="h-3.5 w-3.5 text-amber-400" />
+                    <ImageIcon className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                   )}
                   <span>Fetch Cover Artwork</span>
                 </DropdownMenuItem>
@@ -1334,7 +1334,7 @@ function BookLibraryPageContent() {
                     })
                   }
                 >
-                  <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                   <span>Report an Issue</span>
                 </DropdownMenuItem>
 
@@ -1344,12 +1344,12 @@ function BookLibraryPageContent() {
                     <DropdownMenuLabel>Administration</DropdownMenuLabel>
 
                     <DropdownMenuItem onClick={() => handleOpenMatchModal(book)}>
-                      <Link2 className="h-3.5 w-3.5 text-sky-400" />
+                      <Link2 className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                       <span>Match &amp; Link Series</span>
                     </DropdownMenuItem>
 
                     <DropdownMenuItem onClick={() => handleOpenEditBookModal(book)}>
-                      <Edit3 className="h-3.5 w-3.5 text-blue-400" />
+                      <Edit3 className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
                       <span>Edit Details</span>
                     </DropdownMenuItem>
 
@@ -1357,7 +1357,7 @@ function BookLibraryPageContent() {
                       variant="destructive"
                       onClick={() => handleDeleteBook(book.id)}
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                      <Trash2 className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                       <span>Delete Audiobook</span>
                     </DropdownMenuItem>
                   </>
@@ -2537,7 +2537,7 @@ function BookLibraryPageContent() {
                   !userKindleEmail
                     .toLowerCase()
                     .endsWith("@free.kindle.com") && (
-                    <div className="flex items-start gap-2 mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-400">
+                    <div className="flex items-start gap-2 mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                       <p>
                         <strong>Warning:</strong> Send-to-Kindle emails
@@ -2572,8 +2572,8 @@ function BookLibraryPageContent() {
               <div className="space-y-3 pt-2">
                 <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2.5 mb-4">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                      <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                    <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                       Required: Authorize Sender on Amazon
                     </span>
                     <Button
@@ -2581,7 +2581,7 @@ function BookLibraryPageContent() {
                       size="sm"
                       variant="outline"
                       asChild
-                      className="text-[11px] h-7 px-2 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
+                      className="text-[11px] h-7 px-2 border-amber-500/30 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
                     >
                       <a
                         href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
@@ -2599,7 +2599,7 @@ function BookLibraryPageContent() {
                     <strong className="text-foreground">&quot;Approved Personal Document E-mail List&quot;</strong> before books can be delivered.
                   </p>
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-black/60 p-2 rounded-lg text-xs font-mono font-bold text-white border border-amber-500/30 select-all truncate">
+                    <div className="flex-1 bg-muted/60 dark:bg-black/60 p-2 rounded-lg text-xs font-mono font-bold text-foreground dark:text-white border border-amber-500/30 select-all truncate">
                       {serverSmtpFrom || "kindle@domshomelab.com"}
                     </div>
                     <Button
@@ -2618,7 +2618,7 @@ function BookLibraryPageContent() {
                       href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-amber-400 underline hover:text-amber-300 inline-flex items-center gap-0.5 font-semibold"
+                      className="text-amber-700 dark:text-amber-400 underline hover:text-amber-800 dark:hover:text-amber-300 inline-flex items-center gap-0.5 font-semibold"
                     >
                       <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
                       <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
@@ -2655,8 +2655,8 @@ function BookLibraryPageContent() {
                   Browse Library
                 </Button>
 
-                <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-xs text-amber-300/90 leading-relaxed flex items-start gap-2.5">
-                  <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-xs text-amber-800/90 dark:text-amber-300/90 leading-relaxed flex items-start gap-2.5">
+                  <Info className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                   <div>
                     <strong>Note:</strong> If you skip, ebooks cannot be
                     automatically sent to your e-reader. You will need to
@@ -2711,10 +2711,10 @@ function BookLibraryPageContent() {
             asChild
             variant="outline"
             size="sm"
-            className="text-xs gap-1.5 border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-slate-200"
+            className="text-xs gap-1.5 border-border dark:border-slate-700 bg-card/95 dark:bg-slate-900/80 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200"
           >
             <Link href="/requests">
-              <Send className="h-3.5 w-3.5 text-blue-400" />
+              <Send className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
               <span>Requests</span>
             </Link>
           </Button>
@@ -2767,39 +2767,39 @@ function BookLibraryPageContent() {
         onValueChange={handleTabChange}
         className="w-full space-y-6"
       >
-        <TabsList className="flex flex-wrap sm:flex-nowrap overflow-x-auto no-scrollbar w-full max-w-4xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
+        <TabsList className="flex flex-wrap sm:flex-nowrap overflow-x-auto no-scrollbar w-full max-w-4xl h-auto p-1.5 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-800/80 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger
             value="libs"
-            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(255,255,255,0.22)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(255,255,255,0.22)] hover:bg-accent dark:hover:bg-slate-800/90 hover:text-foreground dark:hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
             <BookOpen className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span className="truncate">Ebooks</span>
           </TabsTrigger>
           <TabsTrigger
             value="audiobooks"
-            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:bg-accent dark:hover:bg-slate-800/90 hover:text-foreground dark:hover:text-white data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Headphones className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-amber-400 data-[state=active]:text-slate-950" /> <span className="truncate">Audiobooks</span>
+            <Headphones className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-amber-700 dark:text-amber-400 data-[state=active]:text-slate-950" /> <span className="truncate">Audiobooks</span>
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger
               value="manage"
-              className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+              className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-accent dark:hover:bg-slate-800/90 hover:text-foreground dark:hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
             >
               <Plus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span className="truncate">Manage</span>
             </TabsTrigger>
           )}
           <TabsTrigger
             value="kindle"
-            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-cyan-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-cyan-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-accent dark:hover:bg-slate-800/90 hover:text-foreground dark:hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Mail className="h-4 w-4 text-cyan-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
+            <Mail className="h-4 w-4 text-cyan-700 dark:text-cyan-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
             <span className="truncate">Kindle</span>
           </TabsTrigger>
           <TabsTrigger
             value="help"
-            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:bg-accent dark:hover:bg-slate-800/90 hover:text-foreground dark:hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <HelpCircle className="h-4 w-4 text-sky-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
+            <HelpCircle className="h-4 w-4 text-sky-700 dark:text-sky-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
             <span className="truncate">Help &amp; Guide</span>
           </TabsTrigger>
         </TabsList>
@@ -2807,7 +2807,7 @@ function BookLibraryPageContent() {
         <TabsContent value="libs" className="space-y-6">
           {/* Mobile & Tablet Horizontal Ebook Library Bar */}
           {ebookLibraries.length > 0 && (
-            <div className="flex xl:hidden overflow-x-auto no-scrollbar gap-2 p-1.5 bg-slate-900/80 border border-slate-800 rounded-xl w-full">
+            <div className="flex xl:hidden overflow-x-auto no-scrollbar gap-2 p-1.5 bg-card/95 dark:bg-slate-900/80 border border-border dark:border-slate-800 rounded-xl w-full">
               {ebookLibraries.map((lib) => {
                 const isSelected = selectedLibrary?.id === lib.id;
                 return (
@@ -2817,7 +2817,7 @@ function BookLibraryPageContent() {
                     className={`px-3 py-2 rounded-lg text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
                       isSelected
                         ? "bg-primary text-slate-950 shadow-md font-extrabold"
-                        : "bg-slate-950/60 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800"
+                        : "bg-muted/60 dark:bg-slate-950/60 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white border border-border dark:border-slate-800 hover:bg-accent dark:hover:bg-slate-800"
                     }`}
                   >
                     <BookOpen className="h-3.5 w-3.5 shrink-0" />
@@ -2852,8 +2852,8 @@ function BookLibraryPageContent() {
                           onClick={() => setSelectedLibrary(lib)}
                           className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border cursor-pointer ${
                             isSelected
-                              ? "bg-slate-900 border-primary/80 shadow-md ring-1 ring-primary/30 text-primary"
-                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/80 hover:border-primary/60 hover:ring-2 hover:ring-primary/40 hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] hover:text-white"
+                              ? "bg-card/95 dark:bg-slate-900 border-primary/80 shadow-md ring-1 ring-primary/30 text-primary"
+                              : "bg-muted/40 dark:bg-slate-950/40 border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-accent dark:hover:bg-slate-900/80 hover:border-primary/60 hover:ring-2 hover:ring-primary/40 hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] hover:text-foreground dark:hover:text-white"
                           }`}
                         >
                           <span className="font-bold text-sm truncate">
@@ -2883,11 +2883,11 @@ function BookLibraryPageContent() {
                   <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
                     <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-3xl">
                       <div className="relative w-full sm:flex-1">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-slate-600 dark:text-slate-400" />
                         <Input
                           type="search"
                           placeholder="Search books by title or author..."
-                          className="pl-9 h-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-400 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm font-medium w-full shadow-sm rounded-xl"
+                          className="pl-9 h-10 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-foreground dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm font-medium w-full shadow-sm rounded-xl"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -2896,47 +2896,47 @@ function BookLibraryPageContent() {
                         <select
                           value={sortBy}
                           onChange={(e) => handleSortChange(e.target.value)}
-                          className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-md border border-slate-800 bg-slate-900 text-slate-100 hover:bg-slate-800/80 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
+                          className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-md border border-border dark:border-slate-800 bg-card/95 dark:bg-slate-900 text-foreground dark:text-slate-100 hover:bg-accent dark:hover:bg-slate-800/80 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
                         >
                           <option
                             value="recent"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Recently Added
                           </option>
                           <option
                             value="title-asc"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Title (A-Z)
                           </option>
                           <option
                             value="title-desc"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Title (Z-A)
                           </option>
                           <option
                             value="author-asc"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Author (A-Z)
                           </option>
                           <option
                             value="author-desc"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Author (Z-A)
                           </option>
                         </select>
-                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-200 cursor-pointer select-none bg-slate-900 border border-slate-800 px-3 h-10 rounded-md hover:bg-slate-800/80 transition-all shrink-0">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-foreground dark:text-slate-200 cursor-pointer select-none bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800 px-3 h-10 rounded-md hover:bg-accent dark:hover:bg-slate-800/80 transition-all shrink-0">
                           <input
                             type="checkbox"
                             checked={groupBySeries}
                             onChange={(e) =>
                               handleGroupToggle(e.target.checked)
                             }
-                            className="rounded border-slate-700 bg-slate-955 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer accent-primary"
+                            className="rounded border-border dark:border-slate-700 bg-muted dark:bg-slate-955 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer accent-primary"
                           />
                           <span>Group Series</span>
                         </label>
@@ -2968,17 +2968,17 @@ function BookLibraryPageContent() {
                             handleAiScanLibrary(selectedLibrary.id)
                           }
                           disabled={scanning || aiScanning}
-                          className="w-full sm:w-auto font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 shrink-0 gap-1.5"
+                          className="w-full sm:w-auto font-semibold border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 shrink-0 gap-1.5"
                           title="Run AI Metadata Resolution & HD Cover Art Fetching on this library"
                         >
                           {aiScanning ? (
                             <>
-                              <Loader2 className="h-4 w-4 animate-spin text-amber-400" />{" "}
+                              <Loader2 className="h-4 w-4 animate-spin text-amber-700 dark:text-amber-400" />{" "}
                               Resolving AI...
                             </>
                           ) : (
                             <>
-                              <Wand2 className="h-4 w-4 text-amber-400" /> AI
+                              <Wand2 className="h-4 w-4 text-amber-700 dark:text-amber-400" /> AI
                               Resolve Library
                             </>
                           )}
@@ -3147,9 +3147,9 @@ function BookLibraryPageContent() {
                           return (
                             <div
                               key={seriesName}
-                              className="space-y-4 border border-slate-800/80 p-4 rounded-xl bg-slate-900/10 animate-in fade-in duration-300"
+                              className="space-y-4 border border-border dark:border-slate-800/80 p-4 rounded-xl bg-muted/70 dark:bg-slate-900/10 animate-in fade-in duration-300"
                             >
-                              <h3 className="text-sm font-extrabold text-primary flex items-center gap-2 border-b border-slate-800 pb-2">
+                              <h3 className="text-sm font-extrabold text-primary flex items-center gap-2 border-b border-border dark:border-slate-800 pb-2">
                                 <BookOpen className="h-4 w-4 shrink-0" />
                                 <span>{seriesName}</span>
                                 <Badge
@@ -3181,7 +3181,7 @@ function BookLibraryPageContent() {
                               </div>
 
                               {actualMissing.length > 0 && (
-                                <div className="mt-6 pt-4 border-t border-slate-800/50 border-dashed">
+                                <div className="mt-6 pt-4 border-t border-border dark:border-slate-800/50 border-dashed">
                                   <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider flex items-center gap-2">
                                     <Library className="h-3 w-3" /> Missing from
                                     Series
@@ -3204,7 +3204,7 @@ function BookLibraryPageContent() {
                                                 className="w-full h-full object-cover"
                                               />
                                             ) : (
-                                              <div className="w-full h-full flex flex-col items-center justify-center text-xs text-muted-foreground text-center bg-slate-900/50 p-1">
+                                              <div className="w-full h-full flex flex-col items-center justify-center text-xs text-muted-foreground text-center bg-muted/70 dark:bg-slate-900/50 p-1">
                                                 <BookOpen className="h-6 w-6 mb-1 opacity-20" />
                                                 No Cover
                                               </div>
@@ -3234,7 +3234,7 @@ function BookLibraryPageContent() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="w-full h-7 text-[10px] bg-slate-900 border-slate-700 hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all"
+                                                className="w-full h-7 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all"
                                                 onClick={() =>
                                                   handleAutoDownloadMissingBook(
                                                     {
@@ -3256,7 +3256,7 @@ function BookLibraryPageContent() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="w-full h-7 text-[10px] bg-slate-900 border-slate-700 hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all"
+                                                className="w-full h-7 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all"
                                                 onClick={() =>
                                                   handleSearchAndReplaceRelease(
                                                     {
@@ -3300,13 +3300,13 @@ function BookLibraryPageContent() {
                           visibleCount - Object.keys(seriesGroups).length,
                         ),
                       ).length > 0 && (
-                        <div className="space-y-4 pt-4 border-t border-slate-800">
-                          <h3 className="text-sm font-extrabold text-slate-300 flex items-center gap-2 border-b border-slate-800 pb-2">
-                            <BookOpen className="h-4 w-4 shrink-0 text-slate-400" />
+                        <div className="space-y-4 pt-4 border-t border-border dark:border-slate-800">
+                          <h3 className="text-sm font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-2 border-b border-border dark:border-slate-800 pb-2">
+                            <BookOpen className="h-4 w-4 shrink-0 text-slate-600 dark:text-slate-400" />
                             <span>Standalone &amp; Uncategorized Books</span>
                             <Badge
                               variant="outline"
-                              className="text-[10px] py-0 border-slate-700 text-slate-300 font-bold bg-slate-900/45"
+                              className="text-[10px] py-0 border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold bg-muted/70 dark:bg-slate-900/45"
                             >
                               {standaloneBooks.length}{" "}
                               {standaloneBooks.length === 1 ? "Book" : "Books"}
@@ -3363,7 +3363,7 @@ function BookLibraryPageContent() {
         <TabsContent value="audiobooks" className="space-y-6">
           {/* Mobile & Tablet Horizontal Audiobook Library Bar */}
           {audiobookLibraries.length > 0 && (
-            <div className="flex xl:hidden overflow-x-auto no-scrollbar gap-2 p-1.5 bg-slate-900/80 border border-slate-800 rounded-xl w-full">
+            <div className="flex xl:hidden overflow-x-auto no-scrollbar gap-2 p-1.5 bg-card/95 dark:bg-slate-900/80 border border-border dark:border-slate-800 rounded-xl w-full">
               {audiobookLibraries.map((lib) => {
                 const isSelected = selectedLibrary?.id === lib.id;
                 return (
@@ -3373,7 +3373,7 @@ function BookLibraryPageContent() {
                     className={`px-3 py-2 rounded-lg text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
                       isSelected
                         ? "bg-amber-400 text-slate-950 shadow-md font-extrabold"
-                        : "bg-slate-950/60 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800"
+                        : "bg-muted/60 dark:bg-slate-950/60 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white border border-border dark:border-slate-800 hover:bg-accent dark:hover:bg-slate-800"
                     }`}
                   >
                     <Headphones className="h-3.5 w-3.5 shrink-0" />
@@ -3425,8 +3425,8 @@ function BookLibraryPageContent() {
                           onClick={() => setSelectedLibrary(lib)}
                           className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border cursor-pointer ${
                             isSelected
-                              ? "bg-slate-900 border-amber-400/80 shadow-md ring-1 ring-amber-400/30 text-amber-400 font-bold"
-                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/80 hover:border-amber-400/60 hover:ring-2 hover:ring-amber-400/40 hover:shadow-[0_0_12px_rgba(251,191,36,0.2)] hover:text-white"
+                              ? "bg-card/95 dark:bg-slate-900 border-amber-400/80 shadow-md ring-1 ring-amber-400/30 text-amber-700 dark:text-amber-400 font-bold"
+                              : "bg-muted/40 dark:bg-slate-950/40 border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-accent dark:hover:bg-slate-900/80 hover:border-amber-400/60 hover:ring-2 hover:ring-amber-400/40 hover:shadow-[0_0_12px_rgba(251,191,36,0.2)] hover:text-foreground dark:hover:text-white"
                           }`}
                         >
                           <span className="font-bold text-sm truncate">
@@ -3456,11 +3456,11 @@ function BookLibraryPageContent() {
                   <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
                     <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-3xl">
                       <div className="relative w-full sm:flex-1">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-slate-600 dark:text-slate-400" />
                         <Input
                           type="search"
                           placeholder="Search audiobooks by title or author..."
-                          className="pl-9 h-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-400 focus:border-amber-400/80 focus:ring-1 focus:ring-amber-400/40 text-sm font-medium w-full shadow-sm rounded-xl"
+                          className="pl-9 h-10 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-foreground dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:border-amber-400/80 focus:ring-1 focus:ring-amber-400/40 text-sm font-medium w-full shadow-sm rounded-xl"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -3469,35 +3469,35 @@ function BookLibraryPageContent() {
                         <select
                           value={sortBy}
                           onChange={(e) => handleSortChange(e.target.value)}
-                          className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-xl border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
+                          className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-xl border border-border dark:border-slate-700 bg-card/95 dark:bg-slate-900 text-foreground dark:text-slate-100 hover:bg-accent dark:hover:bg-slate-800 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
                         >
                           <option
                             value="recent"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Recently Added
                           </option>
                           <option
                             value="title-asc"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Title (A-Z)
                           </option>
                           <option
                             value="title-desc"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Title (Z-A)
                           </option>
                           <option
                             value="author-asc"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Author (A-Z)
                           </option>
                           <option
                             value="author-desc"
-                            className="bg-slate-955 text-slate-100"
+                            className="bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100"
                           >
                             Author (Z-A)
                           </option>
@@ -3530,17 +3530,17 @@ function BookLibraryPageContent() {
                             handleAiScanLibrary(selectedLibrary.id)
                           }
                           disabled={scanning || aiScanning}
-                          className="w-full sm:w-auto font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 shrink-0 gap-1.5"
+                          className="w-full sm:w-auto font-semibold border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 shrink-0 gap-1.5"
                           title="Run AI Metadata Resolution & HD Cover Art Fetching on this library"
                         >
                           {aiScanning ? (
                             <>
-                              <Loader2 className="h-4 w-4 animate-spin text-amber-400" />{" "}
+                              <Loader2 className="h-4 w-4 animate-spin text-amber-700 dark:text-amber-400" />{" "}
                               Resolving AI...
                             </>
                           ) : (
                             <>
-                              <Wand2 className="h-4 w-4 text-amber-400" /> AI
+                              <Wand2 className="h-4 w-4 text-amber-700 dark:text-amber-400" /> AI
                               Resolve Library
                             </>
                           )}
@@ -3551,7 +3551,7 @@ function BookLibraryPageContent() {
 
                   {booksLoading ? (
                     <div className="p-12 text-center text-muted-foreground flex justify-center items-center">
-                      <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+                      <Loader2 className="h-6 w-6 animate-spin text-amber-700 dark:text-amber-400" />
                     </div>
                   ) : sortedBooks.length === 0 ? (
                     <div className="text-center p-12 text-muted-foreground border border-dashed rounded-lg bg-muted/5 space-y-2">
@@ -3584,7 +3584,7 @@ function BookLibraryPageContent() {
                 </>
               ) : (
                 <div className="text-center p-16 text-muted-foreground border border-dashed rounded-lg bg-muted/5 space-y-3">
-                  <Headphones className="h-12 w-12 mx-auto text-amber-400/60" />
+                  <Headphones className="h-12 w-12 mx-auto text-amber-700/60 dark:text-amber-400/60" />
                   <p className="text-sm font-semibold">
                     Select an audiobook library from the left panel to listen
                     and browse files.
@@ -3814,7 +3814,7 @@ function BookLibraryPageContent() {
                               <Button
                                 type="button"
                                 variant="ghost"
-                                className="h-4 text-[9px] p-0 text-muted-foreground hover:text-red-400 hover:bg-transparent"
+                                className="h-4 text-[9px] p-0 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 hover:bg-transparent"
                                 onClick={() => setLibAllowedUsers("admin")}
                               >
                                 Reset to Admin Only
@@ -3826,7 +3826,7 @@ function BookLibraryPageContent() {
                       <div className="space-y-1">
                         <Label
                           htmlFor="libRestrictedUsers"
-                          className="text-xs font-semibold text-red-400 flex items-center gap-1.5"
+                          className="text-xs font-semibold text-red-700 dark:text-red-400 flex items-center gap-1.5"
                         >
                           <UserX className="h-3.5 w-3.5" /> Restricted / Blocked
                           Users (Explicit Exclusions)
@@ -3842,8 +3842,8 @@ function BookLibraryPageContent() {
                         />
                       </div>
 
-                      <div className="space-y-2 border border-red-500/20 p-3 rounded-md bg-red-950/10">
-                        <Label className="text-xs font-semibold block border-b border-red-500/20 pb-1 mb-1 text-red-400 flex items-center gap-1.5">
+                      <div className="space-y-2 border border-red-500/20 p-3 rounded-md bg-red-500/10 dark:bg-red-950/10">
+                        <Label className="text-xs font-semibold block border-b border-red-500/20 pb-1 mb-1 text-red-700 dark:text-red-400 flex items-center gap-1.5">
                           <UserX className="h-3.5 w-3.5" /> Restricted Users
                           Quick Block List
                         </Label>
@@ -3903,7 +3903,7 @@ function BookLibraryPageContent() {
                               <Button
                                 type="button"
                                 variant="ghost"
-                                className="h-4 text-[9px] p-0 text-red-400 hover:underline hover:bg-transparent font-semibold"
+                                className="h-4 text-[9px] p-0 text-red-700 dark:text-red-400 hover:underline hover:bg-transparent font-semibold"
                                 onClick={() => setLibRestrictedUsers("")}
                               >
                                 Clear Blocked List
@@ -3988,7 +3988,7 @@ function BookLibraryPageContent() {
                                     {lib.name}
                                   </h4>
                                   {isKids && (
-                                    <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px] flex items-center gap-1 font-semibold">
+                                    <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 text-[10px] flex items-center gap-1 font-semibold">
                                       <Baby className="h-3 w-3" /> Kids Shelf
                                     </Badge>
                                   )}
@@ -4000,13 +4000,13 @@ function BookLibraryPageContent() {
                                   {lib.description || "No description."}
                                 </p>
                                 <div className="flex items-center gap-2 pt-1 flex-wrap">
-                                  <Badge className="bg-slate-900 border border-slate-800 text-slate-200 text-[10px]">
+                                  <Badge className="bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800 text-foreground dark:text-slate-200 text-[10px]">
                                     Access: {isPublic ? "Public (*)" : `${allowedList.length} User${allowedList.length === 1 ? "" : "s"}`}
                                   </Badge>
                                   {lib.restrictedUsers && (
                                     <Badge
                                       variant="destructive"
-                                      className="bg-red-950/80 text-red-300 border border-red-800 text-[10px] flex items-center gap-1"
+                                      className="bg-red-500/15 dark:bg-red-950/80 text-red-800 dark:text-red-300 border border-red-500/40 dark:border-red-800 text-[10px] flex items-center gap-1"
                                     >
                                       <UserX className="h-3 w-3" /> Excluded:{" "}
                                       {lib.restrictedUsers}
@@ -4035,7 +4035,7 @@ function BookLibraryPageContent() {
                                         <Badge
                                           key={uname}
                                           variant="secondary"
-                                          className="text-[10px] font-mono bg-primary/10 border border-primary/25 text-primary hover:bg-red-950/40 hover:text-red-400 hover:border-red-800/40 cursor-pointer transition-colors group"
+                                          className="text-[10px] font-mono bg-primary/10 border border-primary/25 text-primary hover:bg-red-500/10 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-400 hover:border-red-500/40 dark:hover:border-red-800/40 cursor-pointer transition-colors group"
                                           title={`Click to remove ${uname}`}
                                           onClick={() => handleToggleUserAccess(lib.id, uname)}
                                         >
@@ -4060,12 +4060,12 @@ function BookLibraryPageContent() {
                                       <span>Manage Users</span>
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-56 p-1 bg-slate-900 border-slate-800">
+                                  <DropdownMenuContent align="end" className="w-56 p-1 bg-popover dark:bg-slate-900 border-border dark:border-slate-800">
                                     <DropdownMenuLabel className="text-xs font-semibold px-2 py-1.5 flex items-center justify-between">
                                       <span>Toggle Member Access</span>
                                       <span className="text-[10px] text-muted-foreground font-normal">Click user</span>
                                     </DropdownMenuLabel>
-                                    <DropdownMenuSeparator className="bg-slate-800" />
+                                    <DropdownMenuSeparator className="bg-muted dark:bg-slate-800" />
                                     <div className="max-h-56 overflow-y-auto p-1 space-y-0.5">
                                       {allUsers.length === 0 ? (
                                         <div className="p-2 text-xs text-muted-foreground text-center">No users available</div>
@@ -4075,7 +4075,7 @@ function BookLibraryPageContent() {
                                           return (
                                             <DropdownMenuItem
                                               key={u.id}
-                                              className="flex items-center justify-between text-xs cursor-pointer py-1.5 px-2 rounded hover:bg-slate-800"
+                                              className="flex items-center justify-between text-xs cursor-pointer py-1.5 px-2 rounded hover:bg-accent dark:hover:bg-slate-800"
                                               onSelect={(e) => {
                                                 e.preventDefault();
                                                 handleToggleUserAccess(lib.id, u.username);
@@ -4083,7 +4083,7 @@ function BookLibraryPageContent() {
                                             >
                                               <span className="font-mono">{u.username}</span>
                                               {userAllowed ? (
-                                                <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] px-1 py-0 h-4">
+                                                <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-[9px] px-1 py-0 h-4">
                                                   Allowed
                                                 </Badge>
                                               ) : (
@@ -4180,7 +4180,7 @@ function BookLibraryPageContent() {
                         !userKindleEmail
                           .toLowerCase()
                           .endsWith("@free.kindle.com") && (
-                          <div className="flex items-start gap-2 mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-400">
+                          <div className="flex items-start gap-2 mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-700 dark:text-amber-400">
                             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                             <p>
                               <strong>Warning:</strong> Send-to-Kindle emails
@@ -4222,10 +4222,10 @@ function BookLibraryPageContent() {
 
               {/* Pre-flight Diagnostic Results */}
               {kindleDiagnostics && (
-                <Card className="border-muted/60 bg-[#16161c]/90 mt-4 animate-in fade-in">
+                <Card className="border-muted/60 bg-card/95 dark:bg-[#16161c]/90 mt-4 animate-in fade-in">
                   <CardHeader className="py-3 px-4 border-b border-muted/50 flex flex-row items-center justify-between">
                     <CardTitle className="text-xs font-bold flex items-center gap-1.5">
-                      <Zap className="h-3.5 w-3.5 text-amber-400" /> Pre-Flight Diagnostic Report
+                      <Zap className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Pre-Flight Diagnostic Report
                     </CardTitle>
                     <Button
                       variant="ghost"
@@ -4245,11 +4245,11 @@ function BookLibraryPageContent() {
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-foreground flex items-center gap-1.5">
                               {isPass ? (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                               ) : isWarn ? (
-                                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                               ) : (
-                                <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                                <XCircle className="h-3.5 w-3.5 text-red-700 dark:text-red-400 shrink-0" />
                               )}
                               {item.name}
                             </span>
@@ -4257,10 +4257,10 @@ function BookLibraryPageContent() {
                               variant="outline"
                               className={`text-[9px] py-0 px-1.5 font-bold ${
                                 isPass
-                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
                                   : isWarn
-                                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                                    : "bg-red-500/10 text-red-400 border-red-500/30"
+                                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                    : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30"
                               }`}
                             >
                               {isPass ? "READY" : isWarn ? "WARNING" : "ATTENTION"}
@@ -4292,14 +4292,14 @@ function BookLibraryPageContent() {
                   </p>
 
                   {/* Sender Address Update Notice Banner */}
-                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400 mt-0.5" />
                     <div className="space-y-1">
-                      <div className="font-bold text-amber-200">
+                      <div className="font-bold text-amber-900 dark:text-amber-200">
                         Outbound Sender Updated to {serverSmtpFrom || "kindle@domshomelab.com"}
                       </div>
                       <p className="text-muted-foreground leading-relaxed">
-                        If you previously configured your Kindle settings with an older address, please update your Amazon Approved Personal Document E-mail List with <code className="bg-black/50 px-1 py-0.5 rounded font-mono text-amber-300 font-bold">{serverSmtpFrom || "kindle@domshomelab.com"}</code> so your wireless Kindle deliveries continue uninterrupted.
+                        If you previously configured your Kindle settings with an older address, please update your Amazon Approved Personal Document E-mail List with <code className="bg-muted/60 dark:bg-black/50 px-1 py-0.5 rounded font-mono text-amber-800 dark:text-amber-300 font-bold">{serverSmtpFrom || "kindle@domshomelab.com"}</code> so your wireless Kindle deliveries continue uninterrupted.
                       </p>
                     </div>
                   </div>
@@ -4401,7 +4401,7 @@ function BookLibraryPageContent() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/30 gap-1"
+                    className="h-7 text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-500/10 dark:hover:bg-red-950/30 gap-1"
                     disabled={clearingKindleLogs}
                     onClick={handleClearDeliveryLogs}
                   >
@@ -4440,10 +4440,10 @@ function BookLibraryPageContent() {
                             <Badge
                               className={`text-[10px] py-0 px-1.5 font-bold ${
                                 isDelivered
-                                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30"
                                   : isFailed
-                                    ? "bg-red-500/15 text-red-400 border border-red-500/30"
-                                    : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                                    ? "bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/30"
+                                    : "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30"
                               }`}
                             >
                               {isDelivered ? "DELIVERED" : isFailed ? "DELIVERY FAILED" : "RETRYING"}
@@ -4466,14 +4466,14 @@ function BookLibraryPageContent() {
 
                           {/* Failure diagnostics & resolution */}
                           {isFailed && log.errorMessage && (
-                            <div className="mt-2 p-2.5 rounded-md bg-red-950/20 border border-red-500/30 text-xs space-y-1">
-                              <p className="text-red-400 font-medium flex items-center gap-1.5">
-                                <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                            <div className="mt-2 p-2.5 rounded-md bg-red-500/10 dark:bg-red-950/20 border border-red-500/30 text-xs space-y-1">
+                              <p className="text-red-700 dark:text-red-400 font-medium flex items-center gap-1.5">
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-700 dark:text-red-400 shrink-0" />
                                 <strong>Error:</strong> {log.errorMessage}
                               </p>
                               {serverSmtpFrom && (
-                                <p className="text-[11px] text-amber-300/90 pl-5">
-                                  💡 <strong>Amazon Whitelist Check:</strong> Ensure your server sending address (<code className="bg-black/40 px-1 rounded">{serverSmtpFrom}</code>) is added to your Amazon Approved Personal Document E-mail List.
+                                <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 pl-5">
+                                  💡 <strong>Amazon Whitelist Check:</strong> Ensure your server sending address (<code className="bg-muted/60 dark:bg-black/40 px-1 rounded">{serverSmtpFrom}</code>) is added to your Amazon Approved Personal Document E-mail List.
                                 </p>
                               )}
                             </div>
@@ -4555,7 +4555,7 @@ function BookLibraryPageContent() {
           </div>
 
           {isEditingGuide && isAdmin ? (
-            <Card className="border-primary/40 bg-slate-950/60 shadow-xl">
+            <Card className="border-primary/40 bg-muted/60 dark:bg-slate-950/60 shadow-xl">
               <CardHeader className="py-3 px-5 border-b border-muted/40 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -4611,13 +4611,13 @@ function BookLibraryPageContent() {
                 <textarea
                   value={editGuideText}
                   onChange={(e) => setEditGuideText(e.target.value)}
-                  className="w-full h-[600px] font-mono text-xs bg-slate-900/90 text-slate-100 p-4 rounded-lg border border-slate-800 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed resize-y"
+                  className="w-full h-[600px] font-mono text-xs bg-card/95 dark:bg-slate-900/90 text-foreground dark:text-slate-100 p-4 rounded-lg border border-border dark:border-slate-800 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed resize-y"
                   placeholder="# Write markdown guide content here..."
                 />
               </CardContent>
             </Card>
           ) : (
-            <Card className="border-muted/60 bg-slate-950/40 shadow-xl overflow-hidden">
+            <Card className="border-muted/60 bg-muted/40 dark:bg-slate-950/40 shadow-xl overflow-hidden">
               <CardContent className="p-6 md:p-8">
                 {guideLoading ? (
                   <div className="py-16 text-center text-muted-foreground flex flex-col items-center justify-center gap-3">
@@ -4625,18 +4625,7 @@ function BookLibraryPageContent() {
                     <p className="text-xs">Loading User Guide...</p>
                   </div>
                 ) : (
-                  <div className="prose prose-invert prose-emerald max-w-none text-slate-200 text-sm leading-relaxed 
-                    [&>h1]:text-2xl [&>h1]:font-extrabold [&>h1]:text-white [&>h1]:border-b [&>h1]:border-muted/50 [&>h1]:pb-3 [&>h1]:mb-6
-                    [&>h2]:text-lg [&>h2]:font-bold [&>h2]:text-primary [&>h2]:mt-8 [&>h2]:mb-3 [&>h2]:border-b [&>h2]:border-muted/30 [&>h2]:pb-1.5
-                    [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:text-amber-400 [&>h3]:mt-4 [&>h3]:mb-2
-                    [&>p]:my-2.5 [&>p]:leading-relaxed
-                    [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-2.5 [&>ul>li]:my-1
-                    [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-2.5 [&>ol>li]:my-1
-                    [&>blockquote]:border-l-2 [&>blockquote]:border-primary [&>blockquote]:pl-4 [&>blockquote]:py-1 [&>blockquote]:my-4 [&>blockquote]:bg-primary/5 [&>blockquote]:rounded-r
-                    [&_code]:bg-muted/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-primary [&_code]:text-xs [&_code]:font-mono
-                    [&_pre]:bg-slate-900 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:border [&_pre]:border-slate-800
-                    [&_hr]:border-muted/40 [&_hr]:my-6
-                    [&_a]:text-primary [&_a]:underline [&_a]:hover:text-primary/80">
+                  <div className="prose dark:prose-invert prose-emerald max-w-none text-foreground dark:text-slate-200 text-sm leading-relaxed [&>h1]:text-2xl [&>h1]:font-extrabold [&>h1]:text-foreground dark:[&>h1]:text-white [&>h1]:border-b [&>h1]:border-muted/50 [&>h1]:pb-3 [&>h1]:mb-6 [&>h2]:text-lg [&>h2]:font-bold [&>h2]:text-primary [&>h2]:mt-8 [&>h2]:mb-3 [&>h2]:border-b [&>h2]:border-muted/30 [&>h2]:pb-1.5 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:text-amber-700 dark:[&>h3]:text-amber-400 [&>h3]:mt-4 [&>h3]:mb-2 [&>p]:my-2.5 [&>p]:leading-relaxed [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-2.5 [&>ul>li]:my-1 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-2.5 [&>ol>li]:my-1 [&>blockquote]:border-l-2 [&>blockquote]:border-primary [&>blockquote]:pl-4 [&>blockquote]:py-1 [&>blockquote]:my-4 [&>blockquote]:bg-primary/5 [&>blockquote]:rounded-r [&_code]:bg-muted/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-primary [&_code]:text-xs [&_code]:font-mono [&_pre]:bg-card/95 dark:[&_pre]:bg-slate-900 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:border [&_pre]:border-border dark:[&_pre]:border-slate-800 [&_hr]:border-muted/40 [&_hr]:my-6 [&_a]:text-primary [&_a]:underline [&_a]:hover:text-primary/80">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {guideMarkdown || "*No guide content found. Click 'Refresh Guide' to load content.*"}
                     </ReactMarkdown>
@@ -4683,7 +4672,7 @@ function BookLibraryPageContent() {
               </Button>
             </div>
           </div>
-          <div className="flex-1 w-full h-full bg-[#1b1b1b]">
+          <div className="flex-1 w-full h-full bg-card dark:bg-[#1b1b1b]">
             {activeBook.fileType === "pdf" ? (
               <iframe
                 src={`/api/books/${activeBook.id}`}
@@ -4885,13 +4874,13 @@ function BookLibraryPageContent() {
                 </div>
               ) : searchProwlarrError ? (
                 <div className="p-6 text-center space-y-3">
-                  <p className="text-xs text-red-400 font-mono select-all bg-red-950/20 border border-red-500/30 p-3 rounded-lg break-all">
+                  <p className="text-xs text-red-700 dark:text-red-400 font-mono select-all bg-red-500/10 dark:bg-red-950/20 border border-red-500/30 p-3 rounded-lg break-all">
                     {searchProwlarrError}
                   </p>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs border-red-500/30 text-red-400 hover:bg-red-950/40 gap-1 mx-auto"
+                    className="h-7 text-xs border-red-500/30 text-red-700 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-950/40 gap-1 mx-auto"
                     onClick={() =>
                       showErrorModal(
                         searchProwlarrError,
@@ -4929,7 +4918,7 @@ function BookLibraryPageContent() {
                               {release.isBlocklisted ? (
                                 <Badge
                                   variant="outline"
-                                  className="text-[9px] py-0 px-1.5 font-bold bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1"
+                                  className="text-[9px] py-0 px-1.5 font-bold bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30 flex items-center gap-1"
                                 >
                                   <Ban className="h-2.5 w-2.5" /> Blocklisted Release
                                 </Badge>
@@ -4944,7 +4933,7 @@ function BookLibraryPageContent() {
                             </div>
                             
                             {release.warning && (
-                              <p className="text-[10px] text-amber-400/90 font-medium flex items-center gap-1">
+                              <p className="text-[10px] text-amber-700/90 dark:text-amber-400/90 font-medium flex items-center gap-1">
                                 <AlertTriangle className="h-3 w-3 shrink-0" />
                                 <span>{release.warning}</span>
                               </p>
@@ -5012,7 +5001,7 @@ function BookLibraryPageContent() {
 
       {isReportModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md border-muted/85 bg-[#141419]/90 shadow-2xl relative animate-in zoom-in-95 duration-200">
+          <Card className="w-full max-w-md border-muted/85 bg-card/95 dark:bg-[#141419]/90 shadow-2xl relative animate-in zoom-in-95 duration-200">
             <CardHeader className="pb-3 border-b border-muted/30">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-base font-bold flex items-center gap-2 text-amber-500">
@@ -5110,7 +5099,7 @@ function BookLibraryPageContent() {
 
       {isEditBookModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md border-muted/85 bg-[#141419]/90 shadow-2xl relative animate-in zoom-in-95 duration-200">
+          <Card className="w-full max-w-md border-muted/85 bg-card/95 dark:bg-[#141419]/90 shadow-2xl relative animate-in zoom-in-95 duration-200">
             <CardHeader className="pb-3 border-b border-muted/30">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-base font-bold flex items-center gap-2 text-primary">
@@ -5220,13 +5209,13 @@ function BookLibraryPageContent() {
           }}
         >
           <Card
-            className="w-[96vw] sm:max-w-2xl max-h-[85vh] flex flex-col border-amber-500/30 bg-slate-955 text-slate-100 shadow-2xl overflow-hidden cursor-default"
+            className="w-[96vw] sm:max-w-2xl max-h-[85vh] flex flex-col border-amber-500/30 bg-muted dark:bg-slate-955 text-foreground dark:text-slate-100 shadow-2xl overflow-hidden cursor-default"
             onClick={(e) => e.stopPropagation()}
           >
-            <CardHeader className="border-b border-slate-800 pb-4 bg-slate-900/60">
+            <CardHeader className="border-b border-border dark:border-slate-800 pb-4 bg-muted/70 dark:bg-slate-900/60">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <div className="h-16 w-16 rounded-lg bg-slate-900 border border-slate-800 shrink-0 overflow-hidden flex items-center justify-center">
+                  <div className="h-16 w-16 rounded-lg bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800 shrink-0 overflow-hidden flex items-center justify-center">
                     {chaptersModalBook.coverUrl ? (
                       <img
                         src={chaptersModalBook.coverUrl}
@@ -5234,14 +5223,14 @@ function BookLibraryPageContent() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Headphones className="h-8 w-8 text-amber-400" />
+                      <Headphones className="h-8 w-8 text-amber-700 dark:text-amber-400" />
                     )}
                   </div>
                   <div className="space-y-1">
                     <CardTitle className="text-lg font-bold line-clamp-1">
                       {chaptersModalBook.title}
                     </CardTitle>
-                    <CardDescription className="text-xs text-slate-400 line-clamp-1">
+                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400 line-clamp-1">
                       {chaptersModalBook.author || "Unknown Author"} •{" "}
                       {chaptersList.length} Chapters Found
                     </CardDescription>
@@ -5281,15 +5270,15 @@ function BookLibraryPageContent() {
                         <Button
                           size="sm"
                           variant="secondary"
-                          className="h-7 text-xs font-extrabold bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 gap-1.5"
+                          className="h-7 text-xs font-extrabold bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 gap-1.5"
                           disabled={analyzingAiChapters}
                           onClick={handleAnalyzeChaptersWithAI}
                           title="AI Auto-Detect & Name Chapters"
                         >
                           {analyzingAiChapters ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-300" />
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-800 dark:text-sky-300" />
                           ) : (
-                            <Sparkles className="h-3.5 w-3.5 text-sky-300" />
+                            <Sparkles className="h-3.5 w-3.5 text-sky-800 dark:text-sky-300" />
                           )}
                           AI Name Chapters
                         </Button>
@@ -5300,7 +5289,7 @@ function BookLibraryPageContent() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 px-2.5 text-xs font-bold border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white shrink-0 gap-1"
+                  className="h-8 px-2.5 text-xs font-bold border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-accent dark:hover:bg-slate-800 hover:text-foreground dark:hover:text-white shrink-0 gap-1"
                   onClick={() => setChaptersModalBook(null)}
                   title="Close Popout"
                 >
@@ -5310,12 +5299,12 @@ function BookLibraryPageContent() {
             </CardHeader>
             <CardContent className="p-4 space-y-2 overflow-y-auto max-h-[50vh]">
               {loadingChapters ? (
-                <div className="p-8 text-center text-xs text-slate-400 flex flex-col items-center gap-2">
-                  <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+                <div className="p-8 text-center text-xs text-slate-600 dark:text-slate-400 flex flex-col items-center gap-2">
+                  <Loader2 className="h-8 w-8 animate-spin text-amber-700 dark:text-amber-400" />
                   <span>Scanning track audio metadata...</span>
                 </div>
               ) : chaptersList.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 space-y-1">
+                <div className="p-8 text-center text-xs text-slate-600 dark:text-slate-400 space-y-1">
                   <p>No audio chapter files detected on disk.</p>
                   <p className="text-[10px] text-slate-500">
                     Ensure `.mp3` or `.m4b` files exist in this book's folder.
@@ -5330,7 +5319,7 @@ function BookLibraryPageContent() {
                     return (
                       <div
                         key={idx}
-                        className={`p-3 flex items-center justify-between gap-3 hover:bg-slate-900/80 rounded-lg transition-colors ${isCurrentlyPlaying ? "bg-amber-500/10 border border-amber-500/30" : ""}`}
+                        className={`p-3 flex items-center justify-between gap-3 hover:bg-accent dark:hover:bg-slate-900/80 rounded-lg transition-colors ${isCurrentlyPlaying ? "bg-amber-500/10 border border-amber-500/30" : ""}`}
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           {isEditingChapters ? (
@@ -5343,13 +5332,13 @@ function BookLibraryPageContent() {
                                 onChange={(e) =>
                                   updateTrackNumber(idx, e.target.value)
                                 }
-                                className="w-14 h-8 text-center text-xs font-bold border-amber-500/50 bg-slate-900 text-amber-300"
+                                className="w-14 h-8 text-center text-xs font-bold border-amber-500/50 bg-card/95 dark:bg-slate-900 text-amber-800 dark:text-amber-300"
                               />
                               <div className="flex flex-col gap-0.5">
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="h-4 w-5 p-0 text-slate-400 hover:text-amber-300"
+                                  className="h-4 w-5 p-0 text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-300"
                                   disabled={idx === 0}
                                   onClick={() => moveChapterTrack(idx, "up")}
                                 >
@@ -5358,7 +5347,7 @@ function BookLibraryPageContent() {
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="h-4 w-5 p-0 text-slate-400 hover:text-amber-300"
+                                  className="h-4 w-5 p-0 text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-300"
                                   disabled={idx === chaptersList.length - 1}
                                   onClick={() => moveChapterTrack(idx, "down")}
                                 >
@@ -5369,18 +5358,18 @@ function BookLibraryPageContent() {
                           ) : (
                             <Badge
                               variant="outline"
-                              className={`h-6 min-w-[32px] justify-center text-xs font-bold shrink-0 ${isCurrentlyPlaying ? "border-amber-400 text-amber-400 bg-amber-400/10" : "border-slate-800 text-slate-400"}`}
+                              className={`h-6 min-w-[32px] justify-center text-xs font-bold shrink-0 ${isCurrentlyPlaying ? "border-amber-400 text-amber-700 dark:text-amber-400 bg-amber-400/10" : "border-border dark:border-slate-800 text-slate-600 dark:text-slate-400"}`}
                             >
                               {ch.trackNumber}
                             </Badge>
                           )}
                           <div className="truncate flex-1">
                             <p
-                              className={`text-xs font-semibold truncate ${isCurrentlyPlaying ? "text-amber-400 font-bold" : "text-slate-200"}`}
+                              className={`text-xs font-semibold truncate ${isCurrentlyPlaying ? "text-amber-700 dark:text-amber-400 font-bold" : "text-foreground dark:text-slate-200"}`}
                             >
                               {ch.title}
                             </p>
-                            <p className="text-[10px] text-slate-400 truncate">
+                            <p className="text-[10px] text-slate-600 dark:text-slate-400 truncate">
                               {ch.relativePath} •{" "}
                               {(ch.size / (1024 * 1024)).toFixed(1)} MB
                             </p>
@@ -5391,7 +5380,7 @@ function BookLibraryPageContent() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 text-xs font-semibold px-2.5 border-slate-700 text-slate-300 hover:bg-slate-800 gap-1"
+                              className="h-7 text-xs font-semibold px-2.5 border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-accent dark:hover:bg-slate-800 gap-1"
                               title={`Download ${ch.fileName}`}
                               asChild
                             >
@@ -5407,7 +5396,7 @@ function BookLibraryPageContent() {
                               variant={
                                 isCurrentlyPlaying ? "default" : "outline"
                               }
-                              className={`h-7 text-xs font-semibold px-3 ${isCurrentlyPlaying ? "bg-amber-400 text-black hover:bg-amber-300 font-bold" : "border-slate-700 text-slate-200 hover:bg-slate-800"}`}
+                              className={`h-7 text-xs font-semibold px-3 ${isCurrentlyPlaying ? "bg-amber-400 text-black hover:bg-amber-300 font-bold" : "border-border dark:border-slate-700 text-foreground dark:text-slate-200 hover:bg-accent dark:hover:bg-slate-800"}`}
                               onClick={() => {
                                 handlePlayChapter(
                                   chaptersModalBook,
@@ -5438,17 +5427,17 @@ function BookLibraryPageContent() {
               )}
             </CardContent>
 
-            <CardFooter className="border-t border-slate-800 p-3 bg-slate-900/60 flex items-center justify-between">
+            <CardFooter className="border-t border-border dark:border-slate-800 p-3 bg-muted/70 dark:bg-slate-900/60 flex items-center justify-between">
               {isEditingChapters ? (
                 <>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
                     Total {chaptersList.length} tracks
                   </span>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-8 text-xs text-slate-400 hover:text-white"
+                      className="h-8 text-xs text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                       onClick={() => setIsEditingChapters(false)}
                     >
                       Cancel
@@ -5470,16 +5459,16 @@ function BookLibraryPageContent() {
                 </>
               ) : (
                 <>
-                  <span className="text-xs text-slate-400 font-medium">
+                  <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">
                     Total {chaptersList.length} Chapters
                   </span>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 px-4 text-xs font-bold border-slate-700 text-slate-200 hover:bg-slate-800 gap-1.5 shadow-sm"
+                    className="h-8 px-4 text-xs font-bold border-border dark:border-slate-700 text-foreground dark:text-slate-200 hover:bg-accent dark:hover:bg-slate-800 gap-1.5 shadow-sm"
                     onClick={() => setChaptersModalBook(null)}
                   >
-                    <X className="h-3.5 w-3.5 text-slate-400" /> Close / Back to
+                    <X className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" /> Close / Back to
                     Library
                   </Button>
                 </>
@@ -5491,23 +5480,23 @@ function BookLibraryPageContent() {
 
       {activePlayingTrack && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl px-4 animate-in slide-in-from-bottom duration-300">
-          <div className="bg-slate-950/95 border border-amber-500/40 shadow-2xl backdrop-blur-md p-4 rounded-2xl flex flex-col gap-3">
+          <div className="bg-muted/80 dark:bg-slate-950/95 border border-amber-500/40 shadow-2xl backdrop-blur-md p-4 rounded-2xl flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 truncate min-w-0">
-                <div className="p-2 bg-amber-500/20 rounded-xl text-amber-400 shrink-0">
+                <div className="p-2 bg-amber-500/20 rounded-xl text-amber-700 dark:text-amber-400 shrink-0">
                   <Headphones className="h-5 w-5" />
                 </div>
                 <div className="truncate">
-                  <p className="text-xs font-extrabold text-amber-400 uppercase tracking-wider">
+                  <p className="text-xs font-extrabold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
                     Chapter {activePlayingTrack.currentChapterIndex + 1} of{" "}
                     {activePlayingTrack.chapters.length}
                   </p>
-                  <p className="text-sm font-bold truncate text-white">
+                  <p className="text-sm font-bold truncate text-foreground dark:text-white">
                     {activePlayingTrack.chapters[
                       activePlayingTrack.currentChapterIndex
                     ]?.title || activePlayingTrack.bookTitle}
                   </p>
-                  <p className="text-xs text-slate-400 truncate">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
                     {activePlayingTrack.bookTitle} •{" "}
                     {activePlayingTrack.bookAuthor || "Unknown Author"}
                   </p>
@@ -5518,7 +5507,7 @@ function BookLibraryPageContent() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-2 text-xs font-semibold text-slate-300 hover:text-white"
+                    className="h-8 px-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                     onClick={() =>
                       handleOpenChaptersModal({
                         id: activePlayingTrack.bookId,
@@ -5534,7 +5523,7 @@ function BookLibraryPageContent() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 p-0 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white"
+                  className="h-8 w-8 p-0 rounded-full hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                   onClick={() => setActivePlayingTrack(null)}
                 >
                   <X className="h-4 w-4" />
@@ -5552,23 +5541,23 @@ function BookLibraryPageContent() {
             />
 
             {activePlayingTrack.chapters.length > 1 && (
-              <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800/60">
+              <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 pt-1 border-t border-border dark:border-slate-800/60">
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 text-xs text-slate-300 hover:text-white disabled:opacity-40"
+                  className="h-7 text-xs text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white disabled:opacity-40"
                   disabled={activePlayingTrack.currentChapterIndex === 0}
                   onClick={handlePrevChapter}
                 >
                   ⏮ Prev Chapter
                 </Button>
-                <span className="text-[11px] font-semibold text-slate-400">
+                <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                   Autoplay On Next
                 </span>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 text-xs text-slate-300 hover:text-white disabled:opacity-40"
+                  className="h-7 text-xs text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white disabled:opacity-40"
                   disabled={
                     activePlayingTrack.currentChapterIndex ===
                     activePlayingTrack.chapters.length - 1

@@ -41,7 +41,7 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
     const renderAvailabilityBadge = () => {
         if (status === "AVAILABLE") {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <CheckCircle2 className="h-3 w-3 shrink-0" />
                     <span>In Library</span>
                 </div>
@@ -49,7 +49,7 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
         }
         if (status === "DOWNLOADING") {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm animate-pulse">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm animate-pulse">
                     <Download className="h-3 w-3 shrink-0" />
                     <span>Downloading</span>
                 </div>
@@ -57,7 +57,7 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
         }
         if (status === "SEARCHING") {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <Search className="h-3 w-3 shrink-0" />
                     <span>Missing (Searching)</span>
                 </div>
@@ -65,7 +65,7 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
         }
         if (status === "REQUESTED") {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <Clock className="h-3 w-3 shrink-0" />
                     <span>Requested</span>
                 </div>
@@ -92,9 +92,9 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                 ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-4 text-center bg-gradient-to-b from-muted/30 to-muted/80 text-muted-foreground/60">
                         {isAudiobook ? (
-                            <Headphones className="h-10 w-10 text-amber-400/70" />
+                            <Headphones className="h-10 w-10 text-amber-700/70 dark:text-amber-400/70" />
                         ) : (
-                            <BookOpen className="h-10 w-10 text-emerald-400/70" />
+                            <BookOpen className="h-10 w-10 text-emerald-700/70 dark:text-emerald-400/70" />
                         )}
                         <span className="text-xs font-medium line-clamp-2 px-2 text-foreground/70">{item.title}</span>
                     </div>
@@ -109,8 +109,8 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                         variant="secondary" 
                         className={`text-[10px] font-bold tracking-wider px-2 py-0.5 border shadow-sm backdrop-blur-md flex items-center gap-1 ${
                             isAudiobook 
-                                ? "bg-amber-500/25 text-amber-300 border-amber-500/40" 
-                                : "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
+                                ? "bg-amber-500/25 text-amber-800 dark:text-amber-300 border-amber-500/40" 
+                                : "bg-emerald-500/25 text-emerald-800 dark:text-emerald-300 border-emerald-500/40"
                         }`}
                     >
                         {isAudiobook ? <Headphones className="h-3 w-3 shrink-0" /> : <BookOpen className="h-3 w-3 shrink-0" />}
@@ -123,12 +123,12 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                                 variant="outline"
                                 className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded backdrop-blur-md border shadow-xs ${
                                     item.ageRating === "Kids"
-                                        ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
+                                        ? "bg-emerald-500/25 text-emerald-800 dark:text-emerald-300 border-emerald-500/40"
                                         : item.ageRating === "YA (12+)"
-                                        ? "bg-sky-500/25 text-sky-300 border-sky-500/40"
+                                        ? "bg-sky-500/25 text-sky-800 dark:text-sky-300 border-sky-500/40"
                                         : item.ageRating === "18+ Mature"
-                                        ? "bg-rose-500/25 text-rose-300 border-rose-500/40"
-                                        : "bg-slate-900/80 text-slate-300 border-slate-700/60"
+                                        ? "bg-rose-500/25 text-rose-800 dark:text-rose-300 border-rose-500/40"
+                                        : "bg-card/95 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-border dark:border-slate-700/60"
                                 }`}
                             >
                                 {item.ageRating}
@@ -137,7 +137,7 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                         {item.volumeNumber && (
                             <Badge 
                                 variant="secondary" 
-                                className="bg-black/60 text-foreground/90 border border-white/10 text-[10px] font-bold px-1.5 py-0.5 backdrop-blur-md shadow-sm"
+                                className="bg-muted/60 dark:bg-black/60 text-foreground/90 border border-border/70 dark:border-white/10 text-[10px] font-bold px-1.5 py-0.5 backdrop-blur-md shadow-sm"
                             >
                                 #{item.volumeNumber}
                             </Badge>
@@ -152,8 +152,8 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
 
                 {/* Rating Badge (if available) */}
                 {item.rating && item.rating > 0 && (
-                    <div className="absolute bottom-2 right-2 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-black/70 border border-white/10 text-amber-300 text-[10px] font-bold backdrop-blur-md shadow-sm">
-                        <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                    <div className="absolute bottom-2 right-2 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-black/70 border border-border/70 dark:border-white/10 text-amber-300 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                        <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-700 dark:text-amber-400" />
                         <span>{item.rating.toFixed(1)}</span>
                     </div>
                 )}
@@ -214,11 +214,11 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                         {item.ageRating && (
                             <span className={`px-1 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider border ${
                                 item.ageRating === "Kids"
-                                    ? "bg-emerald-950/60 text-emerald-400 border-emerald-500/30"
+                                    ? "bg-emerald-500/10 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
                                     : item.ageRating === "YA (12+)"
-                                    ? "bg-sky-950/60 text-sky-400 border-sky-500/30"
+                                    ? "bg-sky-500/10 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400 border-sky-500/30"
                                     : item.ageRating === "18+ Mature"
-                                    ? "bg-rose-950/60 text-rose-400 border-rose-500/30"
+                                    ? "bg-rose-500/10 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border-rose-500/30"
                                     : "bg-muted/40 text-muted-foreground border-border/30"
                             }`}>
                                 {item.ageRating}

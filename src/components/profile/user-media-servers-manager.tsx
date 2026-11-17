@@ -218,7 +218,7 @@ export function UserMediaServersManager({
             {/* ========================================================================= */}
             {/* 1. ROLE & CAPABILITIES OVERVIEW BANNER */}
             {/* ========================================================================= */}
-            <Card className="border-border/60 bg-gradient-to-r from-slate-900/90 via-[#121218]/95 to-slate-900/80 shadow-md relative overflow-hidden">
+            <Card className="border-border/60 bg-gradient-to-r from-muted/60 dark:from-slate-900/90 via-card dark:via-[#121218]/95 to-muted/60 dark:to-slate-900/80 shadow-md relative overflow-hidden">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-1">
@@ -227,19 +227,19 @@ export function UserMediaServersManager({
                                     Account Tier &amp; Capabilities
                                 </span>
                                 {isTrialUser ? (
-                                    <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-xs font-bold">
+                                    <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-xs font-bold">
                                         Trial Account
                                     </Badge>
                                 ) : isSuperUser ? (
-                                    <Badge variant="outline" className="bg-cyan-500/15 text-cyan-300 border-cyan-500/30 text-xs font-bold">
+                                    <Badge variant="outline" className="bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30 text-xs font-bold">
                                         Super User
                                     </Badge>
                                 ) : isAdmin ? (
-                                    <Badge variant="outline" className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-xs font-bold">
+                                    <Badge variant="outline" className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30 text-xs font-bold">
                                         Administrator
                                     </Badge>
                                 ) : (
-                                    <Badge variant="outline" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-xs font-bold">
+                                    <Badge variant="outline" className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-xs font-bold">
                                         Full Member
                                     </Badge>
                                 )}
@@ -254,44 +254,44 @@ export function UserMediaServersManager({
                 </CardHeader>
                 <CardContent className="pt-1 pb-4">
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-border/40 text-center space-y-1">
+                        <div className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40 text-center space-y-1">
                             <Tv className="h-4 w-4 mx-auto text-primary" />
                             <span className="text-[11px] font-bold block text-foreground truncate">Direct Play</span>
-                            <span className="text-[10px] text-emerald-400 block font-mono">Active</span>
+                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block font-mono">Active</span>
                         </div>
 
-                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-border/40 text-center space-y-1">
-                            <Compass className="h-4 w-4 mx-auto text-rose-400" />
+                        <div className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40 text-center space-y-1">
+                            <Compass className="h-4 w-4 mx-auto text-rose-700 dark:text-rose-400" />
                             <span className="text-[11px] font-bold block text-foreground truncate">Media Requests</span>
-                            <span className="text-[10px] text-emerald-400 block font-mono">
+                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block font-mono">
                                 {isTrialUser ? "3 / Week" : "Uncapped"}
                             </span>
                         </div>
 
-                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-border/40 text-center space-y-1">
-                            <BookOpen className="h-4 w-4 mx-auto text-emerald-400" />
+                        <div className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40 text-center space-y-1">
+                            <BookOpen className="h-4 w-4 mx-auto text-emerald-700 dark:text-emerald-400" />
                             <span className="text-[11px] font-bold block text-foreground truncate">Book Library</span>
-                            <span className={`text-[10px] block font-mono ${isTrialUser ? "text-amber-400" : "text-emerald-400"}`}>
+                            <span className={`text-[10px] block font-mono ${isTrialUser ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}>
                                 {isTrialUser ? "Full Members" : "Unlocked"}
                             </span>
                         </div>
 
-                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-border/40 text-center space-y-1">
-                            <Zap className="h-4 w-4 mx-auto text-amber-400" />
+                        <div className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40 text-center space-y-1">
+                            <Zap className="h-4 w-4 mx-auto text-amber-700 dark:text-amber-400" />
                             <span className="text-[11px] font-bold block text-foreground truncate">AI Assistant</span>
-                            <span className="text-[10px] text-emerald-400 block font-mono">24/7 Active</span>
+                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block font-mono">24/7 Active</span>
                         </div>
 
-                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-border/40 text-center space-y-1">
-                            <Server className="h-4 w-4 mx-auto text-cyan-400" />
+                        <div className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40 text-center space-y-1">
+                            <Server className="h-4 w-4 mx-auto text-cyan-700 dark:text-cyan-400" />
                             <span className="text-[11px] font-bold block text-foreground truncate">Multi-Server</span>
-                            <span className="text-[10px] text-emerald-400 block font-mono">Self-Select</span>
+                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block font-mono">Self-Select</span>
                         </div>
 
-                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-border/40 text-center space-y-1">
-                            <Crown className="h-4 w-4 mx-auto text-amber-400" />
+                        <div className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40 text-center space-y-1">
+                            <Crown className="h-4 w-4 mx-auto text-amber-700 dark:text-amber-400" />
                             <span className="text-[11px] font-bold block text-foreground truncate">Sub-Accounts</span>
-                            <span className={`text-[10px] block font-mono ${isTrialUser ? "text-amber-400" : "text-emerald-400"}`}>
+                            <span className={`text-[10px] block font-mono ${isTrialUser ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}>
                                 {isTrialUser ? "Full Members" : "Included"}
                             </span>
                         </div>
@@ -299,8 +299,8 @@ export function UserMediaServersManager({
 
                     {isTrialUser && (
                         <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-                            <div className="flex items-center gap-2 text-xs text-amber-300">
-                                <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
+                            <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
+                                <Sparkles className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                                 <span>
                                     Ready to unlock unlimited requests, 4K HDR streams, audiobooks, and household sub-accounts?
                                 </span>
@@ -323,17 +323,17 @@ export function UserMediaServersManager({
             {/* ========================================================================= */}
             {/* 2. MULTI-PLATFORM MEDIA SERVERS & LIBRARIES COMMAND CENTER */}
             {/* ========================================================================= */}
-            <Card id="media-servers" className={`transition-all duration-300 bg-[#121218]/90 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
+            <Card id="media-servers" className={`transition-all duration-300 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
                 <CardHeader className="pb-3 border-b border-border/30">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
-                                <Server className="h-5 w-5 text-cyan-400" />
+                                <Server className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
                                 <CardTitle className="text-base sm:text-lg font-bold text-foreground">
                                     My Media Servers &amp; Libraries (Plex • Jellyfin • Emby)
                                 </CardTitle>
                                 {isDirty && (
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 font-bold ml-1">
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 font-bold ml-1">
                                         Unsaved Changes
                                     </Badge>
                                 )}
@@ -342,7 +342,7 @@ export function UserMediaServersManager({
                                 Choose which media servers and libraries appear in your player apps. Showing only servers and libraries permitted by your Administrator.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-cyan-500/15 text-cyan-300 border-cyan-500/30 text-xs w-fit">
+                        <Badge variant="outline" className="bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30 text-xs w-fit">
                             {selectedServerKeys.length} Servers • {selectedMediaLibraryKeys.length} Libraries Selected
                         </Badge>
                     </div>
@@ -350,15 +350,15 @@ export function UserMediaServersManager({
 
                 <CardContent className="pt-4 space-y-5">
                     {msg && (
-                        <div className="p-3 text-xs bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 rounded-lg flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                        <div className="p-3 text-xs bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 rounded-lg flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
                             <span>{msg}</span>
                         </div>
                     )}
                     {err && (
-                        <div className="p-3 text-xs bg-red-950/40 border border-red-500/40 text-red-300 rounded-lg flex items-center justify-between gap-2">
+                        <div className="p-3 text-xs bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 text-red-800 dark:text-red-300 rounded-lg flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                                <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                                <XCircle className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
                                 <span>{err}</span>
                             </div>
                             <Button variant="outline" size="sm" onClick={loadData} className="h-7 text-[11px] shrink-0">
@@ -368,9 +368,9 @@ export function UserMediaServersManager({
                     )}
 
                     {isTrialUser && (
-                        <div className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/40 text-amber-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+                        <div className="p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/25 border border-amber-500/40 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
                             <div className="flex items-center gap-2.5 text-xs">
-                                <Lock className="h-4 w-4 text-amber-400 shrink-0" />
+                                <Lock className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                                 <span className="leading-relaxed">
                                     <strong>Jellyfin &amp; Emby multi-platform streaming</strong> is exclusively available for Full Members. Upgrade your membership pass to unlock.
                                 </span>
@@ -394,7 +394,7 @@ export function UserMediaServersManager({
                             <p className="text-xs text-muted-foreground">Loading permitted media servers...</p>
                         </div>
                     ) : servers.length === 0 ? (
-                        <div className="p-6 text-center text-xs text-muted-foreground bg-white/[0.01] border border-border/40 rounded-xl">
+                        <div className="p-6 text-center text-xs text-muted-foreground bg-muted/50 dark:bg-white/[0.01] border border-border/40 rounded-xl">
                             No media servers are currently permitted for your account. Please contact your server administrator.
                         </div>
                     ) : (
@@ -417,17 +417,17 @@ export function UserMediaServersManager({
                                         key={server.serverKey}
                                         className={`rounded-xl border transition-all overflow-hidden ${
                                             isServerActive 
-                                                ? "bg-white/[0.02] border-border/60" 
+                                                ? "bg-muted/50 dark:bg-white/[0.02] border-border/60" 
                                                 : "bg-background/40 border-border/30 opacity-70"
                                         }`}
                                     >
                                         {/* Server Header Bar */}
-                                        <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/30 bg-white/[0.01]">
+                                        <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/30 bg-muted/50 dark:bg-white/[0.01]">
                                             <div className="flex items-center gap-3">
                                                 <div className={`h-9 w-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                                                    isPlex ? "bg-amber-500/10 border-amber-500/30 text-amber-400" :
-                                                    isJellyfin ? "bg-sky-500/10 border-sky-500/30 text-sky-400" :
-                                                    "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                                    isPlex ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400" :
+                                                    isJellyfin ? "bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-400" :
+                                                    "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
                                                 }`}>
                                                     <Server className="h-4.5 w-4.5" />
                                                 </div>
@@ -459,7 +459,7 @@ export function UserMediaServersManager({
                                                             setGuideServer(server);
                                                             setGuideModalOpen(true);
                                                         }}
-                                                        className="h-7 text-xs font-semibold gap-1.5 border-border/60 hover:bg-white/[0.05] text-foreground cursor-pointer"
+                                                        className="h-7 text-xs font-semibold gap-1.5 border-border/60 hover:bg-accent dark:hover:bg-white/[0.05] text-foreground cursor-pointer"
                                                     >
                                                         <BookOpen className="h-3.5 w-3.5 shrink-0" /> Setup Guide
                                                     </Button>
@@ -468,7 +468,7 @@ export function UserMediaServersManager({
                                                 <div className="flex items-center gap-2">
                                                     {isTrialUser && !isPlex ? (
                                                         <>
-                                                            <Badge variant="outline" className="text-[10px] font-bold bg-amber-500/15 text-amber-300 border-amber-500/30">
+                                                            <Badge variant="outline" className="text-[10px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                                                 <Lock className="h-3 w-3 mr-1" /> Full Members Only
                                                             </Badge>
                                                             <Switch
@@ -496,7 +496,7 @@ export function UserMediaServersManager({
                                             <div className="p-3.5 space-y-3.5">
                                                 {/* Remote Username Binding for Jellyfin/Emby */}
                                                 {!isPlex && (
-                                                    <div className="p-2.5 rounded-lg bg-white/[0.02] border border-border/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                                    <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                                                         <div className="space-y-0.5">
                                                             <Label className="text-xs font-semibold text-foreground">
                                                                 {server.serverType} Username
@@ -530,7 +530,7 @@ export function UserMediaServersManager({
                                                                 variant="ghost"
                                                                 size="sm"
                                                                 onClick={() => handleSelectAllServerLibs(server)}
-                                                                className="h-6 px-2 text-[10px] text-cyan-300 hover:text-cyan-200"
+                                                                className="h-6 px-2 text-[10px] text-cyan-800 dark:text-cyan-300 hover:text-cyan-900 dark:hover:text-cyan-200"
                                                             >
                                                                 <CheckSquare className="h-2.5 w-2.5 mr-1" /> Select All Allowed
                                                             </Button>
@@ -556,19 +556,19 @@ export function UserMediaServersManager({
                                                                     onClick={() => handleToggleLibrary(lib.libraryKey)}
                                                                     className={`p-2.5 rounded-lg border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
                                                                         isLibSelected
-                                                                            ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-xs"
+                                                                            ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-900 dark:text-cyan-200 shadow-xs"
                                                                             : "bg-background/50 border-border/40 text-muted-foreground hover:border-border hover:text-foreground"
                                                                     }`}
                                                                 >
                                                                     <div className="flex items-center gap-2 min-w-0">
                                                                         {lib.type.includes("movie") ? (
-                                                                            <Film className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-cyan-400" : "text-muted-foreground"}`} />
+                                                                            <Film className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-cyan-700 dark:text-cyan-400" : "text-muted-foreground"}`} />
                                                                         ) : lib.type.includes("show") || lib.type.includes("tv") ? (
-                                                                            <Tv className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-sky-400" : "text-muted-foreground"}`} />
+                                                                            <Tv className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-sky-700 dark:text-sky-400" : "text-muted-foreground"}`} />
                                                                         ) : lib.type.includes("music") ? (
-                                                                            <Music className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-emerald-400" : "text-muted-foreground"}`} />
+                                                                            <Music className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`} />
                                                                         ) : (
-                                                                            <FolderCheck className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-amber-400" : "text-muted-foreground"}`} />
+                                                                            <FolderCheck className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`} />
                                                                         )}
                                                                         <span className="text-xs font-semibold truncate">{lib.title}</span>
                                                                     </div>
@@ -591,7 +591,7 @@ export function UserMediaServersManager({
                     )}
                 </CardContent>
 
-                <CardFooter className="pt-3 pb-4 px-4 bg-white/[0.01] border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <CardFooter className="pt-3 pb-4 px-4 bg-muted/50 dark:bg-white/[0.01] border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <p className="text-[11px] text-muted-foreground">
                         Changes synchronize directly to your Plex shares and Jellyfin/Emby user policies.
                     </p>

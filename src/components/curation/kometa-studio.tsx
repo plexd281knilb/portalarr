@@ -1853,7 +1853,7 @@ export function KometaStudio() {
                         }}
                     >
                         {hasBackdrop ? (
-                            <div className="bg-black/92 px-2.5 py-1 rounded-lg border border-white/20 shadow-xl shadow-black/90 flex items-center justify-center backdrop-blur-md">
+                            <div className="bg-black/92 px-2.5 py-1 rounded-lg border border-border/70 dark:border-white/20 shadow-xl shadow-black/90 flex items-center justify-center backdrop-blur-md">
                                 {imgElement}
                             </div>
                         ) : (
@@ -1876,7 +1876,7 @@ export function KometaStudio() {
                     }}
                 >
                     {hasBackdrop ? (
-                        <div className="bg-black/92 p-0.5 rounded-lg border border-white/20 shadow-xl shadow-black/90 flex items-center justify-center backdrop-blur-md">
+                        <div className="bg-black/92 p-0.5 rounded-lg border border-border/70 dark:border-white/20 shadow-xl shadow-black/90 flex items-center justify-center backdrop-blur-md">
                             {vectorFallbackJsx}
                         </div>
                     ) : (
@@ -2118,9 +2118,9 @@ export function KometaStudio() {
                 <div key="ratings" className={`relative flex items-center gap-1.5 px-2 py-0.5 rounded-md border shadow-lg text-[10px] overflow-hidden backdrop-blur-md ${st.container}`}>
                     <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
                     <div className="bg-yellow-400 text-black font-black px-1 rounded text-[8.5px] leading-tight">IMDb</div>
-                    <span className="font-bold text-white text-[10px]">8.6</span>
+                    <span className="font-bold text-foreground dark:text-white text-[10px]">8.6</span>
                     <span className="text-[10px]">🍅</span>
-                    <span className="font-bold text-white text-[10px]">94%</span>
+                    <span className="font-bold text-foreground dark:text-white text-[10px]">94%</span>
                 </div>
             );
             items.push({
@@ -3322,7 +3322,7 @@ export function KometaStudio() {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin text-sky-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-sky-700 dark:text-sky-400" />
                 <p className="text-sm font-medium">Loading Kometa Overlays Studio...</p>
             </div>
         );
@@ -3354,12 +3354,12 @@ export function KometaStudio() {
 
             {/* Static Server & Library Section Navigator */}
             {servers.length > 0 && (
-                <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
                     <div className="p-5 sm:p-6 space-y-5">
                         {/* Plex Servers Static Tabs */}
-                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
-                            <div className="flex items-center gap-2.5 text-xs font-bold text-slate-300 shrink-0">
-                                <Tv className="h-4 w-4 text-sky-400" />
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border dark:border-slate-800/80 pb-4">
+                            <div className="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                <Tv className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                                 <span>Plex Server:</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
@@ -3374,12 +3374,12 @@ export function KometaStudio() {
                                             className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                                 isSelected
                                                     ? 'bg-sky-600 text-white shadow-lg border border-sky-400/50 ring-1 ring-sky-400/40'
-                                                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                                    : 'bg-muted/80 dark:bg-slate-800/80 hover:bg-slate-700/80 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white border border-border dark:border-slate-700/60'
                                             }`}
                                         >
                                             <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white shadow-sm' : 'bg-emerald-400'}`} />
                                             <span>{s.serverName || "Plex Server"}</span>
-                                            <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${isSelected ? 'border-sky-300 text-sky-100 bg-sky-700/60' : 'border-slate-700 text-slate-400'}`}>
+                                            <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${isSelected ? 'border-sky-300 text-sky-100 bg-sky-700/60' : 'border-border dark:border-slate-700 text-slate-400'}`}>
                                                 {secCount} {secCount === 1 ? 'lib' : 'libs'}
                                             </Badge>
                                         </button>
@@ -3390,19 +3390,19 @@ export function KometaStudio() {
 
                         {/* Library Sections Static Tabs */}
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                            <div className="flex items-center gap-2.5 text-xs font-bold text-slate-300 shrink-0">
-                                <Film className="h-4 w-4 text-sky-400" />
+                            <div className="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                <Film className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                                 <span>Library Sections:</span>
-                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />}
+                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700 dark:text-sky-400" />}
                             </div>
                             <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
                                 {serverSectionsLoading ? (
-                                    <div className="flex items-center gap-2 text-xs text-sky-400 py-1 font-medium">
+                                    <div className="flex items-center gap-2 text-xs text-sky-700 dark:text-sky-400 py-1 font-medium">
                                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                         <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
                                     </div>
                                 ) : currentSections.length === 0 ? (
-                                    <span className="text-xs text-slate-400 py-1">No library sections found on this server.</span>
+                                    <span className="text-xs text-slate-600 dark:text-slate-400 py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {
                                         const isSelected = String(sec.key) === selectedSectionKey;
@@ -3416,7 +3416,7 @@ export function KometaStudio() {
                                                 className={`flex items-center rounded-xl transition-all border shadow-sm ${
                                                     isSelected
                                                         ? 'bg-sky-600/20 border-sky-400/60 ring-1 ring-sky-400/40'
-                                                        : 'bg-slate-800/80 border-slate-700/70 hover:border-slate-600'
+                                                        : 'bg-muted/80 dark:bg-slate-800/80 border-border dark:border-slate-700/70 hover:border-slate-600'
                                                 }`}
                                             >
                                                 {/* Library Tab Selector Button */}
@@ -3425,15 +3425,15 @@ export function KometaStudio() {
                                                     onClick={() => handleSelectSection(String(sec.key))}
                                                     className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-l-xl transition-all cursor-pointer ${
                                                         isSelected
-                                                            ? 'text-sky-200'
-                                                            : 'text-slate-300 hover:text-white'
+                                                            ? 'text-sky-900 dark:text-sky-200'
+                                                            : 'text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white'
                                                     }`}
                                                 >
-                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
-                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
-                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-800 dark:text-amber-300 shrink-0" />}
+                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-800 dark:text-cyan-300 shrink-0" />}
+                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-700 dark:text-slate-300 shrink-0" />}
                                                     <span>{sec.title}</span>
-                                                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-sky-500/30 text-sky-100' : 'bg-slate-900 text-slate-400'}`}>
+                                                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-sky-500/30 text-sky-900 dark:text-sky-100' : 'bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}>
                                                         #{sec.key}
                                                     </span>
                                                 </button>
@@ -3449,9 +3449,9 @@ export function KometaStudio() {
                                                     className={`px-3 py-2 text-[10px] font-extrabold transition-all border-l flex items-center gap-1.5 rounded-r-xl cursor-pointer ${
                                                         isSecEnabled 
                                                             ? isSelected
-                                                                ? 'bg-emerald-500/30 text-emerald-200 border-sky-400/40 hover:bg-emerald-500/40'
-                                                                : 'bg-emerald-500/20 text-emerald-300 border-slate-700 hover:bg-emerald-500/30'
-                                                            : 'bg-slate-900/90 text-slate-500 border-slate-700 hover:text-slate-300 hover:bg-slate-800'
+                                                                ? 'bg-emerald-500/30 text-emerald-900 dark:text-emerald-200 border-sky-400/40 hover:bg-emerald-500/40'
+                                                                : 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-border dark:border-slate-700 hover:bg-emerald-500/30'
+                                                            : 'bg-card/95 dark:bg-slate-900/90 text-slate-500 border-border dark:border-slate-700 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-accent dark:hover:bg-slate-800'
                                                     }`}
                                                 >
                                                     <span className={`w-1.5 h-1.5 rounded-full ${isSecEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
@@ -3466,29 +3466,29 @@ export function KometaStudio() {
 
                         {/* Active Library Control Bar */}
                         {currentSections.length > 0 && selectedSectionKey && (
-                            <div className="mt-3 pt-4 border-t border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-slate-950/70 p-4 sm:p-5 rounded-2xl border border-slate-800/90 min-w-0">
+                            <div className="mt-3 pt-4 border-t border-border dark:border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-muted/70 dark:bg-slate-950/70 p-4 sm:p-5 rounded-2xl border dark:border-slate-800/90 min-w-0">
                                 <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
                                     <div className={`p-2.5 rounded-xl border shrink-0 ${
                                         isSectionEnabled(selectedServerId, selectedSectionKey)
-                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-950/30'
-                                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-950/30'
+                                            : 'bg-muted dark:bg-slate-800 border-border dark:border-slate-700 text-slate-600 dark:text-slate-400'
                                     }`}>
                                         {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
                                     </div>
                                     <div className="space-y-1 min-w-0 flex-1">
                                         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-                                            <span className="text-xs sm:text-sm font-black text-white tracking-tight break-words">
+                                            <span className="text-xs sm:text-sm font-black text-foreground dark:text-white tracking-tight break-words">
                                                 {currentServer?.serverName} &rarr; {currentSections.find(s => String(s.key) === selectedSectionKey)?.title || `Library #${selectedSectionKey}`}
                                             </span>
                                             <Badge className={`text-[10px] font-bold px-2 py-0.5 shrink-0 ${
                                                 isSectionEnabled(selectedServerId, selectedSectionKey)
                                                     ? 'bg-emerald-600 text-white'
-                                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                                    : 'bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-border dark:border-slate-700'
                                             }`}>
                                                 {isSectionEnabled(selectedServerId, selectedSectionKey) ? '🟢 OVERLAYS ACTIVE' : '⚪ EXCLUDED / DISABLED'}
                                             </Badge>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey)
                                                 ? 'This library section will receive automated badge & overlay updates during sync.'
                                                 : 'This library section is excluded and will be skipped during all overlay sync operations.'}
@@ -3498,15 +3498,15 @@ export function KometaStudio() {
 
                                 <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto justify-start xl:justify-end min-w-0">
                                     {/* Primary Switch for Selected Library */}
-                                    <div className="flex items-center gap-2.5 bg-slate-900 px-3.5 py-1.5 rounded-xl border border-slate-800 shadow-sm shrink-0">
-                                        <Label htmlFor="sec-master-toggle-kometa" className="text-xs font-bold text-slate-300 cursor-pointer select-none">
+                                    <div className="flex items-center gap-2.5 bg-card/95 dark:bg-slate-900 px-3.5 py-1.5 rounded-xl border border-border dark:border-slate-800 shadow-sm shrink-0">
+                                        <Label htmlFor="sec-master-toggle-kometa" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey) ? (
-                                                <span className="text-emerald-400 font-extrabold flex items-center gap-1.5">
+                                                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center gap-1.5">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                                     Enabled
                                                 </span>
                                             ) : (
-                                                <span className="text-slate-400 font-semibold">Disabled</span>
+                                                <span className="text-slate-600 dark:text-slate-400 font-semibold">Disabled</span>
                                             )}
                                         </Label>
                                         <Switch
@@ -3517,8 +3517,8 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Batch Server Controls Pill */}
-                                    <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-sm shrink-0">
-                                        <span className="text-[10px] font-extrabold text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
+                                    <div className="flex items-center bg-card/95 dark:bg-slate-900/90 p-1 rounded-xl border border-border dark:border-slate-800 shadow-sm shrink-0">
+                                        <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
                                             Server:
                                         </span>
                                         <Button
@@ -3526,22 +3526,22 @@ export function KometaStudio() {
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleToggleAllSectionsOnServer(true)}
-                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-300 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
                                             title="Enable overlays for all library sections on this server"
                                         >
-                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-400" />
+                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-700 dark:text-emerald-400" />
                                             Enable All
                                         </Button>
-                                        <div className="w-[1px] h-4 bg-slate-800 my-auto" />
+                                        <div className="w-[1px] h-4 bg-muted dark:bg-slate-800 my-auto" />
                                         <Button
                                             type="button"
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleToggleAllSectionsOnServer(false)}
-                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
                                             title="Disable overlays for all library sections on this server"
                                         >
-                                            <XCircle className="h-3 w-3 mr-1 text-rose-400" />
+                                            <XCircle className="h-3 w-3 mr-1 text-rose-700 dark:text-rose-400" />
                                             Disable All
                                         </Button>
                                     </div>
@@ -3570,37 +3570,37 @@ export function KometaStudio() {
                 const recheckNext = calculateNextRunTime(overlayRecheckSchedule, overlayRecheckLastRunAt);
 
                 return (
-                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                    <Card className={`bg-card/95 dark:bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
                         isScheduleDirty 
                             ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
-                            : "border-slate-800"
+                            : "border-border dark:border-slate-800"
                     }`}>
-                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                        <CardHeader className="p-5 pb-3 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2.5 flex-wrap">
-                                        <Clock className="h-5 w-5 text-sky-400" />
-                                        <CardTitle className="text-base sm:text-lg font-bold text-white">Poster Overlays Dual Automation Schedules</CardTitle>
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled || overlayRecheckEnabled ? 'border-sky-500/40 text-sky-300 bg-sky-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                        <Clock className="h-5 w-5 text-sky-700 dark:text-sky-400" />
+                                        <CardTitle className="text-base sm:text-lg font-bold text-foreground dark:text-white">Poster Overlays Dual Automation Schedules</CardTitle>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled || overlayRecheckEnabled ? 'border-sky-500/40 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/30' : 'border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-muted/40 dark:bg-slate-800/40'}`}>
                                             {overlayIncrementalEnabled && overlayRecheckEnabled ? 'Dual Schedules Active' : overlayIncrementalEnabled ? 'Incremental Active' : overlayRecheckEnabled ? 'Recheck Active' : 'Schedules Paused'}
                                         </Badge>
                                         {overlayIncrementalEnabled && (
-                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${incNext.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-sky-500/20 text-sky-300 border border-sky-500/30"}`}>
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${incNext.isDue ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40" : "bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/30"}`}>
                                                 Inc Next: {incNext.relativeText}
                                             </Badge>
                                         )}
                                         {overlayRecheckEnabled && (
-                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${recheckNext.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-teal-500/20 text-teal-300 border border-teal-500/30"}`}>
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${recheckNext.isDue ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40" : "bg-teal-500/20 text-teal-800 dark:text-teal-300 border border-teal-500/30"}`}>
                                                 Recheck Next: {recheckNext.relativeText}
                                             </Badge>
                                         )}
                                         {isScheduleDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold">
+                                            <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-[10px] font-bold">
                                                 Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
-                                    <CardDescription className="text-xs text-slate-400">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                         Automatically scans for new media imports and performs periodic library rechecks on independent schedules across enabled Plex libraries.
                                     </CardDescription>
                                 </div>
@@ -3623,15 +3623,15 @@ export function KometaStudio() {
                         <CardContent className="p-5 space-y-4">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {/* Schedule 1: Incremental Scan */}
-                                <div className="bg-slate-950/60 border border-sky-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5 min-w-0">
+                                <div className="bg-muted/60 dark:bg-slate-950/60 border border-sky-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5 min-w-0">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2 min-w-0">
-                                                <Zap className="h-4 w-4 text-sky-400 shrink-0" />
-                                                <span className="font-bold text-slate-100 text-sm truncate">Incremental Scan (All Changed Items)</span>
+                                                <Zap className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
+                                                <span className="font-bold text-foreground dark:text-slate-100 text-sm truncate">Incremental Scan (All Changed Items)</span>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
-                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled ? 'border-sky-500/40 text-sky-300 bg-sky-950/30' : 'border-slate-700 text-slate-400 bg-slate-900/40'}`}>
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled ? 'border-sky-500/40 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/30' : 'border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-muted/70 dark:bg-slate-900/40'}`}>
                                                     {overlayIncrementalEnabled ? `Active (${formatScheduleLabel(overlayIncrementalSchedule)})` : 'Disabled'}
                                                 </Badge>
                                                 <Switch 
@@ -3640,23 +3640,23 @@ export function KometaStudio() {
                                                 />
                                             </div>
                                         </div>
-                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Fast, high-frequency scan that checks newly added and upgraded media across enabled libraries to apply badges immediately.
                                         </p>
                                     </div>
 
                                     <div className="space-y-2.5 pt-1">
                                         <div className="space-y-1 min-w-0">
-                                            <label className="text-[11px] font-medium text-slate-400 block truncate">Trigger Frequency</label>
+                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 block truncate">Trigger Frequency</label>
                                             <Select 
                                                 value={overlayIncrementalSchedule} 
                                                 onValueChange={val => setOverlayIncrementalSchedule(val)}
                                                 disabled={!overlayIncrementalEnabled}
                                             >
-                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
+                                                <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8 text-foreground dark:text-slate-200 truncate">
                                                     <SelectValue placeholder="Select Frequency" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs max-w-sm">
+                                                <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs max-w-sm">
                                                     {SCHEDULE_OPTIONS.map(opt => (
                                                         <SelectItem key={opt.value} value={opt.value}>
                                                             {opt.label}
@@ -3667,16 +3667,16 @@ export function KometaStudio() {
                                         </div>
 
                                         <div className="space-y-1 min-w-0">
-                                            <label className="text-[11px] font-medium text-slate-400 block truncate">Incremental Scope / Batch</label>
+                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 block truncate">Incremental Scope / Batch</label>
                                             <Select 
                                                 value={String(overlayIncrementalBatchSize)} 
                                                 onValueChange={val => setOverlayIncrementalBatchSize(Number(val))}
                                                 disabled={!overlayIncrementalEnabled}
                                             >
-                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-sky-300 font-semibold truncate">
+                                                <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8 text-sky-800 dark:text-sky-300 font-semibold truncate">
                                                     <SelectValue placeholder="Batch Size" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
                                                     <SelectItem value="0">All Changed Items (Default)</SelectItem>
                                                     <SelectItem value="50">50 Items</SelectItem>
                                                     <SelectItem value="100">100 Items</SelectItem>
@@ -3687,17 +3687,17 @@ export function KometaStudio() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5 min-w-0">
-                                            <Clock3 className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-                                            <span className="truncate">Last run: <strong className="text-slate-200">{formatLastRunDisplay(overlayIncrementalLastRunAt)}</strong></span>
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border dark:border-slate-800/80">
+                                        <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5 min-w-0">
+                                            <Clock3 className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
+                                            <span className="truncate">Last run: <strong className="text-foreground dark:text-slate-200">{formatLastRunDisplay(overlayIncrementalLastRunAt)}</strong></span>
                                         </div>
                                         <Button 
                                             size="sm"
                                             onClick={handleRunIncrementalSync}
                                             disabled={runningIncrementalSync}
                                             variant="outline"
-                                            className="border-sky-500/40 text-sky-300 hover:text-white hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                            className="border-sky-500/40 text-sky-800 dark:text-sky-300 hover:text-foreground dark:hover:text-white hover:bg-sky-500/10 dark:hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
                                         >
                                             {runningIncrementalSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
                                             <span>Run Incremental Now</span>
@@ -3706,15 +3706,15 @@ export function KometaStudio() {
                                 </div>
 
                                 {/* Schedule 2: Deep Periodic Recheck */}
-                                <div className="bg-slate-950/60 border border-teal-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5 min-w-0">
+                                <div className="bg-muted/60 dark:bg-slate-950/60 border border-teal-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5 min-w-0">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2 min-w-0">
-                                                <RotateCcw className="h-4 w-4 text-teal-400 shrink-0" />
-                                                <span className="font-bold text-slate-100 text-sm truncate">Daily Deep Recheck (All Items)</span>
+                                                <RotateCcw className="h-4 w-4 text-teal-700 dark:text-teal-400 shrink-0" />
+                                                <span className="font-bold text-foreground dark:text-slate-100 text-sm truncate">Daily Deep Recheck (All Items)</span>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
-                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayRecheckEnabled ? 'border-teal-500/40 text-teal-300 bg-teal-950/30' : 'border-slate-700 text-slate-400 bg-slate-900/40'}`}>
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayRecheckEnabled ? 'border-teal-500/40 text-teal-800 dark:text-teal-300 bg-teal-500/10 dark:bg-teal-950/30' : 'border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-muted/70 dark:bg-slate-900/40'}`}>
                                                     {overlayRecheckEnabled ? `Active (${formatScheduleLabel(overlayRecheckSchedule)})` : 'Disabled'}
                                                 </Badge>
                                                 <Switch 
@@ -3723,23 +3723,23 @@ export function KometaStudio() {
                                                 />
                                             </div>
                                         </div>
-                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Comprehensive full-library maintenance sweep that verifies existing badge hashes, updates dynamic ribbon dates, and processes all catalog items.
                                         </p>
                                     </div>
 
                                     <div className="space-y-2.5 pt-1">
                                         <div className="space-y-1 min-w-0">
-                                            <label className="text-[11px] font-medium text-slate-400 block truncate">Schedule Frequency</label>
+                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 block truncate">Schedule Frequency</label>
                                             <Select 
                                                 value={overlayRecheckSchedule} 
                                                 onValueChange={val => setOverlayRecheckSchedule(val)}
                                                 disabled={!overlayRecheckEnabled}
                                             >
-                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
+                                                <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8 text-foreground dark:text-slate-200 truncate">
                                                     <SelectValue placeholder="Select Frequency" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs max-w-sm">
+                                                <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs max-w-sm">
                                                     {SCHEDULE_OPTIONS.map(opt => (
                                                         <SelectItem key={opt.value} value={opt.value}>
                                                             {opt.label}
@@ -3751,16 +3751,16 @@ export function KometaStudio() {
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                             <div className="space-y-1 min-w-0">
-                                                <label className="text-[11px] font-medium text-slate-400 block truncate">Recheck Scope</label>
+                                                <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 block truncate">Recheck Scope</label>
                                                 <Select 
                                                     value={overlayRecheckScope} 
                                                     onValueChange={val => setOverlayRecheckScope(val)}
                                                     disabled={!overlayRecheckEnabled}
                                                 >
-                                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
+                                                    <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8 text-foreground dark:text-slate-200 truncate">
                                                         <SelectValue placeholder="Recheck Scope" />
                                                     </SelectTrigger>
-                                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
                                                         <SelectItem value="force_all">🔄 All Items (Full Library)</SelectItem>
                                                         <SelectItem value="daily_recheck">🌙 &gt;24h Old Items</SelectItem>
                                                         <SelectItem value="weekly_recheck">📅 &gt;7d Old Items</SelectItem>
@@ -3770,16 +3770,16 @@ export function KometaStudio() {
                                             </div>
 
                                             <div className="space-y-1 min-w-0">
-                                                <label className="text-[11px] font-medium text-slate-400 block truncate">Batch Size</label>
+                                                <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 block truncate">Batch Size</label>
                                                 <Select 
                                                     value={String(overlayRecheckBatchSize)} 
                                                     onValueChange={val => setOverlayRecheckBatchSize(Number(val))}
                                                     disabled={!overlayRecheckEnabled}
                                                 >
-                                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-teal-300 font-semibold truncate">
+                                                    <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8 text-teal-800 dark:text-teal-300 font-semibold truncate">
                                                         <SelectValue placeholder="Batch Size" />
                                                     </SelectTrigger>
-                                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
                                                         <SelectItem value="0">All Items (Default)</SelectItem>
                                                         <SelectItem value="100">100 Items</SelectItem>
                                                         <SelectItem value="200">200 Items</SelectItem>
@@ -3792,17 +3792,17 @@ export function KometaStudio() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5 min-w-0">
-                                            <Clock3 className="h-3.5 w-3.5 text-teal-400 shrink-0" />
-                                            <span className="truncate">Last run: <strong className="text-slate-200">{formatLastRunDisplay(overlayRecheckLastRunAt)}</strong></span>
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border dark:border-slate-800/80">
+                                        <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5 min-w-0">
+                                            <Clock3 className="h-3.5 w-3.5 text-teal-700 dark:text-teal-400 shrink-0" />
+                                            <span className="truncate">Last run: <strong className="text-foreground dark:text-slate-200">{formatLastRunDisplay(overlayRecheckLastRunAt)}</strong></span>
                                         </div>
                                         <Button 
                                             size="sm"
                                             onClick={handleRunRecheckSync}
                                             disabled={runningRecheckSync}
                                             variant="outline"
-                                            className="border-teal-500/40 text-teal-300 hover:text-white hover:bg-teal-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                            className="border-teal-500/40 text-teal-800 dark:text-teal-300 hover:text-foreground dark:hover:text-white hover:bg-teal-500/10 dark:hover:bg-teal-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
                                         >
                                             {runningRecheckSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                                             <span>Run Recheck Now</span>
@@ -3812,43 +3812,43 @@ export function KometaStudio() {
                             </div>
 
                             {/* Target Libraries Banner */}
-                            <div className="pt-3 border-t border-slate-800/80 space-y-1.5">
+                            <div className="pt-3 border-t border-border dark:border-slate-800/80 space-y-1.5">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-                                        <Layers className="h-3 w-3 text-sky-400" />
+                                    <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                        <Layers className="h-3 w-3 text-sky-700 dark:text-sky-400" />
                                         <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
                                     </label>
                                     <button
                                         type="button"
                                         onClick={() => setManageLibrariesModalOpen(true)}
-                                        className="text-[10px] text-sky-400 hover:text-sky-300 font-bold underline cursor-pointer"
+                                        className="text-[10px] text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 font-bold underline cursor-pointer"
                                     >
                                         Manage All &rarr;
                                     </button>
                                 </div>
-                                <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                <div className="min-h-[32px] p-1.5 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
                                     {activeEnabledSections.length > 0 ? (
                                         activeEnabledSections.map(sec => (
                                             <Badge 
                                                 key={`${sec.serverId}-${sec.sectionKey}`}
-                                                className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                className="bg-emerald-500/15 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-500/15 dark:hover:bg-emerald-900/80 transition-colors shadow-sm"
                                                 onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
                                                 title={`Click to disable/exclude "${sec.title}" from overlays`}
                                             >
                                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
                                                 {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
                                                 <span>{sec.title}</span>
-                                                {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                {servers.length > 1 && <span className="text-[9px] text-slate-600 dark:text-slate-400 font-normal">({sec.serverName})</span>}
                                             </Badge>
                                         ))
                                     ) : (
-                                        <span className="text-[11px] text-slate-400 px-1">No libraries active (Overlays paused)</span>
+                                        <span className="text-[11px] text-slate-600 dark:text-slate-400 px-1">No libraries active (Overlays paused)</span>
                                     )}
                                     {excludedSections.length > 0 && (
                                         <Badge
                                             variant="outline"
                                             onClick={() => setManageLibrariesModalOpen(true)}
-                                            className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                            className="border-border dark:border-slate-700/80 bg-muted/80 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
                                         >
                                             +{excludedSections.length} excluded
                                         </Badge>
@@ -3858,7 +3858,7 @@ export function KometaStudio() {
                         </CardContent>
 
                         {overlaySyncResult && (
-                            <div className={`p-3.5 text-xs border-t ${overlaySyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2.5`}>
+                            <div className={`p-3.5 text-xs border-t ${overlaySyncResult.success ? 'bg-emerald-500/10 dark:bg-emerald-950/60 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300' : 'bg-rose-500/10 dark:bg-rose-950/60 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300'} flex items-start gap-2.5`}>
                                 {overlaySyncResult.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" /> : <XCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />}
                                 <div className="space-y-0.5">
                                     <span className="font-bold">{overlaySyncResult.text}</span>
@@ -3873,15 +3873,15 @@ export function KometaStudio() {
             })()}
 
             {/* Main Overlays & Simulator Card */}
-            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                <CardHeader className="p-6 pb-4 border-b border-slate-800/80">
+            <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <CardHeader className="p-6 pb-4 border-b border-border dark:border-slate-800/80">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="space-y-1">
-                            <CardTitle className="text-xl font-black text-white flex items-center gap-2.5">
-                                <Sparkles className="h-5 w-5 text-sky-400" />
+                            <CardTitle className="text-xl font-black text-foreground dark:text-white flex items-center gap-2.5">
+                                <Sparkles className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                                 <span>Poster Overlays &amp; Live Simulator</span>
                             </CardTitle>
-                            <CardDescription className="text-xs text-slate-400">
+                            <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                 Configure 4K UHD, HDR, Dolby Vision dovetailing, studio audio codecs, US age ratings, network logos, and tiered gloss ribbons.
                             </CardDescription>
                         </div>
@@ -3891,9 +3891,9 @@ export function KometaStudio() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => setGuideModalOpen(true)}
-                                className="border-sky-500/40 text-sky-300 hover:text-white hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm"
+                                className="border-sky-500/40 text-sky-800 dark:text-sky-300 hover:text-foreground dark:hover:text-white hover:bg-sky-500/10 dark:hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm"
                             >
-                                <BookOpen className="h-3.5 w-3.5 text-sky-400" />
+                                <BookOpen className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                 <span>Overlays &amp; Badges Guide</span>
                             </Button>
                             <Button
@@ -3915,13 +3915,13 @@ export function KometaStudio() {
                                 {savingOverlaySettings ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                                 <span>Save Overlay Settings</span>
                             </Button>
-                            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 bg-slate-950/80 p-1 sm:p-0.5 rounded-xl border border-slate-800 w-full sm:w-auto">
+                            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 bg-muted/80 dark:bg-slate-950/80 p-1 sm:p-0.5 rounded-xl border border-border dark:border-slate-800 w-full sm:w-auto">
                                 <div className="flex items-center gap-1 w-full sm:w-auto">
                                     <Select value={String(manualBatchSize)} onValueChange={val => setManualBatchSize(Number(val))}>
-                                        <SelectTrigger className="h-8 bg-transparent border-0 text-xs flex-1 sm:w-[95px] text-sky-300 font-bold focus:ring-0">
+                                        <SelectTrigger className="h-8 bg-transparent border-0 text-xs flex-1 sm:w-[95px] text-sky-800 dark:text-sky-300 font-bold focus:ring-0">
                                             <SelectValue placeholder="Size" />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                        <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
                                             <SelectItem value="0">All Items</SelectItem>
                                             <SelectItem value="10">10 Items</SelectItem>
                                             <SelectItem value="50">50 Items</SelectItem>
@@ -3931,10 +3931,10 @@ export function KometaStudio() {
                                         </SelectContent>
                                     </Select>
                                     <Select value={manualBatchMode} onValueChange={(val: any) => setManualBatchMode(val)}>
-                                        <SelectTrigger className="h-8 bg-transparent border-0 text-xs flex-1 sm:w-[145px] text-slate-300 font-medium focus:ring-0" title="Scan Mode & Recheck Scope">
+                                        <SelectTrigger className="h-8 bg-transparent border-0 text-xs flex-1 sm:w-[145px] text-slate-700 dark:text-slate-300 font-medium focus:ring-0" title="Scan Mode & Recheck Scope">
                                             <SelectValue placeholder="Mode" />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                        <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
                                             <SelectItem value="incremental">⚡ Incremental (New &amp; Upgrades)</SelectItem>
                                             <SelectItem value="daily_recheck">🌙 Daily Recheck (&gt;24h Old)</SelectItem>
                                             <SelectItem value="weekly_recheck">📅 Weekly Recheck (&gt;7d Old)</SelectItem>
@@ -3960,13 +3960,13 @@ export function KometaStudio() {
                                 variant="outline"
                                 disabled={revertingOverlays}
                                 onClick={handleRevertOverlays}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5"
+                                className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs h-8 px-2.5 gap-1.5"
                                 title="Restore original artwork from DomsHomeLab backup vault"
                             >
                                 {revertingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                                 <span>↺ Restore Originals</span>
                                 {backupsCount > 0 && (
-                                    <Badge variant="outline" className="text-[10px] py-0 px-1 border-slate-600 text-slate-300 ml-0.5">
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1 border-slate-600 text-slate-700 dark:text-slate-300 ml-0.5">
                                         {backupsCount}
                                     </Badge>
                                 )}
@@ -3977,14 +3977,14 @@ export function KometaStudio() {
                     {overlayMessage && (
                         <div className={`mt-3 p-3 rounded-xl border text-xs flex items-center justify-between gap-2 animate-in fade-in-50 duration-200 ${
                             overlayMessage.success 
-                                ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" 
-                                : "bg-rose-950/80 border-rose-800 text-rose-300"
+                                ? "bg-emerald-500/15 dark:bg-emerald-950/80 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" 
+                                : "bg-rose-500/15 dark:bg-rose-950/80 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                         }`}>
                             <div className="flex items-center gap-2">
-                                {overlayMessage.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : <XCircle className="h-4 w-4 shrink-0 text-rose-400" />}
+                                {overlayMessage.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" /> : <XCircle className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />}
                                 <span>{overlayMessage.text}</span>
                             </div>
-                            <button type="button" onClick={() => setOverlayMessage(null)} className="opacity-70 hover:opacity-100 text-slate-300">
+                            <button type="button" onClick={() => setOverlayMessage(null)} className="opacity-70 hover:opacity-100 text-slate-700 dark:text-slate-300">
                                 <X className="h-3.5 w-3.5" />
                             </button>
                         </div>
@@ -3996,8 +3996,8 @@ export function KometaStudio() {
                         {/* Live Simulator Poster View (5 Cols) */}
                         <div className="lg:col-span-5 space-y-4">
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                                <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                                    <Eye className="h-4 w-4 text-sky-400" /> Live Poster Simulator
+                                <span className="text-xs font-bold text-foreground dark:text-slate-200 flex items-center gap-1.5">
+                                    <Eye className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Live Poster Simulator
                                 </span>
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <Button
@@ -4015,12 +4015,12 @@ export function KometaStudio() {
                                         }}
                                         className={`h-7 text-[11px] gap-1.5 border transition-all cursor-pointer ${
                                             simPosterTheme === "light"
-                                                ? "border-amber-400 bg-amber-500/20 text-amber-200 shadow-sm"
-                                                : "border-slate-700 bg-slate-900/80 text-slate-300 hover:text-white"
+                                                ? "border-amber-400 bg-amber-500/20 text-amber-900 dark:text-amber-200 shadow-sm"
+                                                : "border-border dark:border-slate-700 bg-card/95 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                         }`}
                                         title="Toggle between a dark and bright movie poster to test 1080p and badge contrast"
                                     >
-                                        <Palette className="h-3.5 w-3.5 text-amber-400" />
+                                        <Palette className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                         {simPosterTheme === "light" ? "Bright Poster (Testing 1080p)" : "Dark Poster"}
                                     </Button>
                                     <Button
@@ -4028,11 +4028,11 @@ export function KometaStudio() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => setPosterPickerModalOpen(true)}
-                                        className="h-7 text-[11px] gap-1.5 border-sky-500/40 hover:bg-sky-950/40 text-sky-200 hover:text-sky-100 cursor-pointer"
+                                        className="h-7 text-[11px] gap-1.5 border-sky-500/40 hover:bg-sky-500/10 dark:hover:bg-sky-950/40 text-sky-900 dark:text-sky-200 hover:text-sky-900 dark:hover:text-sky-100 cursor-pointer"
                                     >
-                                        <ImageIcon className="h-3.5 w-3.5 text-sky-400" /> Pull Poster from Plex
+                                        <ImageIcon className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Pull Poster from Plex
                                     </Button>
-                                    <Badge variant="outline" className="text-[10px] border-sky-500/30 text-sky-300 bg-sky-950/30">
+                                    <Badge variant="outline" className="text-[10px] border-sky-500/30 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/30">
                                         Interactive Preview
                                     </Badge>
                                 </div>
@@ -4040,35 +4040,35 @@ export function KometaStudio() {
 
                             {/* Real Item Telemetry Banner if selected */}
                             {simSelectedRealItem && (
-                                <div className="p-2.5 bg-sky-950/40 border border-sky-800/60 rounded-xl text-xs flex items-center justify-between gap-2 animate-in fade-in-50">
+                                <div className="p-2.5 bg-sky-500/10 dark:bg-sky-950/40 border border-sky-500/60 dark:border-sky-800/60 rounded-xl text-xs flex items-center justify-between gap-2 animate-in fade-in-50">
                                     <div className="space-y-0.5 min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                            <span className="font-bold text-white truncate">{simSelectedRealItem.title}</span>
+                                            <span className="font-bold text-foreground dark:text-white truncate">{simSelectedRealItem.title}</span>
                                             {simSelectedRealItem.year && (
-                                                <span className="text-[10px] text-sky-300 font-mono">({simSelectedRealItem.year})</span>
+                                                <span className="text-[10px] text-sky-800 dark:text-sky-300 font-mono">({simSelectedRealItem.year})</span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-sky-200/80">
+                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-sky-900/80 dark:text-sky-200/80">
                                             {(simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution) && (
-                                                <span className="px-1.5 py-0.2 bg-sky-900/60 rounded text-sky-300 font-mono">
+                                                <span className="px-1.5 py-0.2 bg-sky-500/10 dark:bg-sky-900/60 rounded text-sky-800 dark:text-sky-300 font-mono">
                                                     {simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution}
                                                 </span>
                                             )}
                                             {(simSelectedRealItem.detectedBadges?.hdr === "DV" || simSelectedRealItem.media?.[0]?.hdrFormat === "Dolby Vision") && (
-                                                <span className="px-1.5 py-0.2 bg-amber-900/60 rounded text-amber-300 font-bold">DV</span>
+                                                <span className="px-1.5 py-0.2 bg-amber-500/10 dark:bg-amber-900/60 rounded text-amber-800 dark:text-amber-300 font-bold">DV</span>
                                             )}
                                             {(simSelectedRealItem.detectedBadges?.hdr && simSelectedRealItem.detectedBadges.hdr !== "DV") && (
-                                                <span className="px-1.5 py-0.2 bg-blue-900/60 rounded text-blue-300 font-bold">
+                                                <span className="px-1.5 py-0.2 bg-blue-500/10 dark:bg-blue-900/60 rounded text-blue-800 dark:text-blue-300 font-bold">
                                                     {simSelectedRealItem.detectedBadges.hdr}
                                                 </span>
                                             )}
                                             {(simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec) && (
-                                                <span className="px-1.5 py-0.2 bg-slate-800 rounded text-slate-300 uppercase">
+                                                <span className="px-1.5 py-0.2 bg-muted dark:bg-slate-800 rounded text-slate-700 dark:text-slate-300 uppercase">
                                                     {simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec}
                                                 </span>
                                             )}
                                             {(simSelectedRealItem.detectedBadges?.audioChannels || simSelectedRealItem.media?.[0]?.audioChannels) && (
-                                                <span className="px-1.5 py-0.2 bg-slate-800 rounded text-slate-300">
+                                                <span className="px-1.5 py-0.2 bg-muted dark:bg-slate-800 rounded text-slate-700 dark:text-slate-300">
                                                     {simSelectedRealItem.detectedBadges?.audioChannels || `${simSelectedRealItem.media?.[0]?.audioChannels}ch`}
                                                 </span>
                                             )}
@@ -4082,7 +4082,7 @@ export function KometaStudio() {
                                             setSimSelectedRealItem(null);
                                             setSimPosterImage("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
                                         }}
-                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white shrink-0"
+                                        className="h-6 px-2 text-[10px] text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white shrink-0"
                                     >
                                         Reset Sample
                                     </Button>
@@ -4090,7 +4090,7 @@ export function KometaStudio() {
                             )}
 
                             {/* Simulated Poster Card */}
-                            <div className="relative aspect-[2/3] max-w-[320px] mx-auto rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl group bg-slate-950">
+                            <div className="relative aspect-[2/3] max-w-[320px] mx-auto rounded-2xl overflow-hidden border-2 border-border dark:border-slate-700/80 shadow-2xl group bg-muted dark:bg-slate-950">
                                 <img 
                                     src={simPosterImage} 
                                     alt="Live Simulator" 
@@ -4132,31 +4132,31 @@ export function KometaStudio() {
                             </div>
 
                             {/* Applied Overlays Breakdown Box */}
-                            <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                            <div className="p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                                        <Layers className="h-3.5 w-3.5 text-sky-400" /> Applied Overlays Breakdown
+                                    <span className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                                        <Layers className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Applied Overlays Breakdown
                                     </span>
-                                    <Badge variant="outline" className="text-[10px] font-mono border-sky-500/30 text-sky-300 tabular-nums">
+                                    <Badge variant="outline" className="text-[10px] font-mono border-sky-500/30 text-sky-800 dark:text-sky-300 tabular-nums">
                                         {getSimulatedLayersBreakdown().length} Active
                                     </Badge>
                                 </div>
                                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                                     {getSimulatedLayersBreakdown().map((ly, idx) => (
-                                        <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-slate-900/80 border border-slate-800/80 text-[10px]">
+                                        <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-card/95 dark:bg-slate-900/80 border border-border dark:border-slate-800/80 text-[10px]">
                                             <div className="space-y-0.5">
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className="font-semibold text-white">{ly.category}:</span>
-                                                    <span className="text-slate-300 font-bold">{ly.value}</span>
+                                                    <span className="font-semibold text-foreground dark:text-white">{ly.category}:</span>
+                                                    <span className="text-slate-700 dark:text-slate-300 font-bold">{ly.value}</span>
                                                 </div>
-                                                <p className="text-[9px] text-slate-400">Position: <strong className="text-slate-300">{ly.position}</strong></p>
+                                                <p className="text-[9px] text-slate-600 dark:text-slate-400">Position: <strong className="text-slate-700 dark:text-slate-300">{ly.position}</strong></p>
                                             </div>
                                             <Badge className={`text-[9px] px-1.5 py-0 gap-1 ${
                                                 ly.sourceType === "custom" 
-                                                    ? "bg-sky-950 text-sky-300 border-sky-500/40" 
-                                                    : "bg-slate-800 text-slate-300 border-slate-700"
+                                                    ? "bg-sky-500/15 dark:bg-sky-950 text-sky-800 dark:text-sky-300 border-sky-500/40" 
+                                                    : "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-border dark:border-slate-700"
                                             }`}>
-                                                {ly.sourceType === "custom" && <Zap className="h-2.5 w-2.5 text-amber-400" />}
+                                                {ly.sourceType === "custom" && <Zap className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />}
                                                 <span>{ly.sourceType === "custom" ? "Priority 1 (Custom)" : "Priority 2 (SVG)"}</span>
                                             </Badge>
                                         </div>
@@ -4169,12 +4169,12 @@ export function KometaStudio() {
                         <div className="lg:col-span-7 space-y-4">
                             {/* Global Theme & Dovetail Settings */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
-                                    <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                                        <Palette className="h-3.5 w-3.5 text-sky-400" /> Style Theme
+                                <div className="p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800 space-y-2">
+                                    <span className="font-bold text-foreground dark:text-white text-xs flex items-center gap-1.5">
+                                        <Palette className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Style Theme
                                     </span>
                                     <Select value={simTheme} onValueChange={(val: any) => setSimTheme(val)}>
-                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                        <SelectTrigger className="bg-muted dark:bg-slate-800 border-border dark:border-slate-700 text-xs h-8">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -4188,12 +4188,12 @@ export function KometaStudio() {
                                     </Select>
                                 </div>
 
-                                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
+                                <div className="p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800 space-y-2">
                                     <div className="flex items-center justify-between">
-                                        <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                                            <Maximize2 className="h-3.5 w-3.5 text-cyan-400" /> Scale Size
+                                        <span className="font-bold text-foreground dark:text-white text-xs flex items-center gap-1.5">
+                                            <Maximize2 className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" /> Scale Size
                                         </span>
-                                        <span className="text-[11px] font-mono text-cyan-300">{Math.round(simBadgeScale * 100)}%</span>
+                                        <span className="text-[11px] font-mono text-cyan-800 dark:text-cyan-300">{Math.round(simBadgeScale * 100)}%</span>
                                     </div>
                                     <input 
                                         type="range" 
@@ -4202,32 +4202,32 @@ export function KometaStudio() {
                                         step="0.05"
                                         value={simBadgeScale}
                                         onChange={(e) => setSimBadgeScale(parseFloat(e.target.value))}
-                                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                        className="w-full h-2 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                     />
                                 </div>
 
-                                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
+                                <div className="p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800 space-y-2">
                                     <div className="flex items-center justify-between">
-                                        <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                                            <Zap className="h-3.5 w-3.5 text-amber-400" /> Dovetail 4K+DV
+                                        <span className="font-bold text-foreground dark:text-white text-xs flex items-center gap-1.5">
+                                            <Zap className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Dovetail 4K+DV
                                         </span>
                                         <Switch checked={simDovetailResolutionHdr} onCheckedChange={setSimDovetailResolutionHdr} />
                                     </div>
-                                    <p className="text-[10px] text-sky-300 font-mono">
+                                    <p className="text-[10px] text-sky-800 dark:text-sky-300 font-mono">
                                         {simDovetailResolutionHdr ? "4K • DOLBY VISION" : "Independent Badges"}
                                     </p>
                                 </div>
                             </div>
 
                             {/* Comprehensive Poster Badge Toggles with Positions */}
-                            <div className="space-y-3.5 p-5 bg-slate-950/60 rounded-2xl border border-slate-800 shadow-inner">
-                                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 flex-wrap gap-2">
-                                    <span className="text-xs font-bold text-white flex items-center gap-2">
-                                        <Sliders className="h-4 w-4 text-sky-400" /> Comprehensive Poster Badge Toggles &amp; Positions
+                            <div className="space-y-3.5 p-5 bg-muted/60 dark:bg-slate-950/60 rounded-2xl border border-border dark:border-slate-800 shadow-inner">
+                                <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-3 flex-wrap gap-2">
+                                    <span className="text-xs font-bold text-foreground dark:text-white flex items-center gap-2">
+                                        <Sliders className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Comprehensive Poster Badge Toggles &amp; Positions
                                     </span>
                                     {/* Quick presets for Black Backgrounds */}
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-[10px] text-slate-400 font-medium mr-1">Black Backing:</span>
+                                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium mr-1">Black Backing:</span>
                                         <Button
                                             type="button"
                                             size="sm"
@@ -4239,7 +4239,7 @@ export function KometaStudio() {
                                                     edition: true
                                                 }));
                                             }}
-                                            className="h-6 px-2 text-[10px] bg-slate-900 border border-slate-750 hover:bg-slate-800 text-amber-300 hover:text-amber-200 cursor-pointer"
+                                            className="h-6 px-2 text-[10px] bg-card/95 dark:bg-slate-900 border border-slate-750 hover:bg-accent dark:hover:bg-slate-800 text-amber-800 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200 cursor-pointer"
                                             title="Enable black background for Resolution (1080p) & Edition cuts"
                                         >
                                             Res &amp; Editions ON
@@ -4249,7 +4249,7 @@ export function KometaStudio() {
                                             size="sm"
                                             variant="ghost"
                                             onClick={() => setAllBadgeBackdrops(true)}
-                                            className="h-6 px-2 text-[10px] bg-slate-900 border border-slate-750 hover:bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                                            className="h-6 px-2 text-[10px] bg-card/95 dark:bg-slate-900 border border-slate-750 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white cursor-pointer"
                                         >
                                             All ON
                                         </Button>
@@ -4258,7 +4258,7 @@ export function KometaStudio() {
                                             size="sm"
                                             variant="ghost"
                                             onClick={() => setAllBadgeBackdrops(false)}
-                                            className="h-6 px-2 text-[10px] bg-slate-900 border border-slate-750 hover:bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                                            className="h-6 px-2 text-[10px] bg-card/95 dark:bg-slate-900 border border-slate-750 hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 cursor-pointer"
                                         >
                                             Clear All
                                         </Button>
@@ -4267,16 +4267,16 @@ export function KometaStudio() {
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
                                     {/* Resolution */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
+                                    <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-slate-200">📺 Resolution (4K / 1080p)</span>
+                                            <span className="font-semibold text-foreground dark:text-slate-200">📺 Resolution (4K / 1080p)</span>
                                             <Switch checked={simShowResolution} onCheckedChange={setSimShowResolution} />
                                         </div>
-                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                        <div className="space-y-2 pt-2 border-t border-border dark:border-slate-800/70">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simResolutionPosition} onValueChange={setSimResolutionPosition}>
-                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-muted dark:bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4290,7 +4290,7 @@ export function KometaStudio() {
                                                 </Select>
                                             </div>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Scale Size:</span>
                                                 <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
@@ -4299,22 +4299,22 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.resolution ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("resolution", parseFloat(e.target.value))}
-                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                                        className="w-full min-w-0 h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-sky-300 w-9 text-right shrink-0 tabular-nums">
+                                                    <span className="text-[11px] font-mono font-bold text-sky-800 dark:text-sky-300 w-9 text-right shrink-0 tabular-nums">
                                                         {Math.round((simCategoryScales.resolution ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
                                             </div>
                                             {/* Preview Sample 1080p vs 4K */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Sample Preview:</span>
-                                                <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-md border border-slate-800">
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Sample Preview:</span>
+                                                <div className="flex items-center gap-1 bg-muted dark:bg-slate-950 p-0.5 rounded-md border border-border dark:border-slate-800">
                                                     <button
                                                         type="button"
                                                         onClick={() => setSimResolutionSample("1080p")}
                                                         className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors cursor-pointer ${
-                                                            simResolutionSample === "1080p" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-slate-200"
+                                                            simResolutionSample === "1080p" ? "bg-sky-600 text-white" : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200"
                                                         }`}
                                                     >
                                                         1080p
@@ -4323,7 +4323,7 @@ export function KometaStudio() {
                                                         type="button"
                                                         onClick={() => setSimResolutionSample("4K")}
                                                         className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors cursor-pointer ${
-                                                            simResolutionSample === "4K" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-slate-200"
+                                                            simResolutionSample === "4K" ? "bg-sky-600 text-white" : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200"
                                                         }`}
                                                     >
                                                         4K
@@ -4331,11 +4331,11 @@ export function KometaStudio() {
                                                 </div>
                                             </div>
                                             {/* Black Background Backdrop Toggle */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                    <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Black Background:</span>
                                                     {simBadgeBackdrops.resolution && (
-                                                        <span className="text-[9px] text-amber-400/80 font-mono">(1080p visible)</span>
+                                                        <span className="text-[9px] text-amber-700/80 dark:text-amber-400/80 font-mono">(1080p visible)</span>
                                                     )}
                                                 </div>
                                                 <Button
@@ -4346,7 +4346,7 @@ export function KometaStudio() {
                                                     className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
                                                         simBadgeBackdrops.resolution
                                                             ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
-                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                            : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200"
                                                     }`}
                                                 >
                                                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.resolution ? "bg-amber-400" : "bg-slate-600"}`} />
@@ -4357,16 +4357,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* HDR */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
+                                    <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-slate-200">✨ HDR / Dolby Vision</span>
+                                            <span className="font-semibold text-foreground dark:text-slate-200">✨ HDR / Dolby Vision</span>
                                             <Switch checked={simShowHdr} onCheckedChange={setSimShowHdr} />
                                         </div>
-                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                        <div className="space-y-2 pt-2 border-t border-border dark:border-slate-800/70">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simHdrPosition} onValueChange={setSimHdrPosition}>
-                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-muted dark:bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4380,7 +4380,7 @@ export function KometaStudio() {
                                                 </Select>
                                             </div>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Scale Size:</span>
                                                 <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
@@ -4389,16 +4389,16 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.hdr ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("hdr", parseFloat(e.target.value))}
-                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                                        className="w-full min-w-0 h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-sky-300 w-9 text-right shrink-0 tabular-nums">
+                                                    <span className="text-[11px] font-mono font-bold text-sky-800 dark:text-sky-300 w-9 text-right shrink-0 tabular-nums">
                                                         {Math.round((simCategoryScales.hdr ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
                                             </div>
                                             {/* Black Background Backdrop Toggle */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Black Background:</span>
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -4407,7 +4407,7 @@ export function KometaStudio() {
                                                     className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
                                                         simBadgeBackdrops.hdr
                                                             ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
-                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                            : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200"
                                                     }`}
                                                 >
                                                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.hdr ? "bg-amber-400" : "bg-slate-600"}`} />
@@ -4418,16 +4418,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Video Codec */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
+                                    <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-slate-200">🎞️ Video Codec (HEVC / AV1)</span>
+                                            <span className="font-semibold text-foreground dark:text-slate-200">🎞️ Video Codec (HEVC / AV1)</span>
                                             <Switch checked={simShowCodec} onCheckedChange={setSimShowCodec} />
                                         </div>
-                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                        <div className="space-y-2 pt-2 border-t border-border dark:border-slate-800/70">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simCodecPosition} onValueChange={setSimCodecPosition}>
-                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-muted dark:bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4441,7 +4441,7 @@ export function KometaStudio() {
                                                 </Select>
                                             </div>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Scale Size:</span>
                                                 <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
@@ -4450,16 +4450,16 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.codec ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("codec", parseFloat(e.target.value))}
-                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                                        className="w-full min-w-0 h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-sky-300 w-9 text-right shrink-0 tabular-nums">
+                                                    <span className="text-[11px] font-mono font-bold text-sky-800 dark:text-sky-300 w-9 text-right shrink-0 tabular-nums">
                                                         {Math.round((simCategoryScales.codec ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
                                             </div>
                                             {/* Black Background Backdrop Toggle */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Black Background:</span>
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -4468,7 +4468,7 @@ export function KometaStudio() {
                                                     className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
                                                         simBadgeBackdrops.codec
                                                             ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
-                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                            : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200"
                                                     }`}
                                                 >
                                                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.codec ? "bg-amber-400" : "bg-slate-600"}`} />
@@ -4479,16 +4479,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Audio Codec */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
+                                    <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-slate-200">🔊 Audio Codec (Atmos / DTS)</span>
+                                            <span className="font-semibold text-foreground dark:text-slate-200">🔊 Audio Codec (Atmos / DTS)</span>
                                             <Switch checked={simShowAudio} onCheckedChange={setSimShowAudio} />
                                         </div>
-                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                        <div className="space-y-2 pt-2 border-t border-border dark:border-slate-800/70">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simAudioPosition} onValueChange={setSimAudioPosition}>
-                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-muted dark:bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4502,7 +4502,7 @@ export function KometaStudio() {
                                                 </Select>
                                             </div>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Scale Size:</span>
                                                 <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
@@ -4511,16 +4511,16 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.audio ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("audio", parseFloat(e.target.value))}
-                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                                        className="w-full min-w-0 h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-sky-300 w-9 text-right shrink-0 tabular-nums">
+                                                    <span className="text-[11px] font-mono font-bold text-sky-800 dark:text-sky-300 w-9 text-right shrink-0 tabular-nums">
                                                         {Math.round((simCategoryScales.audio ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
                                             </div>
                                             {/* Black Background Backdrop Toggle */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Black Background:</span>
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -4529,7 +4529,7 @@ export function KometaStudio() {
                                                     className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
                                                         simBadgeBackdrops.audio
                                                             ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
-                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                            : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200"
                                                     }`}
                                                 >
                                                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.audio ? "bg-amber-400" : "bg-slate-600"}`} />
@@ -4540,16 +4540,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Audio Channels */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
+                                    <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-slate-200">🎛️ Surround Channels (7.1)</span>
+                                            <span className="font-semibold text-foreground dark:text-slate-200">🎛️ Surround Channels (7.1)</span>
                                             <Switch checked={simShowChannels} onCheckedChange={setSimShowChannels} />
                                         </div>
-                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                        <div className="space-y-2 pt-2 border-t border-border dark:border-slate-800/70">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simChannelsPosition} onValueChange={setSimChannelsPosition}>
-                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-muted dark:bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4563,7 +4563,7 @@ export function KometaStudio() {
                                                 </Select>
                                             </div>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Scale Size:</span>
                                                 <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
@@ -4572,16 +4572,16 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.channels ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("channels", parseFloat(e.target.value))}
-                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                                        className="w-full min-w-0 h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-sky-300 w-9 text-right shrink-0 tabular-nums">
+                                                    <span className="text-[11px] font-mono font-bold text-sky-800 dark:text-sky-300 w-9 text-right shrink-0 tabular-nums">
                                                         {Math.round((simCategoryScales.channels ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
                                             </div>
                                             {/* Black Background Backdrop Toggle */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Black Background:</span>
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -4590,7 +4590,7 @@ export function KometaStudio() {
                                                     className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
                                                         simBadgeBackdrops.channels
                                                             ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
-                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                            : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200"
                                                     }`}
                                                 >
                                                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.channels ? "bg-amber-400" : "bg-slate-600"}`} />
@@ -4601,16 +4601,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Edition Cuts */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
+                                    <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-slate-200">🏷️ Edition Cuts (IMAX Enhanced)</span>
+                                            <span className="font-semibold text-foreground dark:text-slate-200">🏷️ Edition Cuts (IMAX Enhanced)</span>
                                             <Switch checked={simShowEdition} onCheckedChange={setSimShowEdition} />
                                         </div>
-                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                        <div className="space-y-2 pt-2 border-t border-border dark:border-slate-800/70">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simEditionPosition} onValueChange={setSimEditionPosition}>
-                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-muted dark:bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4624,7 +4624,7 @@ export function KometaStudio() {
                                                 </Select>
                                             </div>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Scale Size:</span>
                                                 <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
@@ -4633,24 +4633,24 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.edition ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("edition", parseFloat(e.target.value))}
-                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                                        className="w-full min-w-0 h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-sky-300 w-9 text-right shrink-0 tabular-nums">
+                                                    <span className="text-[11px] font-mono font-bold text-sky-800 dark:text-sky-300 w-9 text-right shrink-0 tabular-nums">
                                                         {Math.round((simCategoryScales.edition ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
                                             </div>
                                             {/* Preview Sample Edition Switcher */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Sample Preview:</span>
-                                                <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-md border border-slate-800">
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Sample Preview:</span>
+                                                <div className="flex items-center gap-1 bg-muted dark:bg-slate-950 p-0.5 rounded-md border border-border dark:border-slate-800">
                                                     {["IMAX", "EXTENDED", "UNRATED"].map((ed) => (
                                                         <button
                                                             key={ed}
                                                             type="button"
                                                             onClick={() => setSimEditionSample(ed)}
                                                             className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-colors cursor-pointer ${
-                                                                simEditionSample === ed ? "bg-sky-600 text-white" : "text-slate-400 hover:text-slate-200"
+                                                                simEditionSample === ed ? "bg-sky-600 text-white" : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200"
                                                             }`}
                                                         >
                                                             {ed}
@@ -4659,11 +4659,11 @@ export function KometaStudio() {
                                                 </div>
                                             </div>
                                             {/* Black Background Backdrop Toggle */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                    <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Black Background:</span>
                                                     {simBadgeBackdrops.edition && (
-                                                        <span className="text-[9px] text-amber-400/80 font-mono">(High Contrast)</span>
+                                                        <span className="text-[9px] text-amber-700/80 dark:text-amber-400/80 font-mono">(High Contrast)</span>
                                                     )}
                                                 </div>
                                                 <Button
@@ -4674,7 +4674,7 @@ export function KometaStudio() {
                                                     className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
                                                         simBadgeBackdrops.edition
                                                             ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
-                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                            : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200"
                                                     }`}
                                                 >
                                                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.edition ? "bg-amber-400" : "bg-slate-600"}`} />
@@ -4685,16 +4685,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Studio Logos */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
+                                    <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-slate-200">🏢 Studio / Network (HBO)</span>
+                                            <span className="font-semibold text-foreground dark:text-slate-200">🏢 Studio / Network (HBO)</span>
                                             <Switch checked={simShowStudio} onCheckedChange={setSimShowStudio} />
                                         </div>
-                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                        <div className="space-y-2 pt-2 border-t border-border dark:border-slate-800/70">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simStudioPosition} onValueChange={setSimStudioPosition}>
-                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-muted dark:bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4708,7 +4708,7 @@ export function KometaStudio() {
                                                 </Select>
                                             </div>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Scale Size:</span>
                                                 <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
@@ -4717,16 +4717,16 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.studio ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("studio", parseFloat(e.target.value))}
-                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                                        className="w-full min-w-0 h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-sky-300 w-9 text-right shrink-0 tabular-nums">
+                                                    <span className="text-[11px] font-mono font-bold text-sky-800 dark:text-sky-300 w-9 text-right shrink-0 tabular-nums">
                                                         {Math.round((simCategoryScales.studio ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
                                             </div>
                                             {/* Black Background Backdrop Toggle */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Black Background:</span>
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -4735,7 +4735,7 @@ export function KometaStudio() {
                                                     className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
                                                         simBadgeBackdrops.studio
                                                             ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
-                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                            : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200"
                                                     }`}
                                                 >
                                                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.studio ? "bg-amber-400" : "bg-slate-600"}`} />
@@ -4746,16 +4746,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Age Ratings */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
+                                    <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-slate-200">🔞 Age Ratings (PG-13 / R)</span>
+                                            <span className="font-semibold text-foreground dark:text-slate-200">🔞 Age Ratings (PG-13 / R)</span>
                                             <Switch checked={simShowRating} onCheckedChange={setSimShowRating} />
                                         </div>
-                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                        <div className="space-y-2 pt-2 border-t border-border dark:border-slate-800/70">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simRatingPosition} onValueChange={setSimRatingPosition}>
-                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-muted dark:bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4769,7 +4769,7 @@ export function KometaStudio() {
                                                 </Select>
                                             </div>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Scale Size:</span>
                                                 <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
@@ -4778,16 +4778,16 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.contentRating ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("contentRating", parseFloat(e.target.value))}
-                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                                        className="w-full min-w-0 h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-sky-300 w-9 text-right shrink-0 tabular-nums">
+                                                    <span className="text-[11px] font-mono font-bold text-sky-800 dark:text-sky-300 w-9 text-right shrink-0 tabular-nums">
                                                         {Math.round((simCategoryScales.contentRating ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
                                             </div>
                                             {/* Black Background Backdrop Toggle */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Black Background:</span>
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -4796,7 +4796,7 @@ export function KometaStudio() {
                                                     className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
                                                         simBadgeBackdrops.contentRating
                                                             ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
-                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                            : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200"
                                                     }`}
                                                 >
                                                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.contentRating ? "bg-amber-400" : "bg-slate-600"}`} />
@@ -4807,16 +4807,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Community Ratings */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 sm:col-span-2 shadow-sm hover:border-slate-750 transition-all min-w-0">
+                                    <div className="p-3.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800/90 space-y-3 sm:col-span-2 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-slate-200">⭐ Community Ratings (IMDb / Rotten Tomatoes)</span>
+                                            <span className="font-semibold text-foreground dark:text-slate-200">⭐ Community Ratings (IMDb / Rotten Tomatoes)</span>
                                             <Switch checked={simRatings} onCheckedChange={setSimRatings} />
                                         </div>
-                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                        <div className="space-y-2 pt-2 border-t border-border dark:border-slate-800/70">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simRatingsPosition} onValueChange={setSimRatingsPosition}>
-                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-muted dark:bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4830,7 +4830,7 @@ export function KometaStudio() {
                                                 </Select>
                                             </div>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium shrink-0">Scale Size:</span>
                                                 <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
@@ -4839,16 +4839,16 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.ratings ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("ratings", parseFloat(e.target.value))}
-                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                                        className="w-full min-w-0 h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-sky-300 w-9 text-right shrink-0 tabular-nums">
+                                                    <span className="text-[11px] font-mono font-bold text-sky-800 dark:text-sky-300 w-9 text-right shrink-0 tabular-nums">
                                                         {Math.round((simCategoryScales.ratings ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
                                             </div>
                                             {/* Black Background Backdrop Toggle */}
-                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border dark:border-slate-800/40">
+                                                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Black Background:</span>
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -4857,7 +4857,7 @@ export function KometaStudio() {
                                                     className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
                                                         simBadgeBackdrops.ratings
                                                             ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
-                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                            : "bg-muted dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200"
                                                     }`}
                                                 >
                                                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.ratings ? "bg-amber-400" : "bg-slate-600"}`} />
@@ -4870,13 +4870,13 @@ export function KometaStudio() {
                             </div>
 
                             {/* Authentic Kometa Waterfall Ribbons Studio */}
-                            <div className="space-y-4 p-5 bg-slate-950/60 rounded-2xl border border-slate-800 shadow-inner">
-                                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                            <div className="space-y-4 p-5 bg-muted/60 dark:bg-slate-950/60 rounded-2xl border border-border dark:border-slate-800 shadow-inner">
+                                <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-3">
                                     <div className="space-y-0.5">
-                                        <span className="text-xs font-bold text-white flex items-center gap-2">
-                                            <Sparkles className="h-4 w-4 text-amber-400" /> Authentic Kometa Waterfall Ribbons Studio
+                                        <span className="text-xs font-bold text-foreground dark:text-white flex items-center gap-2">
+                                            <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Authentic Kometa Waterfall Ribbons Studio
                                         </span>
-                                        <p className="text-xs text-slate-400">Cascading priority evaluation: the highest qualifying tier awards a single high-gloss 45° corner ribbon.</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400">Cascading priority evaluation: the highest qualifying tier awards a single high-gloss 45° corner ribbon.</p>
                                     </div>
                                     <Switch checked={simShowRibbon} onCheckedChange={setSimShowRibbon} />
                                 </div>
@@ -4886,9 +4886,9 @@ export function KometaStudio() {
                                         {/* Top Config Row */}
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                                             <div className="space-y-1.5 min-w-0">
-                                                <label className="text-xs font-bold text-slate-300 block truncate">Ribbon Evaluation Mode</label>
+                                                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block truncate">Ribbon Evaluation Mode</label>
                                                 <Select value={simRibbonMode} onValueChange={(val: any) => setSimRibbonMode(val)}>
-                                                    <SelectTrigger className="h-9 w-full bg-slate-900 border-slate-700 text-xs truncate [&>span]:truncate [&>span]:block">
+                                                    <SelectTrigger className="h-9 w-full bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs truncate [&>span]:truncate [&>span]:block">
                                                         <SelectValue placeholder="Select mode..." />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4899,9 +4899,9 @@ export function KometaStudio() {
                                             </div>
 
                                             <div className="space-y-1.5 min-w-0">
-                                                <label className="text-xs font-bold text-slate-300 block truncate">Ribbon Placement Corner</label>
+                                                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block truncate">Ribbon Placement Corner</label>
                                                 <Select value={simRibbonPosition} onValueChange={(val: any) => setSimRibbonPosition(val)}>
-                                                    <SelectTrigger className="h-9 w-full bg-slate-900 border-slate-700 text-xs truncate [&>span]:truncate [&>span]:block">
+                                                    <SelectTrigger className="h-9 w-full bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs truncate [&>span]:truncate [&>span]:block">
                                                         <SelectValue placeholder="Select corner..." />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4915,8 +4915,8 @@ export function KometaStudio() {
 
                                             <div className="space-y-1.5 min-w-0">
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-xs font-bold text-slate-300 block truncate">Ribbon Scale Size</label>
-                                                    <span className="text-[11px] font-mono font-bold text-amber-300">{Math.round((simCategoryScales.ribbon ?? 1.0) * 100)}%</span>
+                                                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block truncate">Ribbon Scale Size</label>
+                                                    <span className="text-[11px] font-mono font-bold text-amber-800 dark:text-amber-300">{Math.round((simCategoryScales.ribbon ?? 1.0) * 100)}%</span>
                                                 </div>
                                                 <div className="flex items-center gap-2 h-9">
                                                     <input
@@ -4926,7 +4926,7 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.ribbon ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("ribbon", parseFloat(e.target.value))}
-                                                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                        className="w-full h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
                                                     />
                                                 </div>
                                             </div>
@@ -4934,20 +4934,20 @@ export function KometaStudio() {
 
                                         {/* Single Custom Mode Controls */}
                                         {simRibbonMode === "single" && (
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-slate-900/70 rounded-xl border border-slate-800">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-card/95 dark:bg-slate-900/70 rounded-xl border border-border dark:border-slate-800">
                                                 <div className="space-y-1.5 min-w-0">
-                                                    <label className="text-xs font-bold text-slate-300">Custom Ribbon Text</label>
+                                                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Custom Ribbon Text</label>
                                                     <Input 
                                                         value={simRibbonText} 
                                                         onChange={e => setSimRibbonText(e.target.value)} 
                                                         placeholder="e.g. IMDb TOP 250, CRITERION COLLECTION" 
-                                                        className="h-8.5 bg-slate-950 border-slate-700 text-xs text-slate-100"
+                                                        className="h-8.5 bg-muted dark:bg-slate-950 border-border dark:border-slate-700 text-xs text-foreground dark:text-slate-100"
                                                     />
                                                 </div>
                                                 <div className="space-y-1.5 min-w-0">
-                                                    <label className="text-xs font-bold text-slate-300">Ribbon Theme</label>
+                                                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Ribbon Theme</label>
                                                     <Select value={simRibbonTheme} onValueChange={(val: any) => setSimRibbonTheme(val)}>
-                                                        <SelectTrigger className="h-8.5 bg-slate-950 border-slate-700 text-xs">
+                                                        <SelectTrigger className="h-8.5 bg-muted dark:bg-slate-950 border-border dark:border-slate-700 text-xs">
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -4977,35 +4977,35 @@ export function KometaStudio() {
                                                         purple: "bg-purple-500/20 text-purple-300 border-purple-500/50",
                                                         cyan: "bg-sky-500/20 text-sky-300 border-sky-500/50",
                                                         pink: "bg-pink-500/20 text-pink-300 border-pink-500/50",
-                                                        glass: "bg-slate-800 text-slate-300 border-slate-600",
+                                                        glass: "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-600",
                                                         orange: "bg-orange-500/20 text-orange-300 border-orange-500/50"
                                                     };
 
                                                     return (
-                                                        <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                                                        <div className="p-3.5 rounded-xl bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-800 space-y-2">
                                                             <div className="flex items-center justify-between gap-2.5 flex-wrap">
                                                                 <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                                                    <div className="h-6 w-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-black shrink-0">
+                                                                    <div className="h-6 w-6 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center text-xs font-black shrink-0">
                                                                         #
                                                                     </div>
-                                                                    <span className="text-xs font-bold text-white whitespace-nowrap">Waterfall Result:</span>
+                                                                    <span className="text-xs font-bold text-foreground dark:text-white whitespace-nowrap">Waterfall Result:</span>
                                                                     {win ? (
                                                                         <Badge variant="outline" className={`text-xs px-2.5 py-0.5 font-black uppercase tracking-wider ${themeBadgeClasses[win.theme] || themeBadgeClasses.cyan}`}>
                                                                             Priority #{win.priority}: "{win.text}"
                                                                         </Badge>
                                                                     ) : (
-                                                                        <Badge variant="outline" className="text-xs px-2 py-0.5 font-bold border border-slate-700 text-slate-400 bg-slate-800">
+                                                                        <Badge variant="outline" className="text-xs px-2 py-0.5 font-bold border border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-muted dark:bg-slate-800">
                                                                             No Qualified Tier (No Ribbon)
                                                                         </Badge>
                                                                     )}
                                                                 </div>
                                                                 {simSelectedRealItem && (
-                                                                    <span className="text-[10px] font-mono text-sky-300 bg-sky-950/50 px-2 py-0.5 rounded-lg border border-sky-800/40 truncate max-w-[200px]" title={simSelectedRealItem.title}>
+                                                                    <span className="text-[10px] font-mono text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/50 px-2 py-0.5 rounded-lg border border-sky-500/40 dark:border-sky-800/40 truncate max-w-[200px]" title={simSelectedRealItem.title}>
                                                                         Telemetry: {simSelectedRealItem.title}
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <p className="text-xs text-slate-400">
+                                                            <p className="text-xs text-slate-600 dark:text-slate-400">
                                                                 {win 
                                                                     ? `Cascade evaluated top-to-bottom and matched Priority #${win.priority} (${win.ruleLabel}). Lower-ranked tiers are bypassed.`
                                                                     : "The simulated poster does not meet any enabled criteria in the priority list."}
@@ -5018,8 +5018,8 @@ export function KometaStudio() {
                                                 <div className="space-y-3 pt-1">
                                                     <div className="flex items-center justify-between gap-2 flex-wrap">
                                                         <div className="space-y-0.5 min-w-0">
-                                                            <span className="text-xs font-bold text-slate-200">Waterfall Priority Cascading List</span>
-                                                            <p className="text-xs text-slate-400">Tiers are evaluated from top to bottom. The first qualifying tier awards the single corner ribbon.</p>
+                                                            <span className="text-xs font-bold text-foreground dark:text-slate-200">Waterfall Priority Cascading List</span>
+                                                            <p className="text-xs text-slate-600 dark:text-slate-400">Tiers are evaluated from top to bottom. The first qualifying tier awards the single corner ribbon.</p>
                                                         </div>
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             <Button
@@ -5033,7 +5033,7 @@ export function KometaStudio() {
                                                                         { id: newId, type: "auto_quality", text: "4K UHD", theme: "gold", enabled: true }
                                                                     ]);
                                                                 }}
-                                                                className="h-7.5 px-2.5 text-xs bg-slate-900 border-slate-700 text-sky-300 hover:text-white"
+                                                                className="h-7.5 px-2.5 text-xs bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-sky-800 dark:text-sky-300 hover:text-foreground dark:hover:text-white"
                                                             >
                                                                 <Plus className="h-3.5 w-3.5 mr-1" /> Add Tier
                                                             </Button>
@@ -5042,7 +5042,7 @@ export function KometaStudio() {
                                                                 variant="ghost"
                                                                 size="sm"
                                                                 onClick={() => setSimTieredRibbons(DEFAULT_KOMETA_WATERFALL_RIBBONS)}
-                                                                className="h-7.5 px-2.5 text-xs text-slate-400 hover:text-white"
+                                                                className="h-7.5 px-2.5 text-xs text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                                                             >
                                                                 ↺ Reset Defaults
                                                             </Button>
@@ -5059,19 +5059,19 @@ export function KometaStudio() {
                                                                     key={tier.id || idx}
                                                                     className={`p-3.5 rounded-xl border text-xs transition-all space-y-3 ${
                                                                         tier.enabled 
-                                                                            ? "bg-slate-900/90 border-slate-800 shadow-sm hover:border-slate-700" 
-                                                                            : "bg-slate-950/60 border-slate-800/40 opacity-60"
+                                                                            ? "bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-sm hover:border-border dark:hover:border-slate-700" 
+                                                                            : "bg-muted/60 dark:bg-slate-950/60 border-border dark:border-slate-800/40 opacity-60"
                                                                     }`}
                                                                 >
                                                                     {/* Header Row: Priority Badge + Up/Down + Toggle + Delete */}
-                                                                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/60 pb-2.5">
+                                                                    <div className="flex items-center justify-between gap-2 border-b border-border dark:border-slate-800/60 pb-2.5">
                                                                         <div className="flex items-center gap-2">
                                                                             <Badge
                                                                                 variant="outline"
                                                                                 className={`text-xs font-mono font-black px-2 py-0.5 ${
                                                                                     isFirst 
-                                                                                        ? "border-amber-500/60 text-amber-300 bg-amber-950/30" 
-                                                                                        : "border-slate-700 text-slate-300 bg-slate-800"
+                                                                                        ? "border-amber-500/60 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30" 
+                                                                                        : "border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 bg-muted dark:bg-slate-800"
                                                                                 }`}
                                                                             >
                                                                                 #{idx + 1} {isFirst ? "(Top Priority)" : ""}
@@ -5087,7 +5087,7 @@ export function KometaStudio() {
                                                                                         next[idx - 1] = tmp;
                                                                                         setSimTieredRibbons(next);
                                                                                     }}
-                                                                                    className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                                                                                    className="p-1 rounded-lg hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white disabled:opacity-20 cursor-pointer"
                                                                                     title="Move Priority Up"
                                                                                 >
                                                                                     <ChevronUp className="h-4 w-4" />
@@ -5102,13 +5102,13 @@ export function KometaStudio() {
                                                                                         next[idx + 1] = tmp;
                                                                                         setSimTieredRibbons(next);
                                                                                     }}
-                                                                                    className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                                                                                    className="p-1 rounded-lg hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white disabled:opacity-20 cursor-pointer"
                                                                                     title="Move Priority Down"
                                                                                 >
                                                                                     <ChevronDown className="h-4 w-4" />
                                                                                 </button>
                                                                             </div>
-                                                                            <span className={`text-[10px] font-bold ${tier.enabled ? "text-emerald-400" : "text-slate-500"}`}>
+                                                                            <span className={`text-[10px] font-bold ${tier.enabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`}>
                                                                                 {tier.enabled ? "Active" : "Disabled"}
                                                                             </span>
                                                                         </div>
@@ -5127,7 +5127,7 @@ export function KometaStudio() {
                                                                                 onClick={() => {
                                                                                     setSimTieredRibbons(prev => prev.filter((_, i) => i !== idx));
                                                                                 }}
-                                                                                className="p-1.5 rounded-lg hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                                                                className="p-1.5 rounded-lg hover:bg-rose-500/10 dark:hover:bg-rose-950/60 text-slate-500 hover:text-rose-700 dark:hover:text-rose-400 transition-colors cursor-pointer"
                                                                                 title="Delete Tier"
                                                                             >
                                                                                 <Trash2 className="h-4 w-4" />
@@ -5137,7 +5137,7 @@ export function KometaStudio() {
 
                                                                     {/* Preset Selector Row */}
                                                                     <div className="space-y-1">
-                                                                        <label className="text-[11px] font-medium text-slate-400">Trigger Condition / Award Preset:</label>
+                                                                        <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Trigger Condition / Award Preset:</label>
                                                                         <Select
                                                                             value={tier.type || "custom"}
                                                                             onValueChange={(val: any) => {
@@ -5152,7 +5152,7 @@ export function KometaStudio() {
                                                                                 setSimTieredRibbons(next);
                                                                             }}
                                                                         >
-                                                                            <SelectTrigger className="h-8 w-full bg-slate-950 border-slate-700 text-xs">
+                                                                            <SelectTrigger className="h-8 w-full bg-muted dark:bg-slate-950 border-border dark:border-slate-700 text-xs">
                                                                                 <SelectValue />
                                                                             </SelectTrigger>
                                                                             <SelectContent>
@@ -5168,7 +5168,7 @@ export function KometaStudio() {
                                                                     {/* Customization Row: Theme Selector + Custom Ribbon Text */}
                                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                                                                         <div className="space-y-1 min-w-0">
-                                                                            <label className="text-[11px] font-medium text-slate-400">Ribbon Theme:</label>
+                                                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Ribbon Theme:</label>
                                                                             <Select
                                                                                 value={tier.theme || "purple"}
                                                                                 onValueChange={(val: any) => {
@@ -5177,7 +5177,7 @@ export function KometaStudio() {
                                                                                     setSimTieredRibbons(next);
                                                                                 }}
                                                                             >
-                                                                                <SelectTrigger className="h-8 w-full bg-slate-950 border-slate-700 text-xs">
+                                                                                <SelectTrigger className="h-8 w-full bg-muted dark:bg-slate-950 border-border dark:border-slate-700 text-xs">
                                                                                     <SelectValue />
                                                                                 </SelectTrigger>
                                                                                 <SelectContent>
@@ -5194,7 +5194,7 @@ export function KometaStudio() {
                                                                         </div>
 
                                                                         <div className="space-y-1 min-w-0">
-                                                                            <label className="text-[11px] font-medium text-slate-400">Ribbon Text:</label>
+                                                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Ribbon Text:</label>
                                                                             <Input
                                                                                 value={tier.text || ""}
                                                                                 onChange={e => {
@@ -5203,7 +5203,7 @@ export function KometaStudio() {
                                                                                     setSimTieredRibbons(next);
                                                                                 }}
                                                                                 placeholder="e.g. IMDb TOP 250"
-                                                                                className="h-8 w-full bg-slate-950 border-slate-700 text-xs px-2.5"
+                                                                                className="h-8 w-full bg-muted dark:bg-slate-950 border-border dark:border-slate-700 text-xs px-2.5"
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -5219,20 +5219,20 @@ export function KometaStudio() {
                             </div>
 
                             {/* Layer Priority & Rendering Order List */}
-                            <div className="space-y-3.5 p-5 bg-slate-950/60 rounded-2xl border border-slate-800 shadow-inner">
-                                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                            <div className="space-y-3.5 p-5 bg-muted/60 dark:bg-slate-950/60 rounded-2xl border border-border dark:border-slate-800 shadow-inner">
+                                <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-3">
                                     <div className="space-y-0.5">
-                                        <span className="text-xs font-bold text-white flex items-center gap-2">
-                                            <Layers className="h-4 w-4 text-sky-400" /> Layer Priority &amp; Rendering Order
+                                        <span className="text-xs font-bold text-foreground dark:text-white flex items-center gap-2">
+                                            <Layers className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Layer Priority &amp; Rendering Order
                                         </span>
-                                        <p className="text-xs text-slate-400">Order determines which badges render on top when sharing corners</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400">Order determines which badges render on top when sharing corners</p>
                                     </div>
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => setLayerPriorityOrder(DEFAULT_LAYER_PRIORITY_ORDER)}
-                                        className="text-xs text-sky-300 hover:text-sky-200 h-7 px-2.5"
+                                        className="text-xs text-sky-800 dark:text-sky-300 hover:text-sky-900 dark:hover:text-sky-200 h-7 px-2.5"
                                     >
                                         Reset Order
                                     </Button>
@@ -5257,11 +5257,11 @@ export function KometaStudio() {
                                         return (
                                             <div 
                                                 key={layerKey}
-                                                className="flex items-center justify-between p-3 rounded-xl bg-slate-900/90 border border-slate-800/90 text-xs shadow-sm hover:border-slate-750 transition-all"
+                                                className="flex items-center justify-between p-3 rounded-xl bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-800/90 text-xs shadow-sm hover:border-slate-750 transition-all"
                                             >
                                                 <div className="flex items-center gap-2.5">
-                                                    <span className="text-xs font-mono text-sky-400 font-black w-5 text-center tabular-nums">#{idx + 1}</span>
-                                                    <span className="font-semibold text-slate-200">{meta.name}</span>
+                                                    <span className="text-xs font-mono text-sky-700 dark:text-sky-400 font-black w-5 text-center tabular-nums">#{idx + 1}</span>
+                                                    <span className="font-semibold text-foreground dark:text-slate-200">{meta.name}</span>
                                                 </div>
                                                 <div className="flex items-center gap-1">
                                                     <button
@@ -5274,7 +5274,7 @@ export function KometaStudio() {
                                                             next[idx - 1] = tmp;
                                                             setLayerPriorityOrder(next);
                                                         }}
-                                                        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                                                        className="p-1.5 rounded-lg hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white disabled:opacity-20 cursor-pointer"
                                                         title="Move Priority Up"
                                                     >
                                                         <ChevronUp className="h-4 w-4" />
@@ -5289,7 +5289,7 @@ export function KometaStudio() {
                                                             next[idx + 1] = tmp;
                                                             setLayerPriorityOrder(next);
                                                         }}
-                                                        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                                                        className="p-1.5 rounded-lg hover:bg-accent dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white disabled:opacity-20 cursor-pointer"
                                                         title="Move Priority Down"
                                                     >
                                                         <ChevronDown className="h-4 w-4" />
@@ -5312,15 +5312,15 @@ export function KometaStudio() {
                 const displayedBadges = filteredCustomBadges.slice((currentBadgePage - 1) * BADGES_PER_PAGE, currentBadgePage * BADGES_PER_PAGE);
 
                 return (
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                        <CardHeader className="p-6 pb-4 border-b border-slate-800/80">
+                    <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                        <CardHeader className="p-6 pb-4 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                 <div className="space-y-1">
-                                    <CardTitle className="text-xl font-black text-white flex items-center gap-2.5">
-                                        <Zap className="h-5 w-5 text-amber-400 fill-amber-400/20" />
+                                    <CardTitle className="text-xl font-black text-foreground dark:text-white flex items-center gap-2.5">
+                                        <Zap className="h-5 w-5 text-amber-700 dark:text-amber-400 fill-amber-400/20" />
                                         <span>Custom Badges Vault &amp; Overrides Repository</span>
                                     </CardTitle>
-                                    <CardDescription className="text-xs text-slate-400">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                         Upload high-DPI SVGs or PNG graphics to override default Kometa badges. Custom badges automatically take Priority 1 over built-in SVGs.
                                     </CardDescription>
                                 </div>
@@ -5330,9 +5330,9 @@ export function KometaStudio() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => setGuideModalOpen(true)}
-                                        className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5 cursor-pointer"
+                                        className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs h-8 px-2.5 gap-1.5 cursor-pointer"
                                     >
-                                        <HelpCircle className="h-3.5 w-3.5 text-sky-400" />
+                                        <HelpCircle className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                         <span>Guide &amp; Rules</span>
                                     </Button>
                                     <Button
@@ -5360,7 +5360,7 @@ export function KometaStudio() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => setGithubModalOpen(true)}
-                                        className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5"
+                                        className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs h-8 px-2.5 gap-1.5"
                                     >
                                         <DownloadCloud className="h-3.5 w-3.5" />
                                         <span>Import from GitHub Repo</span>
@@ -5371,10 +5371,10 @@ export function KometaStudio() {
                                             size="sm"
                                             variant="outline"
                                             onClick={() => setBulkDeleteModalOpen(true)}
-                                            className="border-rose-800/60 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-xs h-8 px-2.5 gap-1.5 shadow-sm cursor-pointer"
+                                            className="border-rose-500/60 dark:border-rose-800/60 bg-rose-500/10 dark:bg-rose-950/40 hover:bg-rose-500/10 dark:hover:bg-rose-900/60 text-rose-800 dark:text-rose-300 hover:text-foreground dark:hover:text-white text-xs h-8 px-2.5 gap-1.5 shadow-sm cursor-pointer"
                                             title="Bulk delete or purge downloaded custom badges from database & disk"
                                         >
-                                            <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                                            <Trash2 className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                             <span>Bulk Delete</span>
                                         </Button>
                                     )}
@@ -5409,7 +5409,7 @@ export function KometaStudio() {
                                             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                                 customBadgeFilter === tab.id
                                                     ? "bg-sky-600 text-white shadow-md"
-                                                    : "bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white"
+                                                    : "bg-muted/80 dark:bg-slate-800/80 hover:bg-slate-700/80 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                                             }`}
                                         >
                                             {tab.label}
@@ -5418,7 +5418,7 @@ export function KometaStudio() {
                                 </div>
 
                                 <div className="relative w-full sm:w-72">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-600 dark:text-slate-400" />
                                     <Input
                                         value={customBadgeSearch}
                                         onChange={e => {
@@ -5426,23 +5426,23 @@ export function KometaStudio() {
                                             setBadgePage(1);
                                         }}
                                         placeholder="Search badges by name or rule..."
-                                        className="pl-8.5 h-8.5 bg-slate-950/80 border-slate-800 text-xs text-slate-100 rounded-xl"
+                                        className="pl-8.5 h-8.5 bg-muted/80 dark:bg-slate-950/80 border-border dark:border-slate-800 text-xs text-foreground dark:text-slate-100 rounded-xl"
                                     />
                                 </div>
                             </div>
 
                             {/* Bulk Action Controls */}
                             {customBadges.length > 0 && (
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs text-slate-400">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-muted/80 dark:bg-slate-950/80 rounded-2xl border border-border dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Button
                                             type="button"
                                             variant="outline"
                                             size="sm"
                                             onClick={handleSelectAllFilteredBadges}
-                                            className="h-7.5 px-3 text-xs border-slate-700 bg-slate-900 text-slate-300 hover:text-white rounded-lg"
+                                            className="h-7.5 px-3 text-xs border-border dark:border-slate-700 bg-card/95 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white rounded-lg"
                                         >
-                                            <CheckCheck className="h-3.5 w-3.5 mr-1.5 text-sky-400" />
+                                            <CheckCheck className="h-3.5 w-3.5 mr-1.5 text-sky-700 dark:text-sky-400" />
                                             {selectedCustomBadgeIds.length === filteredCustomBadges.length && filteredCustomBadges.length > 0
                                                 ? "Deselect All"
                                                 : `Select All (${filteredCustomBadges.length})`}
@@ -5453,7 +5453,7 @@ export function KometaStudio() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleSelectCurrentPageBadges(displayedBadges.map(b => b.id))}
-                                                className="h-7.5 px-2.5 text-xs text-slate-400 hover:text-white rounded-lg"
+                                                className="h-7.5 px-2.5 text-xs text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white rounded-lg"
                                             >
                                                 Select Page ({displayedBadges.length})
                                             </Button>
@@ -5464,15 +5464,15 @@ export function KometaStudio() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={handleSelectNoneBadges}
-                                                className="h-7.5 px-2.5 text-xs text-slate-400 hover:text-white rounded-lg"
+                                                className="h-7.5 px-2.5 text-xs text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white rounded-lg"
                                             >
                                                 Clear Selection
                                             </Button>
                                         )}
-                                        <Badge variant="outline" className="text-xs font-mono border-sky-500/30 text-sky-300 ml-1 px-2 py-0.5 tabular-nums">
+                                        <Badge variant="outline" className="text-xs font-mono border-sky-500/30 text-sky-800 dark:text-sky-300 ml-1 px-2 py-0.5 tabular-nums">
                                             {filteredCustomBadges.length} of {customBadges.length} Badges
                                         </Badge>
-                                        <span className="text-xs text-slate-400">•</span>
+                                        <span className="text-xs text-slate-600 dark:text-slate-400">•</span>
                                         <span className="text-xs">
                                             {customBadges.filter(b => b.enabled !== false).length} Active Overrides
                                         </span>
@@ -5489,7 +5489,7 @@ export function KometaStudio() {
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => handleBulkToggleBadges(true)}
-                                                    className="h-7.5 px-2.5 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30 rounded-lg"
+                                                    className="h-7.5 px-2.5 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/30 rounded-lg"
                                                 >
                                                     Enable Selected
                                                 </Button>
@@ -5498,7 +5498,7 @@ export function KometaStudio() {
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => handleBulkToggleBadges(false)}
-                                                    className="h-7.5 px-2.5 text-xs text-slate-400 hover:text-slate-300 hover:bg-slate-900 rounded-lg"
+                                                    className="h-7.5 px-2.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-accent dark:hover:bg-slate-900 rounded-lg"
                                                 >
                                                     Disable Selected
                                                 </Button>
@@ -5520,7 +5520,7 @@ export function KometaStudio() {
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => handleBulkToggleBadges(true)}
-                                                    className="h-7.5 px-2.5 text-xs text-emerald-400 hover:text-emerald-300 rounded-lg"
+                                                    className="h-7.5 px-2.5 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 rounded-lg"
                                                 >
                                                     Enable All
                                                 </Button>
@@ -5529,7 +5529,7 @@ export function KometaStudio() {
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => handleBulkToggleBadges(false)}
-                                                    className="h-7.5 px-2.5 text-xs text-slate-400 hover:text-slate-300 rounded-lg"
+                                                    className="h-7.5 px-2.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg"
                                                 >
                                                     Disable All
                                                 </Button>
@@ -5538,9 +5538,9 @@ export function KometaStudio() {
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => setBulkDeleteModalOpen(true)}
-                                                    className="h-7.5 px-3 text-xs text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 gap-1.5 font-semibold rounded-lg cursor-pointer"
+                                                    className="h-7.5 px-3 text-xs text-rose-700 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-200 hover:bg-rose-500/10 dark:hover:bg-rose-950/40 gap-1.5 font-semibold rounded-lg cursor-pointer"
                                                 >
-                                                    <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                                                    <Trash2 className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                                     <span>Purge / Delete All ({customBadges.length})</span>
                                                 </Button>
                                             </>
@@ -5551,9 +5551,9 @@ export function KometaStudio() {
 
                             {/* Custom Badges Grid */}
                             {filteredCustomBadges.length === 0 ? (
-                                <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800 space-y-3">
-                                    <Sparkles className="h-8 w-8 text-amber-400/80 mx-auto animate-pulse" />
-                                    <p className="text-xs text-slate-400">No custom badges found in vault.</p>
+                                <div className="p-8 text-center bg-muted/40 dark:bg-slate-950/40 rounded-2xl border border-border dark:border-slate-800 space-y-3">
+                                    <Sparkles className="h-8 w-8 text-amber-700/80 dark:text-amber-400/80 mx-auto animate-pulse" />
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">No custom badges found in vault.</p>
                                     <div className="flex items-center justify-center gap-2 flex-wrap">
                                         <Button
                                             type="button"
@@ -5579,10 +5579,10 @@ export function KometaStudio() {
                                                     onClick={() => handleToggleSelectCustomBadge(badge.id)}
                                                     className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3.5 cursor-pointer group/card ${
                                                         isSelected
-                                                            ? "bg-sky-950/40 border-2 border-sky-500 shadow-xl ring-1 ring-sky-500/40"
+                                                            ? "bg-sky-500/10 dark:bg-sky-950/40 border-2 border-sky-500 shadow-xl ring-1 ring-sky-500/40"
                                                             : isEnabled
-                                                                ? "bg-slate-950/90 border-slate-800/90 hover:border-sky-500/60 shadow-lg"
-                                                                : "bg-slate-950/40 border-slate-900 opacity-60 hover:opacity-100"
+                                                                ? "bg-muted/80 dark:bg-slate-950/90 border-border dark:border-slate-800/90 hover:border-sky-500/60 shadow-lg"
+                                                                : "bg-muted/40 dark:bg-slate-950/40 border-slate-900 opacity-60 hover:opacity-100"
                                                     }`}
                                                 >
                                                     {/* Card Header */}
@@ -5591,25 +5591,25 @@ export function KometaStudio() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleToggleSelectCustomBadge(badge.id)}
-                                                                className="text-slate-400 hover:text-white shrink-0 p-0.5"
+                                                                className="text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white shrink-0 p-0.5"
                                                                 title={isSelected ? "Deselect" : "Select"}
                                                             >
                                                                 {isSelected ? (
-                                                                    <CheckSquare className="h-4 w-4 text-sky-400" />
+                                                                    <CheckSquare className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                                                                 ) : (
-                                                                    <Square className="h-4 w-4 text-slate-400 group-hover/card:text-slate-200" />
+                                                                    <Square className="h-4 w-4 text-slate-600 dark:text-slate-400 group-hover/card:text-foreground dark:group-hover/card:text-slate-200" />
                                                                 )}
                                                             </button>
                                                             <div className="space-y-0.5 overflow-hidden">
-                                                                <span className="font-black text-white text-xs block truncate tracking-tight" title={badge.name}>
+                                                                <span className="font-black text-foreground dark:text-white text-xs block truncate tracking-tight" title={badge.name}>
                                                                     {badge.name}
                                                                 </span>
                                                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono capitalize border-slate-700 text-slate-300 bg-slate-900">
+                                                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono capitalize border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 bg-card/95 dark:bg-slate-900">
                                                                         {badge.category || "custom"}
                                                                     </Badge>
                                                                     {badge.matchRule && (
-                                                                        <span className="text-[10px] font-mono text-amber-300 font-bold bg-amber-950/50 border border-amber-500/30 px-1.5 py-0 rounded truncate max-w-[110px]" title={`Rule: ${badge.matchRule}`}>
+                                                                        <span className="text-[10px] font-mono text-amber-800 dark:text-amber-300 font-bold bg-amber-500/10 dark:bg-amber-950/50 border border-amber-500/30 px-1.5 py-0 rounded truncate max-w-[110px]" title={`Rule: ${badge.matchRule}`}>
                                                                             {badge.matchRule}
                                                                         </span>
                                                                     )}
@@ -5623,7 +5623,7 @@ export function KometaStudio() {
                                                     </div>
 
                                                     {/* High-DPI Visual Badge Preview Showcase */}
-                                                    <div className="h-24 w-full rounded-xl bg-gradient-to-b from-slate-900/90 to-slate-950/90 border border-slate-800/80 flex items-center justify-center p-3.5 relative overflow-hidden bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:10px_10px] shadow-inner group/badge transition-all group-hover/card:border-sky-500/30">
+                                                    <div className="h-24 w-full rounded-xl bg-gradient-to-b from-muted/60 dark:from-slate-900/90 to-muted/60 dark:to-slate-950/90 border border-border dark:border-slate-800/80 flex items-center justify-center p-3.5 relative overflow-hidden bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:10px_10px] shadow-inner group/badge transition-all group-hover/card:border-sky-500/30">
                                                         <img 
                                                             src={`/api/curation/badges/${encodeURIComponent(badge.id)}?t=${Date.now()}`} 
                                                             alt={badge.name} 
@@ -5637,9 +5637,9 @@ export function KometaStudio() {
                                                         />
                                                         <div 
                                                             style={{ display: "none" }}
-                                                            className="badge-fallback-mockup flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-sky-500/40 bg-sky-950/60 text-sky-200 text-xs font-black tracking-wider uppercase shadow-md"
+                                                            className="badge-fallback-mockup flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-sky-500/40 bg-sky-500/10 dark:bg-sky-950/60 text-sky-900 dark:text-sky-200 text-xs font-black tracking-wider uppercase shadow-md"
                                                         >
-                                                            <Sparkles className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                                            <Sparkles className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                                                             <span className="truncate">{badge.name}</span>
                                                         </div>
                                                     </div>
@@ -5647,7 +5647,7 @@ export function KometaStudio() {
                                                     {/* Card Footer Controls */}
                                                     <div className="flex items-center justify-between gap-2.5 pt-2.5 border-t border-slate-900 text-xs" onClick={e => e.stopPropagation()}>
                                                         <div className="flex items-center gap-1.5">
-                                                            <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-slate-800 text-slate-400 font-mono bg-slate-900">
+                                                            <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-border dark:border-slate-800 text-slate-600 dark:text-slate-400 font-mono bg-card/95 dark:bg-slate-900">
                                                                 {badge.fileType ? badge.fileType.toUpperCase() : "SVG"}
                                                             </Badge>
                                                             {badge.width && badge.height && (
@@ -5658,13 +5658,13 @@ export function KometaStudio() {
                                                         </div>
 
                                                         <div className="flex items-center gap-2">
-                                                            <span className={`text-[10px] font-bold ${isEnabled ? "text-emerald-400" : "text-slate-500"}`}>
+                                                            <span className={`text-[10px] font-bold ${isEnabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`}>
                                                                 {isEnabled ? "Active" : "Disabled"}
                                                             </span>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleDeleteCustomBadge(badge.id)}
-                                                                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer"
+                                                                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-500/10 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
                                                                 title="Delete Custom Badge"
                                                             >
                                                                 <Trash2 className="h-4 w-4" />
@@ -5678,10 +5678,10 @@ export function KometaStudio() {
 
                                     {/* Pagination Controls */}
                                     {totalBadgePages > 1 && (
-                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-800/80 text-xs text-slate-400">
+                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-border dark:border-slate-800/80 text-xs text-slate-600 dark:text-slate-400">
                                             <div className="flex items-center gap-2">
                                                 <span>
-                                                    Showing <strong className="text-white">{(currentBadgePage - 1) * BADGES_PER_PAGE + 1}</strong> to <strong className="text-white">{Math.min(currentBadgePage * BADGES_PER_PAGE, filteredCustomBadges.length)}</strong> of <strong className="text-white">{filteredCustomBadges.length}</strong> badges
+                                                    Showing <strong className="text-foreground dark:text-white">{(currentBadgePage - 1) * BADGES_PER_PAGE + 1}</strong> to <strong className="text-foreground dark:text-white">{Math.min(currentBadgePage * BADGES_PER_PAGE, filteredCustomBadges.length)}</strong> of <strong className="text-foreground dark:text-white">{filteredCustomBadges.length}</strong> badges
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -5691,12 +5691,12 @@ export function KometaStudio() {
                                                     size="sm"
                                                     disabled={currentBadgePage === 1}
                                                     onClick={() => setBadgePage(prev => Math.max(1, prev - 1))}
-                                                    className="h-8 px-2.5 text-xs border-slate-700 bg-slate-900 text-slate-300 hover:text-white disabled:opacity-30 rounded-lg"
+                                                    className="h-8 px-2.5 text-xs border-border dark:border-slate-700 bg-card/95 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white disabled:opacity-30 rounded-lg"
                                                 >
                                                     <ChevronLeft className="h-4 w-4 mr-0.5" />
                                                     Previous
                                                 </Button>
-                                                <div className="px-3 py-1.5 text-xs font-mono font-bold bg-slate-950 rounded-lg border border-slate-800 text-sky-300 tabular-nums">
+                                                <div className="px-3 py-1.5 text-xs font-mono font-bold bg-muted dark:bg-slate-950 rounded-lg border border-border dark:border-slate-800 text-sky-800 dark:text-sky-300 tabular-nums">
                                                     Page {currentBadgePage} of {totalBadgePages}
                                                 </div>
                                                 <Button
@@ -5705,7 +5705,7 @@ export function KometaStudio() {
                                                     size="sm"
                                                     disabled={currentBadgePage === totalBadgePages}
                                                     onClick={() => setBadgePage(prev => Math.min(totalBadgePages, prev + 1))}
-                                                    className="h-8 px-2.5 text-xs border-slate-700 bg-slate-900 text-slate-300 hover:text-white disabled:opacity-30 rounded-lg"
+                                                    className="h-8 px-2.5 text-xs border-border dark:border-slate-700 bg-card/95 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white disabled:opacity-30 rounded-lg"
                                                 >
                                                     Next
                                                     <ChevronRight className="h-4 w-4 ml-0.5" />
@@ -5721,33 +5721,33 @@ export function KometaStudio() {
             })()}
 
             {/* Media Inspector & Stream Telemetry Diagnostics Card */}
-            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                <CardHeader className="p-6 pb-4 border-b border-slate-800/80">
+            <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <CardHeader className="p-6 pb-4 border-b border-border dark:border-slate-800/80">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="space-y-1">
-                            <CardTitle className="text-xl font-black text-white flex items-center gap-2.5">
-                                <Film className="h-5 w-5 text-sky-400" />
+                            <CardTitle className="text-xl font-black text-foreground dark:text-white flex items-center gap-2.5">
+                                <Film className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                                 <span>Media Inspector &amp; Stream Telemetry</span>
                             </CardTitle>
-                            <CardDescription className="text-xs text-slate-400">
+                            <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                 Test overlay generation and inspect detected video/audio codecs, HDR decisions, and custom priority overrides on actual Plex media items.
                             </CardDescription>
                         </div>
                         <form onSubmit={handleSearchInspector} className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                             <div className="relative w-full sm:w-64">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-600 dark:text-slate-400" />
                                 <Input
                                     value={inspectorSearchQuery}
                                     onChange={e => setInspectorSearchQuery(e.target.value)}
                                     placeholder="Search movie or show title..."
-                                    className="pl-8.5 h-8.5 bg-slate-950/80 border-slate-800 text-xs text-slate-100 rounded-xl"
+                                    className="pl-8.5 h-8.5 bg-muted/80 dark:bg-slate-950/80 border-border dark:border-slate-800 text-xs text-foreground dark:text-slate-100 rounded-xl"
                                 />
                             </div>
                             <Select value={String(inspectorLimit)} onValueChange={(val) => setInspectorLimit(Number(val))}>
-                                <SelectTrigger className="h-8.5 bg-slate-950/80 border-slate-800 text-xs w-[110px] text-slate-300 rounded-xl">
+                                <SelectTrigger className="h-8.5 bg-muted/80 dark:bg-slate-950/80 border-border dark:border-slate-800 text-xs w-[110px] text-slate-700 dark:text-slate-300 rounded-xl">
                                     <SelectValue placeholder="Limit" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
                                     <SelectItem value="10" className="text-xs">10 Items</SelectItem>
                                     <SelectItem value="50" className="text-xs">50 Items</SelectItem>
                                     <SelectItem value="100" className="text-xs">100 Items</SelectItem>
@@ -5769,14 +5769,14 @@ export function KometaStudio() {
                     {singleItemMsg && (
                         <div className={`mt-3 p-3.5 rounded-xl border text-xs flex items-center justify-between gap-2.5 animate-in fade-in-50 duration-200 ${
                             singleItemMsg.success 
-                                ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" 
-                                : "bg-rose-950/80 border-rose-800 text-rose-300"
+                                ? "bg-emerald-500/15 dark:bg-emerald-950/80 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" 
+                                : "bg-rose-500/15 dark:bg-rose-950/80 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                         }`}>
                             <div className="flex items-center gap-2">
-                                {singleItemMsg.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-emerald-400" /> : <XCircle className="h-4.5 w-4.5 shrink-0 text-rose-400" />}
+                                {singleItemMsg.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-emerald-700 dark:text-emerald-400" /> : <XCircle className="h-4.5 w-4.5 shrink-0 text-rose-700 dark:text-rose-400" />}
                                 <span>{singleItemMsg.text}</span>
                             </div>
-                            <button type="button" onClick={() => setSingleItemMsg(null)} className="opacity-70 hover:opacity-100 text-slate-300 cursor-pointer">
+                            <button type="button" onClick={() => setSingleItemMsg(null)} className="opacity-70 hover:opacity-100 text-slate-700 dark:text-slate-300 cursor-pointer">
                                 <X className="h-4 w-4" />
                             </button>
                         </div>
@@ -5787,7 +5787,7 @@ export function KometaStudio() {
                     {/* Search Results Quick Chooser */}
                     {searchResults.length > 0 && (
                         <div className="mb-6 space-y-2.5">
-                            <span className="text-xs font-bold text-slate-300">Select Media Item to Inspect:</span>
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Select Media Item to Inspect:</span>
                             <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
                                 {searchResults.map(item => {
                                     const isSelected = inspectingItem?.ratingKey === item.ratingKey;
@@ -5799,7 +5799,7 @@ export function KometaStudio() {
                                             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold shrink-0 transition-all cursor-pointer ${
                                                 isSelected
                                                     ? "bg-sky-600 text-white border-sky-400 shadow-md shadow-sky-950/60"
-                                                    : "bg-slate-950/80 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700"
+                                                    : "bg-muted/80 dark:bg-slate-950/80 border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white hover:border-border dark:hover:border-slate-700"
                                             }`}
                                         >
                                             <span>{item.title}</span>
@@ -5812,15 +5812,15 @@ export function KometaStudio() {
                     )}
 
                     {loadingInspection ? (
-                        <div className="flex flex-col items-center justify-center p-12 gap-3 text-slate-400">
-                            <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
+                        <div className="flex flex-col items-center justify-center p-12 gap-3 text-slate-600 dark:text-slate-400">
+                            <Loader2 className="h-6 w-6 animate-spin text-sky-700 dark:text-sky-400" />
                             <p className="text-xs font-medium">Extracting stream telemetry and evaluating overlay rules...</p>
                         </div>
                     ) : inspectingItem ? (
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                             {/* Poster Preview (4 Cols) */}
                             <div className="lg:col-span-4 space-y-3.5">
-                                <div className="relative aspect-[2/3] max-w-[280px] mx-auto rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950">
+                                <div className="relative aspect-[2/3] max-w-[280px] mx-auto rounded-2xl overflow-hidden border-2 border-border dark:border-slate-700/80 shadow-2xl bg-muted dark:bg-slate-950">
                                     <img 
                                         src={inspectingItem.thumb ? `/api/media/image?url=${encodeURIComponent(inspectingItem.thumb)}` : simPosterImage} 
                                         alt={inspectingItem.title} 
@@ -5844,7 +5844,7 @@ export function KometaStudio() {
                                         variant="outline"
                                         disabled={revertingSingleOverlay}
                                         onClick={() => handleRestoreSingleItemPoster(inspectingItem.ratingKey)}
-                                        className="border-slate-700 text-slate-300 text-xs h-8.5 px-3 gap-1.5 rounded-xl cursor-pointer"
+                                        className="border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs h-8.5 px-3 gap-1.5 rounded-xl cursor-pointer"
                                     >
                                         {revertingSingleOverlay ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                                         <span>Restore</span>
@@ -5855,48 +5855,48 @@ export function KometaStudio() {
                             {/* Telemetry & Decision Matrix (8 Cols) */}
                             <div className="lg:col-span-8 space-y-4">
                                 <div>
-                                    <h3 className="text-lg font-black text-white">{inspectingItem.title}</h3>
-                                    <p className="text-xs text-slate-400">
-                                        {inspectingItem.year || "Unknown Year"} • {inspectingItem.type === "movie" ? "Feature Film" : "TV Series"} • RatingKey: <code className="font-mono text-sky-300">{inspectingItem.ratingKey}</code>
+                                    <h3 className="text-lg font-black text-foreground dark:text-white">{inspectingItem.title}</h3>
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                                        {inspectingItem.year || "Unknown Year"} • {inspectingItem.type === "movie" ? "Feature Film" : "TV Series"} • RatingKey: <code className="font-mono text-sky-800 dark:text-sky-300">{inspectingItem.ratingKey}</code>
                                     </p>
                                 </div>
 
                                 {/* Stream Telemetry Tags */}
                                 <div className="space-y-2">
-                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Detected Stream Telemetry:</span>
+                                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Detected Stream Telemetry:</span>
                                     <div className="flex flex-wrap gap-2 text-xs">
                                         {inspectingItem.detectedBadges?.resolution && (
-                                            <Badge className="bg-amber-950/80 text-amber-300 border-amber-500/40 font-bold px-2.5 py-1">
+                                            <Badge className="bg-amber-500/15 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-500/40 font-bold px-2.5 py-1">
                                                 {inspectingItem.detectedBadges.resolution}
                                             </Badge>
                                         )}
                                         {inspectingItem.detectedBadges?.hdr && (
-                                            <Badge className="bg-teal-950/80 text-teal-300 border-teal-500/40 font-bold px-2.5 py-1">
+                                            <Badge className="bg-teal-500/15 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 border-teal-500/40 font-bold px-2.5 py-1">
                                                 {inspectingItem.detectedBadges.hdr}
                                             </Badge>
                                         )}
                                         {inspectingItem.detectedBadges?.codec && (
-                                            <Badge className="bg-sky-950/80 text-sky-300 border-sky-500/40 font-mono px-2.5 py-1">
+                                            <Badge className="bg-sky-500/15 dark:bg-sky-950/80 text-sky-800 dark:text-sky-300 border-sky-500/40 font-mono px-2.5 py-1">
                                                 {inspectingItem.detectedBadges.codec}
                                             </Badge>
                                         )}
                                         {inspectingItem.detectedBadges?.audio && (
-                                            <Badge className="bg-sky-950/80 text-sky-300 border-sky-500/40 font-bold px-2.5 py-1">
+                                            <Badge className="bg-sky-500/15 dark:bg-sky-950/80 text-sky-800 dark:text-sky-300 border-sky-500/40 font-bold px-2.5 py-1">
                                                 {inspectingItem.detectedBadges.audio} {inspectingItem.detectedBadges?.audioChannels ? `(${inspectingItem.detectedBadges.audioChannels} CH)` : ""}
                                             </Badge>
                                         )}
                                         {inspectingItem.detectedBadges?.edition && (
-                                            <Badge className="bg-cyan-950/80 text-cyan-300 border-cyan-500/40 font-bold px-2.5 py-1">
+                                            <Badge className="bg-cyan-500/15 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-300 border-cyan-500/40 font-bold px-2.5 py-1">
                                                 {inspectingItem.detectedBadges.edition}
                                             </Badge>
                                         )}
                                         {inspectingItem.detectedBadges?.studio && (
-                                            <Badge className="bg-amber-950/80 text-amber-300 border-amber-500/40 font-bold px-2.5 py-1">
+                                            <Badge className="bg-amber-500/15 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-500/40 font-bold px-2.5 py-1">
                                                 {inspectingItem.detectedBadges.studio}
                                             </Badge>
                                         )}
                                         {inspectingItem.detectedBadges?.contentRating && (
-                                            <Badge className="bg-rose-950/80 text-rose-300 border-rose-500/40 font-bold px-2.5 py-1">
+                                            <Badge className="bg-rose-500/15 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border-rose-500/40 font-bold px-2.5 py-1">
                                                 {inspectingItem.detectedBadges.contentRating}
                                             </Badge>
                                         )}
@@ -5905,23 +5905,23 @@ export function KometaStudio() {
 
                                 {/* Decision Matrix Table */}
                                 <div className="space-y-2">
-                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Overlay Decision Matrix:</span>
-                                    <div className="rounded-2xl border border-slate-800 bg-slate-950/80 overflow-hidden divide-y divide-slate-800/80">
+                                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Overlay Decision Matrix:</span>
+                                    <div className="rounded-2xl border border-border dark:border-slate-800 bg-muted/80 dark:bg-slate-950/80 overflow-hidden divide-y divide-border dark:divide-slate-800/80">
                                         {getInspectedItemDecisionMatrix(inspectingItem).map((dec, idx) => (
                                             <div key={idx} className="p-3 flex items-center justify-between gap-3.5 text-xs">
                                                 <div className="space-y-0.5">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="font-bold text-white">{dec.property}:</span>
-                                                        <span className="text-slate-300 font-mono">{dec.detectedValue}</span>
+                                                        <span className="font-bold text-foreground dark:text-white">{dec.property}:</span>
+                                                        <span className="text-slate-700 dark:text-slate-300 font-mono">{dec.detectedValue}</span>
                                                     </div>
-                                                    <p className="text-[11px] text-slate-400">Position: <strong className="text-slate-300">{dec.position}</strong></p>
+                                                    <p className="text-[11px] text-slate-600 dark:text-slate-400">Position: <strong className="text-slate-700 dark:text-slate-300">{dec.position}</strong></p>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="font-mono text-xs text-sky-300">{dec.badgeName}</span>
+                                                    <span className="font-mono text-xs text-sky-800 dark:text-sky-300">{dec.badgeName}</span>
                                                     <Badge className={`text-xs px-2 py-0.5 ${
                                                         dec.isCustom 
-                                                            ? "bg-sky-950 text-sky-300 border-sky-500/40" 
-                                                            : "bg-slate-800 text-slate-300 border-slate-700"
+                                                            ? "bg-sky-500/15 dark:bg-sky-950 text-sky-800 dark:text-sky-300 border-sky-500/40" 
+                                                            : "bg-muted dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-border dark:border-slate-700"
                                                     }`}>
                                                         {dec.priority}
                                                     </Badge>
@@ -5933,9 +5933,9 @@ export function KometaStudio() {
                             </div>
                         </div>
                     ) : (
-                        <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800 space-y-2">
-                            <Film className="h-8 w-8 text-slate-400 mx-auto" />
-                            <p className="text-xs text-slate-400">Search for a movie or TV show above to inspect its audio/video streams and test overlay application.</p>
+                        <div className="p-8 text-center bg-muted/40 dark:bg-slate-950/40 rounded-2xl border border-border dark:border-slate-800 space-y-2">
+                            <Film className="h-8 w-8 text-slate-600 dark:text-slate-400 mx-auto" />
+                            <p className="text-xs text-slate-600 dark:text-slate-400">Search for a movie or TV show above to inspect its audio/video streams and test overlay application.</p>
                         </div>
                     )}
                 </CardContent>
@@ -5943,20 +5943,20 @@ export function KometaStudio() {
 
             {/* Upload Custom Badge Modal */}
             <Dialog open={badgeUploadModalOpen} onOpenChange={setBadgeUploadModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100">
                     <DialogHeader className="shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Plus className="h-5 w-5 text-sky-400" />
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <Plus className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                             <span>Upload Custom Badge Graphic</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Upload an SVG, PNG, or WebP graphic to override default Kometa badges.
                         </DialogDescription>
                     </DialogHeader>
 
                     <form onSubmit={handleUploadCustomBadge} className="space-y-3.5 text-xs py-2 flex-1 overflow-y-auto min-h-0">
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-200">Badge File (.svg, .png, .webp)</Label>
+                            <Label className="text-xs text-foreground dark:text-slate-200">Badge File (.svg, .png, .webp)</Label>
                             <Input
                                 type="file"
                                 accept=".svg,.png,.webp,.jpg,.jpeg"
@@ -5967,24 +5967,24 @@ export function KometaStudio() {
                                         if (!badgeName) setBadgeName(f.name.replace(/\.[^/.]+$/, ""));
                                     }
                                 }}
-                                className="bg-slate-950 border-slate-800 text-xs cursor-pointer"
+                                className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs cursor-pointer"
                             />
                         </div>
 
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-200">Badge Display Name</Label>
+                            <Label className="text-xs text-foreground dark:text-slate-200">Badge Display Name</Label>
                             <Input
                                 value={badgeName}
                                 onChange={e => setBadgeName(e.target.value)}
                                 placeholder="e.g. 4K UHD Special Edition"
-                                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                                className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs text-foreground dark:text-slate-100"
                             />
                         </div>
 
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-200">Category</Label>
+                            <Label className="text-xs text-foreground dark:text-slate-200">Category</Label>
                             <Select value={badgeCategory} onValueChange={setBadgeCategory}>
-                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs">
+                                <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -6005,18 +6005,18 @@ export function KometaStudio() {
                         </div>
 
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-200">Match Rule (Comma-separated)</Label>
+                            <Label className="text-xs text-foreground dark:text-slate-200">Match Rule (Comma-separated)</Label>
                             <Input
                                 value={badgeMatchRule}
                                 onChange={e => setBadgeMatchRule(e.target.value)}
                                 placeholder="e.g. 4k, dv, atmos, imax"
-                                className="bg-slate-950 border-slate-800 text-xs text-slate-100 font-mono"
+                                className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs text-foreground dark:text-slate-100 font-mono"
                             />
-                            <p className="text-[10px] text-slate-400">Match criteria in media stream tags to trigger this badge override.</p>
+                            <p className="text-[10px] text-slate-600 dark:text-slate-400">Match criteria in media stream tags to trigger this badge override.</p>
                         </div>
 
                         {badgeUploadError && (
-                            <div className="p-2.5 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs">
+                            <div className="p-2.5 rounded-lg bg-rose-500/15 dark:bg-rose-950/80 border border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs">
                                 {badgeUploadError}
                             </div>
                         )}
@@ -6039,26 +6039,26 @@ export function KometaStudio() {
 
             {/* Import GitHub Badge Packs Modal */}
             <Dialog open={githubModalOpen} onOpenChange={setGithubModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
-                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <DownloadCloud className="h-5 w-5 text-sky-400" />
+                <DialogContent className="w-[96vw] sm:max-w-xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <DownloadCloud className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                             <span>Import Badge Packs from GitHub</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Scan any GitHub repository or folder containing Kometa / PMM badges and batch import them directly into your vault.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3.5 flex-1 overflow-y-auto pr-1 py-2 text-xs">
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-200">GitHub Repository Folder URL</Label>
+                            <Label className="text-xs text-foreground dark:text-slate-200">GitHub Repository Folder URL</Label>
                             <div className="flex items-center gap-2">
                                 <Input
                                     value={githubRepoInput}
                                     onChange={e => setGithubRepoInput(e.target.value)}
                                     placeholder="https://github.com/jmxd/Kometa/tree/main/overlays/images"
-                                    className="bg-slate-950 border-slate-800 text-xs text-slate-100 font-mono"
+                                    className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs text-foreground dark:text-slate-100 font-mono"
                                 />
                                 <Button
                                     type="button"
@@ -6074,34 +6074,34 @@ export function KometaStudio() {
                         </div>
 
                         {scanError && (
-                            <div className="p-2.5 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs">
+                            <div className="p-2.5 rounded-lg bg-rose-500/15 dark:bg-rose-950/80 border border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs">
                                 {scanError}
                             </div>
                         )}
 
                         {importSuccessMsg && (
-                            <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                            <div className="p-2.5 rounded-lg bg-emerald-500/15 dark:bg-emerald-950/80 border border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                 <span>{importSuccessMsg}</span>
                             </div>
                         )}
 
                         {discoveredBadges.length > 0 && (
                             <div className="space-y-2">
-                                <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                                <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
                                     <span>Discovered Badges ({discoveredBadges.length}):</span>
                                     <div className="flex items-center gap-2">
                                         <button
                                             type="button"
                                             onClick={() => setSelectedBadgeIds(discoveredBadges.map(b => b.id))}
-                                            className="text-[10px] text-sky-400 hover:underline"
+                                            className="text-[10px] text-sky-700 dark:text-sky-400 hover:underline"
                                         >
                                             Select All
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setSelectedBadgeIds([])}
-                                            className="text-[10px] text-slate-400 hover:underline"
+                                            className="text-[10px] text-slate-600 dark:text-slate-400 hover:underline"
                                         >
                                             Deselect All
                                         </button>
@@ -6121,8 +6121,8 @@ export function KometaStudio() {
                                                 }}
                                                 className={`p-2 rounded-lg border flex items-center justify-between gap-2 cursor-pointer transition-all ${
                                                     isSelected
-                                                        ? "bg-sky-950/40 border-sky-500/60 text-white"
-                                                        : "bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white"
+                                                        ? "bg-sky-500/10 dark:bg-sky-950/40 border-sky-500/60 text-foreground dark:text-white"
+                                                        : "bg-muted/60 dark:bg-slate-950/60 border-border dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white"
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-2 truncate">
@@ -6133,7 +6133,7 @@ export function KometaStudio() {
                                                         className="rounded accent-sky-500"
                                                     />
                                                     <span className="font-semibold text-xs truncate">{b.name}</span>
-                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 border-slate-700 capitalize">
+                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 border-border dark:border-slate-700 capitalize">
                                                         {b.category}
                                                     </Badge>
                                                 </div>
@@ -6148,7 +6148,7 @@ export function KometaStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button type="button" variant="ghost" size="sm" onClick={() => setGithubModalOpen(false)} className="w-full sm:w-auto">Close</Button>
                         <Button
                             type="button"
@@ -6166,46 +6166,46 @@ export function KometaStudio() {
 
             {/* Kometa Configuration Importer & Migration Modal */}
             <Dialog open={kometaModalOpen} onOpenChange={setKometaModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-3xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
-                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
+                <DialogContent className="w-[96vw] sm:max-w-3xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
                         <div className="flex items-center justify-between">
-                            <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-white">
-                                <Zap className="h-5 w-5 text-amber-400 fill-amber-400/30" />
+                            <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-foreground dark:text-white">
+                                <Zap className="h-5 w-5 text-amber-700 dark:text-amber-400 fill-amber-400/30" />
                                 <span>Kometa &amp; PMM Configuration Studio</span>
                             </DialogTitle>
-                            <Badge variant="outline" className="bg-amber-950/40 text-amber-300 border-amber-500/40 text-xs font-semibold">
+                            <Badge variant="outline" className="bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs font-semibold">
                                 YAML Importer &amp; Migrator
                             </Badge>
                         </div>
-                        <DialogDescription className="text-xs text-slate-400">
-                            Load your existing Kometa or Plex-Meta-Manager <code className="text-amber-300 font-mono">config.yml</code> directly from your computer, server disk, or paste raw YAML. Automatically converts overlay rules, ribbons, and TMDb keys.
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
+                            Load your existing Kometa or Plex-Meta-Manager <code className="text-amber-800 dark:text-amber-300 font-mono">config.yml</code> directly from your computer, server disk, or paste raw YAML. Automatically converts overlay rules, ribbons, and TMDb keys.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs py-2">
                         {/* Source Loader Bar */}
-                        <div className="p-3.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-3">
+                        <div className="p-3.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800 space-y-3">
                             <div className="flex items-center justify-between">
-                                <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                                    <FolderOpen className="h-4 w-4 text-sky-400" /> Load Configuration Source
+                                <span className="font-bold text-foreground dark:text-white text-xs flex items-center gap-1.5">
+                                    <FolderOpen className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Load Configuration Source
                                 </span>
                                 {kometaLoadedFileName ? (
                                     <div className="flex items-center gap-2">
-                                        <Badge className="bg-emerald-950 text-emerald-300 border-emerald-500/40 text-[10px] gap-1 font-mono">
-                                            <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                                        <Badge className="bg-emerald-500/15 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-[10px] gap-1 font-mono">
+                                            <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                                             <span>Active: {kometaLoadedFileName}</span>
                                         </Badge>
                                         <button
                                             type="button"
                                             onClick={handleClearKometaConfig}
-                                            className="text-[10px] text-slate-400 hover:text-rose-300 transition-colors cursor-pointer"
+                                            className="text-[10px] text-slate-600 dark:text-slate-400 hover:text-rose-800 dark:hover:text-rose-300 transition-colors cursor-pointer"
                                             title="Clear loaded configuration"
                                         >
                                             Reset
                                         </button>
                                     </div>
                                 ) : (
-                                    <span className="text-[10px] text-slate-400">Select an import method below</span>
+                                    <span className="text-[10px] text-slate-600 dark:text-slate-400">Select an import method below</span>
                                 )}
                             </div>
 
@@ -6217,38 +6217,38 @@ export function KometaStudio() {
                                     onDrop={handleDropKometaFile}
                                     className={`p-3 rounded-xl border transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer relative group ${
                                         kometaIsDragging
-                                            ? "border-amber-400 bg-amber-950/40 ring-2 ring-amber-400/40"
+                                            ? "border-amber-400 bg-amber-500/10 dark:bg-amber-950/40 ring-2 ring-amber-400/40"
                                             : kometaLoadedFileName
-                                                ? "border-emerald-500/60 bg-emerald-950/20 hover:border-emerald-400"
-                                                : "border-dashed border-slate-700/80 hover:border-amber-500/60 bg-slate-900/90"
+                                                ? "border-emerald-500/60 bg-emerald-500/10 dark:bg-emerald-950/20 hover:border-emerald-400"
+                                                : "border-dashed border-border dark:border-slate-700/80 hover:border-amber-500/60 bg-card/95 dark:bg-slate-900/90"
                                     }`}
                                 >
                                     {kometaUploadingFile || (kometaInspecting && !kometaLoadingDisk) ? (
                                         <>
-                                            <Loader2 className="h-5 w-5 text-amber-400 animate-spin" />
-                                            <span className="font-bold text-amber-300 text-xs">Ingesting &amp; Parsing File...</span>
-                                            <p className="text-[10px] text-slate-400">{kometaLoadedFileName || "Analyzing YAML structure"}</p>
+                                            <Loader2 className="h-5 w-5 text-amber-700 dark:text-amber-400 animate-spin" />
+                                            <span className="font-bold text-amber-800 dark:text-amber-300 text-xs">Ingesting &amp; Parsing File...</span>
+                                            <p className="text-[10px] text-slate-600 dark:text-slate-400">{kometaLoadedFileName || "Analyzing YAML structure"}</p>
                                         </>
                                     ) : kometaLoadedFileName ? (
                                         <>
-                                            <div className="flex items-center gap-1.5 text-emerald-400">
+                                            <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
                                                 <CheckCircle2 className="h-5 w-5" />
-                                                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px] font-bold">
+                                                <Badge className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-[10px] font-bold">
                                                     ✓ Ingested
                                                 </Badge>
                                             </div>
-                                            <span className="font-bold text-white text-xs truncate max-w-[240px]" title={kometaLoadedFileName}>
+                                            <span className="font-bold text-foreground dark:text-white text-xs truncate max-w-[240px]" title={kometaLoadedFileName}>
                                                 {kometaLoadedFileName}
                                             </span>
-                                            <p className="text-[10px] text-emerald-300/80">
+                                            <p className="text-[10px] text-emerald-800/80 dark:text-emerald-300/80">
                                                 {kometaLoadedFileSize ? `${kometaLoadedFileSize} • ` : ""}Click or drop to replace
                                             </p>
                                         </>
                                     ) : (
                                         <>
-                                            <UploadCloud className="h-5 w-5 text-amber-400 group-hover:scale-110 transition-transform" />
-                                            <span className="font-bold text-slate-200 text-xs">Upload config.yml File</span>
-                                            <p className="text-[10px] text-slate-400">Drag &amp; drop or click to browse (.yml, .yaml)</p>
+                                            <UploadCloud className="h-5 w-5 text-amber-700 dark:text-amber-400 group-hover:scale-110 transition-transform" />
+                                            <span className="font-bold text-foreground dark:text-slate-200 text-xs">Upload config.yml File</span>
+                                            <p className="text-[10px] text-slate-600 dark:text-slate-400">Drag &amp; drop or click to browse (.yml, .yaml)</p>
                                         </>
                                     )}
                                     <input 
@@ -6260,12 +6260,12 @@ export function KometaStudio() {
                                 </div>
 
                                 {/* Option 2: Quick Load from Server Disk */}
-                                <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2 flex flex-col justify-between">
+                                <div className="p-3 bg-card/95 dark:bg-slate-900/90 rounded-xl border border-border dark:border-slate-800 space-y-2 flex flex-col justify-between">
                                     <div>
-                                        <span className="font-bold text-slate-200 text-xs flex items-center gap-1">
-                                            <HardDrive className="h-3.5 w-3.5 text-cyan-400" /> Quick Server Disk
+                                        <span className="font-bold text-foreground dark:text-slate-200 text-xs flex items-center gap-1">
+                                            <HardDrive className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" /> Quick Server Disk
                                         </span>
-                                        <p className="text-[10px] text-slate-400">Load files detected in project root</p>
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-400">Load files detected in project root</p>
                                     </div>
                                     <div className="flex flex-wrap gap-1.5">
                                         <Button
@@ -6276,8 +6276,8 @@ export function KometaStudio() {
                                             onClick={() => handleLoadDiskKometaConfig("kometaconfig.yml")}
                                             className={`text-[11px] h-7 px-2 gap-1 font-mono transition-all ${
                                                 kometaLoadedFileName === "kometaconfig.yml"
-                                                    ? "bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold"
-                                                    : "bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700"
+                                                    ? "bg-amber-500/20 border-amber-500/60 text-amber-800 dark:text-amber-300 font-bold"
+                                                    : "bg-muted dark:bg-slate-800 hover:bg-slate-700 text-amber-800 dark:text-amber-300 border-border dark:border-slate-700"
                                             }`}
                                         >
                                             {kometaLoadingDisk && kometaLoadedFileName === "kometaconfig.yml" ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileCode className="h-3 w-3" />}
@@ -6291,8 +6291,8 @@ export function KometaStudio() {
                                             onClick={() => handleLoadDiskKometaConfig("config.yml")}
                                             className={`text-[11px] h-7 px-2 gap-1 font-mono transition-all ${
                                                 kometaLoadedFileName === "config.yml"
-                                                    ? "bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold"
-                                                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
+                                                    ? "bg-amber-500/20 border-amber-500/60 text-amber-800 dark:text-amber-300 font-bold"
+                                                    : "bg-muted dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-border dark:border-slate-700"
                                             }`}
                                         >
                                             config.yml
@@ -6304,21 +6304,21 @@ export function KometaStudio() {
 
                         {/* Status Messages */}
                         {kometaImportSuccessMsg && (
-                            <div className="p-3 bg-emerald-950/80 border border-emerald-800 rounded-xl text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                            <div className="p-3 bg-emerald-500/15 dark:bg-emerald-950/80 border border-emerald-500/40 dark:border-emerald-800 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                 <span>{kometaImportSuccessMsg}</span>
                             </div>
                         )}
 
                         {kometaImportErrorMsg && (
-                            <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-xl text-xs text-rose-300 flex items-center gap-2 animate-in fade-in-50">
-                                <XCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                            <div className="p-3 bg-rose-500/15 dark:bg-rose-950/80 border border-rose-500/40 dark:border-rose-800 rounded-xl text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2 animate-in fade-in-50">
+                                <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />
                                 <span>{kometaImportErrorMsg}</span>
                             </div>
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
                         <Button
                             type="button"
                             variant="outline"
@@ -6327,9 +6327,9 @@ export function KometaStudio() {
                                 handleApplyKometaToSimulator();
                                 setKometaModalOpen(false);
                             }}
-                            className="text-xs border-slate-700 hover:bg-slate-800 gap-1.5 text-slate-300"
+                            className="text-xs border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 gap-1.5 text-slate-700 dark:text-slate-300"
                         >
-                            <Palette className="h-3.5 w-3.5 text-sky-400" />
+                            <Palette className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                             <span>Preview in Poster Simulator</span>
                         </Button>
                         <div className="flex items-center gap-2">
@@ -6383,31 +6383,31 @@ export function KometaStudio() {
 
             {/* Bulk Delete & Purge Custom Badges Dialog */}
             <Dialog open={bulkDeleteModalOpen} onOpenChange={setBulkDeleteModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-white">
+                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white">
                     <DialogHeader className="shrink-0">
-                        <DialogTitle className="text-lg font-bold flex items-center gap-2 text-rose-400">
+                        <DialogTitle className="text-lg font-bold flex items-center gap-2 text-rose-700 dark:text-rose-400">
                             <Trash2 className="h-5 w-5" />
                             <span>Bulk Delete &amp; Purge Custom Badges</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
-                            Manage and purge downloaded custom badges from your disk storage (<code className="text-sky-300 font-mono">data/custom_badges</code>) and database.
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
+                            Manage and purge downloaded custom badges from your disk storage (<code className="text-sky-800 dark:text-sky-300 font-mono">data/custom_badges</code>) and database.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4 py-2 flex-1 overflow-y-auto min-h-0">
-                        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5 text-xs">
-                            <div className="flex items-center justify-between text-slate-300">
+                        <div className="p-3.5 bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800 rounded-xl space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
                                 <span>Total Badges in Vault:</span>
-                                <strong className="text-white font-mono text-sm">{customBadges.length} Badges</strong>
+                                <strong className="text-foreground dark:text-white font-mono text-sm">{customBadges.length} Badges</strong>
                             </div>
                             {selectedCustomBadgeIds.length > 0 && (
-                                <div className="flex items-center justify-between text-sky-300">
+                                <div className="flex items-center justify-between text-sky-800 dark:text-sky-300">
                                     <span>Currently Selected:</span>
                                     <strong className="font-mono text-sm">{selectedCustomBadgeIds.length} Badges</strong>
                                 </div>
                             )}
                             {filteredCustomBadges.length < customBadges.length && (
-                                <div className="flex items-center justify-between text-amber-300">
+                                <div className="flex items-center justify-between text-amber-800 dark:text-amber-300">
                                     <span>Matching Current Filter/Search:</span>
                                     <strong className="font-mono text-sm">{filteredCustomBadges.length} Badges</strong>
                                 </div>
@@ -6420,15 +6420,15 @@ export function KometaStudio() {
                                 type="button"
                                 disabled={purgingBadges}
                                 onClick={() => handleBulkPurgeBadges(true)}
-                                className="w-full text-left p-3.5 rounded-xl border border-amber-500/40 bg-amber-950/20 hover:bg-amber-950/40 transition-all flex items-start gap-3 cursor-pointer group"
+                                className="w-full text-left p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/20 hover:bg-amber-500/10 dark:hover:bg-amber-950/40 transition-all flex items-start gap-3 cursor-pointer group"
                             >
-                                <Zap className="h-5 w-5 text-amber-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                                <Zap className="h-5 w-5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
                                 <div className="space-y-0.5">
-                                    <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                                    <p className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                                         <span>Purge All &amp; Reset to 35 Essential Badges (Recommended)</span>
-                                        {purgingBadges && <Loader2 className="h-3 w-3 animate-spin text-amber-400" />}
+                                        {purgingBadges && <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-400" />}
                                     </p>
-                                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                                         Deletes all {customBadges.length} downloaded/imported community badges, purges disk files, and immediately restores the clean standard 35 high-DPI SVGs (4K UHD, HDR10+, DV, Atmos, etc.).
                                     </p>
                                 </div>
@@ -6443,14 +6443,14 @@ export function KometaStudio() {
                                         setBulkDeleteModalOpen(false);
                                         await handleDeleteSelectedBadges();
                                     }}
-                                    className="w-full text-left p-3.5 rounded-xl border border-sky-500/40 bg-sky-950/20 hover:bg-sky-950/40 transition-all flex items-start gap-3 cursor-pointer group"
+                                    className="w-full text-left p-3.5 rounded-xl border border-sky-500/40 bg-sky-500/10 dark:bg-sky-950/20 hover:bg-sky-500/10 dark:hover:bg-sky-950/40 transition-all flex items-start gap-3 cursor-pointer group"
                                 >
-                                    <CheckCheck className="h-5 w-5 text-sky-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                                    <CheckCheck className="h-5 w-5 text-sky-700 dark:text-sky-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
                                     <div className="space-y-0.5">
-                                        <p className="text-xs font-bold text-sky-300">
+                                        <p className="text-xs font-bold text-sky-800 dark:text-sky-300">
                                             Delete Selected ({selectedCustomBadgeIds.length}) Badges Only
                                         </p>
-                                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Permanently deletes only the {selectedCustomBadgeIds.length} currently selected badge(s) and their image files.
                                         </p>
                                     </div>
@@ -6462,15 +6462,15 @@ export function KometaStudio() {
                                 type="button"
                                 disabled={purgingBadges}
                                 onClick={() => handleBulkPurgeBadges(false)}
-                                className="w-full text-left p-3.5 rounded-xl border border-rose-500/40 bg-rose-950/20 hover:bg-rose-950/40 transition-all flex items-start gap-3 cursor-pointer group"
+                                className="w-full text-left p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 dark:bg-rose-950/20 hover:bg-rose-500/10 dark:hover:bg-rose-950/40 transition-all flex items-start gap-3 cursor-pointer group"
                             >
-                                <Trash2 className="h-5 w-5 text-rose-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                                <Trash2 className="h-5 w-5 text-rose-700 dark:text-rose-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
                                 <div className="space-y-0.5">
-                                    <p className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                                    <p className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
                                         <span>🗑️ Delete Everything (Wipe All {customBadges.length} Badges)</span>
-                                        {purgingBadges && <Loader2 className="h-3 w-3 animate-spin text-rose-400" />}
+                                        {purgingBadges && <Loader2 className="h-3 w-3 animate-spin text-rose-700 dark:text-rose-400" />}
                                     </p>
-                                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                                         Permanently deletes every badge and image file from the custom badge vault, leaving it completely empty (0 badges).
                                     </p>
                                 </div>
@@ -6478,7 +6478,7 @@ export function KometaStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex justify-end">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             variant="ghost"
@@ -6515,26 +6515,26 @@ export function KometaStudio() {
 
             {/* Restore Originals Safe Confirmation Modal */}
             <Dialog open={revertConfirmModalOpen} onOpenChange={setRevertConfirmModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-md p-5 sm:p-6 bg-slate-900 border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
-                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <RotateCcw className="h-5 w-5 text-amber-400" />
+                <DialogContent className="w-[96vw] sm:max-w-md p-5 sm:p-6 bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 rounded-2xl shadow-2xl">
+                    <DialogHeader className="pb-3 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <RotateCcw className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                             <span>Restore Pristine Original Posters</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Revert applied badges and restore the untouched original artwork from the DomsHomeLab backup vault.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="py-3 space-y-3">
-                        <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
-                            <div className="text-xs font-semibold text-slate-300">Choose Restoration Scope:</div>
+                        <div className="p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 space-y-2">
+                            <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">Choose Restoration Scope:</div>
                             <div className="grid grid-cols-1 gap-2">
                                 <label 
                                     className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
                                         revertScope === "section" 
-                                            ? "bg-sky-950/40 border-sky-500/60 text-white" 
-                                            : "bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700"
+                                            ? "bg-sky-500/10 dark:bg-sky-950/40 border-sky-500/60 text-foreground dark:text-white" 
+                                            : "bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-border dark:hover:border-slate-700"
                                     }`}
                                     onClick={() => setRevertScope("section")}
                                 >
@@ -6548,10 +6548,10 @@ export function KometaStudio() {
                                     <div className="space-y-0.5">
                                         <div className="text-xs font-bold flex items-center gap-1.5">
                                             <span>Current Library Only</span>
-                                            <Badge variant="outline" className="text-[10px] py-0 px-1 border-sky-500/50 text-sky-300">Recommended</Badge>
+                                            <Badge variant="outline" className="text-[10px] py-0 px-1 border-sky-500/50 text-sky-800 dark:text-sky-300">Recommended</Badge>
                                         </div>
-                                        <div className="text-[11px] text-slate-400">
-                                            Restores posters exclusively for items in <span className="font-semibold text-slate-200">{servers.find(s => s.serverId === selectedServerId)?.sections?.find(sec => String(sec.key) === String(selectedSectionKey))?.title || `Section #${selectedSectionKey}`}</span>.
+                                        <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                                            Restores posters exclusively for items in <span className="font-semibold text-foreground dark:text-slate-200">{servers.find(s => s.serverId === selectedServerId)?.sections?.find(sec => String(sec.key) === String(selectedSectionKey))?.title || `Section #${selectedSectionKey}`}</span>.
                                         </div>
                                     </div>
                                 </label>
@@ -6559,8 +6559,8 @@ export function KometaStudio() {
                                 <label 
                                     className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
                                         revertScope === "server" 
-                                            ? "bg-rose-950/40 border-rose-500/60 text-white" 
-                                            : "bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700"
+                                            ? "bg-rose-500/10 dark:bg-rose-950/40 border-rose-500/60 text-foreground dark:text-white" 
+                                            : "bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-border dark:hover:border-slate-700"
                                     }`}
                                     onClick={() => setRevertScope("server")}
                                 >
@@ -6572,12 +6572,12 @@ export function KometaStudio() {
                                         className="mt-0.5 text-rose-600 focus:ring-rose-500" 
                                     />
                                     <div className="space-y-0.5">
-                                        <div className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                                        <div className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
                                             <span>Entire Server (All Libraries)</span>
-                                            <Badge variant="outline" className="text-[10px] py-0 px-1 border-rose-500/50 text-rose-300">Caution</Badge>
+                                            <Badge variant="outline" className="text-[10px] py-0 px-1 border-rose-500/50 text-rose-800 dark:text-rose-300">Caution</Badge>
                                         </div>
-                                        <div className="text-[11px] text-slate-400">
-                                            Restores all backed-up artwork across every library on <span className="font-semibold text-slate-200">{servers.find(s => s.serverId === selectedServerId)?.serverName || selectedServerId}</span>.
+                                        <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                                            Restores all backed-up artwork across every library on <span className="font-semibold text-foreground dark:text-slate-200">{servers.find(s => s.serverId === selectedServerId)?.serverName || selectedServerId}</span>.
                                         </div>
                                     </div>
                                 </label>
@@ -6585,13 +6585,13 @@ export function KometaStudio() {
                         </div>
 
                         {/* Orphan Vault Cleaner Quick Action */}
-                        <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800/80 flex items-center justify-between gap-3">
+                        <div className="p-3 bg-muted/50 dark:bg-slate-950/50 rounded-xl border border-border dark:border-slate-800/80 flex items-center justify-between gap-3">
                             <div className="space-y-0.5">
-                                <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                                    <Trash2 className="h-3.5 w-3.5 text-slate-400" />
+                                <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <Trash2 className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
                                     <span>Prune Orphan Artwork Backups</span>
                                 </div>
-                                <div className="text-[11px] text-slate-400">
+                                <div className="text-[11px] text-slate-600 dark:text-slate-400">
                                     Frees disk space by removing backups for items no longer on Plex.
                                 </div>
                             </div>
@@ -6601,26 +6601,26 @@ export function KometaStudio() {
                                 variant="outline"
                                 disabled={pruningOrphans}
                                 onClick={handlePruneOrphans}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-7.5 px-2.5 shrink-0"
+                                className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs h-7.5 px-2.5 shrink-0"
                             >
                                 {pruningOrphans ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Trash2 className="h-3 w-3 mr-1" />}
                                 <span>Prune</span>
                             </Button>
                         </div>
                         {orphanPruneMsg && (
-                            <div className={`text-xs p-2 rounded-lg border ${orphanPruneMsg.success ? "bg-emerald-950/60 border-emerald-800 text-emerald-300" : "bg-rose-950/60 border-rose-800 text-rose-300"}`}>
+                            <div className={`text-xs p-2 rounded-lg border ${orphanPruneMsg.success ? "bg-emerald-500/10 dark:bg-emerald-950/60 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/10 dark:bg-rose-950/60 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"}`}>
                                 {orphanPruneMsg.text}
                             </div>
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
                         <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             onClick={() => setRevertConfirmModalOpen(false)}
-                            className="text-xs text-slate-400 hover:text-white w-full sm:w-auto"
+                            className="text-xs text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
@@ -6640,13 +6640,13 @@ export function KometaStudio() {
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
-                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Layers className="h-5 w-5 text-sky-400" />
+                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <Layers className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                             <span>Configure Target Overlay Libraries</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Select which Plex library sections should receive automated poster badges and overlays. Excluded sections are completely protected and will be skipped.
                         </DialogDescription>
                     </DialogHeader>
@@ -6655,11 +6655,11 @@ export function KometaStudio() {
                         {servers.map(srv => {
                             const srvSections = srv.sections || [];
                             return (
-                                <div key={srv.serverId} className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
-                                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <div key={srv.serverId} className="p-3.5 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800 space-y-3">
+                                    <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-2">
                                         <div className="flex items-center gap-2">
-                                            <HardDrive className="h-4 w-4 text-cyan-400" />
-                                            <span className="text-xs font-bold text-white">{srv.serverName}</span>
+                                            <HardDrive className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
+                                            <span className="text-xs font-bold text-foreground dark:text-white">{srv.serverName}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <Button
@@ -6667,17 +6667,17 @@ export function KometaStudio() {
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, true)}
-                                                className="h-6 text-[10px] px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"
+                                                className="h-6 text-[10px] px-2 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/40"
                                             >
                                                 Enable All
                                             </Button>
-                                            <span className="text-slate-400">•</span>
+                                            <span className="text-slate-600 dark:text-slate-400">•</span>
                                             <Button
                                                 type="button"
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, false)}
-                                                className="h-6 text-[10px] px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                                                className="h-6 text-[10px] px-2 text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10 dark:hover:bg-rose-950/40"
                                             >
                                                 Disable All
                                             </Button>
@@ -6693,19 +6693,19 @@ export function KometaStudio() {
                                                         key={String(sec.key)}
                                                         className={`p-2.5 rounded-lg border flex items-center justify-between transition-all ${
                                                             enabled
-                                                                ? "bg-emerald-950/20 border-emerald-600/40 text-emerald-200"
-                                                                : "bg-slate-900/60 border-slate-800 text-slate-400"
+                                                                ? "bg-emerald-500/10 dark:bg-emerald-950/20 border-emerald-600/40 text-emerald-900 dark:text-emerald-200"
+                                                                : "bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-800 text-slate-600 dark:text-slate-400"
                                                         }`}
                                                     >
                                                         <div className="flex items-center gap-2.5 min-w-0">
                                                             {sec.type === "movie" ? (
-                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`} />
                                                             ) : (
-                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`} />
                                                             )}
                                                             <div className="min-w-0">
-                                                                <span className="text-xs font-bold text-white block truncate">{sec.title}</span>
-                                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                                <span className="text-xs font-bold text-foreground dark:text-white block truncate">{sec.title}</span>
+                                                                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">
                                                                     Section #{sec.key} • {sec.type === "movie" ? "Movies" : "TV Shows"}
                                                                 </span>
                                                             </div>
@@ -6713,7 +6713,7 @@ export function KometaStudio() {
 
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             <Badge className={`text-[10px] font-bold ${
-                                                                enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
+                                                                enabled ? "bg-emerald-600 text-white" : "bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-border dark:border-slate-700"
                                                             }`}>
                                                                 {enabled ? "Active" : "Excluded"}
                                                             </Badge>
@@ -6727,14 +6727,14 @@ export function KometaStudio() {
                                             })}
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-slate-400 py-1">No library sections loaded for this server.</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 py-1">No library sections loaded for this server.</p>
                                     )}
                                 </div>
                             );
                         })}
                     </div>
 
-                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
+                    <DialogFooter className="pt-2 border-t border-border dark:border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             size="sm"

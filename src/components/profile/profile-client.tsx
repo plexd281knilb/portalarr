@@ -1272,7 +1272,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
     if (!user) {
         return (
             <div className="p-6 flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center max-w-md mx-auto">
-                <AlertCircle className="h-10 w-10 text-rose-400" />
+                <AlertCircle className="h-10 w-10 text-rose-700 dark:text-rose-400" />
                 <div className="space-y-1">
                     <h2 className="text-base font-bold text-foreground">Unable to load profile</h2>
                     <p className="text-xs text-muted-foreground">{loadError || "Database or session check timed out."}</p>
@@ -1339,10 +1339,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         size="sm"
                         onClick={handleRecheckStatus}
                         disabled={checkingStatus}
-                        className="h-9 px-3 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs flex-1 sm:flex-initial"
+                        className="h-9 px-3 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs flex-1 sm:flex-initial"
                         title="Ping payment email inboxes to verify new Venmo/PayPal/Zelle payments and refresh access"
                     >
-                        <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin text-emerald-400" : ""}`} />
+                        <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin text-emerald-700 dark:text-emerald-400" : ""}`} />
                         <span>{checkingStatus ? "Checking Payment Emails..." : "Check Access & Payment Status"}</span>
                     </Button>
                     <ServerSpeedTest />
@@ -1352,25 +1352,25 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* STATUS SYNC ALERT FEEDBACK */}
             {statusSyncMsg && (
-                <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
                     <span>{statusSyncMsg}</span>
                 </div>
             )}
             {statusSyncErr && (
-                <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-500/40 text-red-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
-                    <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                <div className="p-3.5 rounded-xl bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 text-red-800 dark:text-red-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
+                    <XCircle className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
                     <span>{statusSyncErr}</span>
                 </div>
             )}
 
             {/* REFERRAL & INVITE LINK CARD */}
-            <Card id="referral" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+            <Card id="referral" className="border-amber-500/30 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Gift className="h-5 w-5 text-amber-400" /> Invite Friends & Community Rewards
+                                <Gift className="h-5 w-5 text-amber-700 dark:text-amber-400" /> Invite Friends & Community Rewards
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 {isTrial 
@@ -1380,11 +1380,11 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </CardDescription>
                         </div>
                         {isTrial ? (
-                            <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/35 text-xs w-fit flex items-center gap-1">
-                                <Sparkles className="h-3 w-3 text-amber-400" /> Full Member Perk
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/35 text-xs w-fit flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Full Member Perk
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/35 text-xs w-fit">
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/35 text-xs w-fit">
                                 Code: {referralInfo?.referralCode || user?.username}
                             </Badge>
                         )}
@@ -1395,7 +1395,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                             <div className="space-y-1">
                                 <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                    <Sparkles className="h-4 w-4 text-amber-400" /> Earn Free Months by Inviting Friends
+                                    <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Earn Free Months by Inviting Friends
                                 </p>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                                     Upgrade to a full annual or monthly membership to unlock your personal referral link, invite friends, and automatically earn free subscription months when they convert!
@@ -1435,17 +1435,17 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
                             {/* REFERRAL METRICS PILLS */}
                             <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/40 text-center">
-                                <div className="p-2.5 rounded-lg bg-slate-900/70 border border-border/50 space-y-0.5">
+                                <div className="p-2.5 rounded-lg bg-card/95 dark:bg-slate-900/70 border border-border/50 space-y-0.5">
                                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Friends Invited</p>
                                     <p className="text-xl font-black text-foreground tabular-nums">{referralInfo?.totalReferrals ?? 0}</p>
                                 </div>
                                 <div className="p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/20 space-y-0.5">
                                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Active Trials</p>
-                                    <p className="text-xl font-black text-sky-400 tabular-nums">{referralInfo?.activeTrials ?? 0}</p>
+                                    <p className="text-xl font-black text-sky-700 dark:text-sky-400 tabular-nums">{referralInfo?.activeTrials ?? 0}</p>
                                 </div>
                                 <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 space-y-0.5">
                                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Subscribed</p>
-                                    <p className="text-xl font-black text-emerald-400 tabular-nums">{referralInfo?.conversions ?? 0}</p>
+                                    <p className="text-xl font-black text-emerald-700 dark:text-emerald-400 tabular-nums">{referralInfo?.conversions ?? 0}</p>
                                 </div>
                             </div>
                         </>
@@ -1454,12 +1454,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* ACCOUNT STATUS & ACCESS CARD */}
-            <Card className="border-sky-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden">
+            <Card className="border-sky-500/30 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Crown className="h-5 w-5 text-sky-400" /> Account Status & Access Level
+                                <Crown className="h-5 w-5 text-sky-700 dark:text-sky-400" /> Account Status & Access Level
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Your account status determines your support level, media requests, and library access.
@@ -1468,12 +1468,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         <div className="flex items-center gap-2">
                             <Badge variant="outline" className={`text-xs font-bold ${
                                 isTrial 
-                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40" 
+                                    ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40" 
                                     : user?.role === "ADMIN"
-                                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                                        ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40"
                                         : user?.role === "SUPER_USER"
-                                            ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                            : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                            ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40"
+                                            : "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40"
                             }`}>
                                 {isTrial ? "Trial User" : (user?.role === "ADMIN" ? "Administrator" : (user?.role === "SUPER_USER" ? "Super User" : "Full Member"))}
                             </Badge>
@@ -1488,10 +1488,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
+                        <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Account Status</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                                <ShieldCheck className={`h-4 w-4 ${isTrial ? "text-amber-400" : (user?.role === "ADMIN" ? "text-sky-400" : (user?.role === "SUPER_USER" ? "text-amber-400" : "text-emerald-400"))}`} />
+                                <ShieldCheck className={`h-4 w-4 ${isTrial ? "text-amber-700 dark:text-amber-400" : (user?.role === "ADMIN" ? "text-sky-700 dark:text-sky-400" : (user?.role === "SUPER_USER" ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"))}`} />
                                 {isTrial ? "Trial User" : (user?.role === "ADMIN" ? "Server Administrator" : (user?.role === "SUPER_USER" ? "Super User" : "Full Member"))}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
@@ -1499,10 +1499,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </p>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
+                        <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Media Quotas</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                                <Sparkles className="h-4 w-4 text-amber-400" />
+                                <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                 {isTrial ? "Trial Requests Active" : (user?.role === "ADMIN" ? "Unlimited Requests" : "Full Library Quotas")}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
@@ -1510,10 +1510,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </p>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
+                        <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Profile Safety</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                                <Tv className="h-4 w-4 text-emerald-400" />
+                                <Tv className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                 {currentAccountType === "KID" ? "Child Protection Active" : "Full Library Access"}
                             </p>
                             <p className="text-[10px] text-muted-foreground">{currentAccountType === "KID" ? "Parental rating & genre filters." : "Standard media server libraries."}</p>
@@ -1532,9 +1532,9 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 onClick={() => {
                                     document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
                                 }}
-                                className="w-full sm:w-auto text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 gap-1.5 shrink-0 transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95"
+                                className="w-full sm:w-auto text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 gap-1.5 shrink-0 transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95"
                             >
-                                <CreditCard className="h-3.5 w-3.5 text-emerald-400" /> View Subscription Options
+                                <CreditCard className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> View Subscription Options
                             </Button>
                         </div>
                     )}
@@ -1542,12 +1542,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* SUBSCRIPTION & RENEWAL CARD */}
-            <Card id="billing" className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
+            <Card id="billing" className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <CreditCard className="h-5 w-5 text-emerald-400" /> Subscription & Prorated Billing
+                                <CreditCard className="h-5 w-5 text-emerald-700 dark:text-emerald-400" /> Subscription & Prorated Billing
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 {user?.subscriptionCadence === "MONTHLY"
@@ -1557,7 +1557,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         </div>
                         <div className="flex items-center gap-2">
                             <FeatureGuideModal guideId="referral-rewards" triggerText="Referral & Billing Guide" />
-                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold w-fit">
+                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-xs font-bold w-fit">
                                 {user?.subscriptionCadence === "MONTHLY"
                                     ? `$${effectiveMonthlyPrice} / month`
                                     : `$${effectiveYearlyPrice} / year`}
@@ -1570,10 +1570,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     {(user?.accountCredit ?? 0) > 0 && (
                         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2.5">
                             <div className="flex items-center justify-between">
-                                <span className="font-bold text-amber-400 flex items-center gap-1.5 text-sm">
-                                    <DollarSign className="h-4 w-4 text-amber-400" /> Account Credit Balance: ${(user.accountCredit ?? 0).toFixed(2)}
+                                <span className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 text-sm">
+                                    <DollarSign className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Account Credit Balance: ${(user.accountCredit ?? 0).toFixed(2)}
                                 </span>
-                                <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-semibold">
+                                <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-[10px] font-semibold">
                                     Partial Payment Credited
                                 </Badge>
                             </div>
@@ -1581,21 +1581,21 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 Your latest payment {user.lastPaymentAmount ? <>of <strong>${user.lastPaymentAmount.toFixed(2)}</strong> {user.lastPaymentDate ? `on ${safeFormatDate(user.lastPaymentDate, "MMMM d, yyyy")}` : ""}</> : ""} has been safely credited to your account balance.
                             </p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                                <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/20 space-y-1">
+                                <div className="p-2.5 rounded-lg bg-muted/60 dark:bg-black/40 border border-amber-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Monthly Plan (${effectiveMonthlyPrice.toFixed(2)}/mo)</span>
                                     <p className="font-semibold text-foreground text-xs">
                                         {(effectiveMonthlyPrice - user.accountCredit) > 0 
-                                            ? <>Send <strong className="text-amber-400">${(effectiveMonthlyPrice - user.accountCredit).toFixed(2)}</strong> more to activate</>
-                                            : <span className="text-emerald-400 font-bold">Credit covers monthly rate!</span>
+                                            ? <>Send <strong className="text-amber-700 dark:text-amber-400">${(effectiveMonthlyPrice - user.accountCredit).toFixed(2)}</strong> more to activate</>
+                                            : <span className="text-emerald-700 dark:text-emerald-400 font-bold">Credit covers monthly rate!</span>
                                         }
                                     </p>
                                 </div>
-                                <div className="p-2.5 rounded-lg bg-black/40 border border-sky-500/20 space-y-1">
+                                <div className="p-2.5 rounded-lg bg-muted/60 dark:bg-black/40 border border-sky-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Discounted Plan (${(referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice).toFixed(2)}/yr)</span>
                                     <p className="font-semibold text-foreground text-xs">
                                         {((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) - user.accountCredit) > 0 
-                                            ? <>Send <strong className="text-sky-400">${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) - user.accountCredit).toFixed(2)}</strong> more for 1 full year (${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) / 12).toFixed(0)}/mo)</>
-                                            : <span className="text-emerald-400 font-bold">Credit covers yearly rate!</span>
+                                            ? <>Send <strong className="text-sky-700 dark:text-sky-400">${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) - user.accountCredit).toFixed(2)}</strong> more for 1 full year (${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) / 12).toFixed(0)}/mo)</>
+                                            : <span className="text-emerald-700 dark:text-emerald-400 font-bold">Credit covers yearly rate!</span>
                                         }
                                     </p>
                                 </div>
@@ -1606,12 +1606,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     {user?.lastPaymentAmount && (user?.accountCredit ?? 0) === 0 && (
                         <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
                             <span className="text-muted-foreground flex items-center gap-1.5">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                                Last Payment: <strong className="text-emerald-300 font-semibold">${user.lastPaymentAmount.toFixed(2)}</strong>
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+                                Last Payment: <strong className="text-emerald-800 dark:text-emerald-300 font-semibold">${user.lastPaymentAmount.toFixed(2)}</strong>
                                 {user.lastPaymentDate ? ` on ${safeFormatDate(user.lastPaymentDate, "MMM d, yyyy")}` : ""}
                                 {user.lastPaymentProvider ? ` via ${user.lastPaymentProvider}` : ""}
                             </span>
-                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
+                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px]">
                                 Applied
                             </Badge>
                         </div>
@@ -1620,8 +1620,8 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     {user?.role === "ADMIN" ? (
                         <div className="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs space-y-1.5">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Access Level</span>
-                            <p className="font-bold text-sky-400 text-sm flex items-center gap-1.5">
-                                <ShieldCheck className="h-4 w-4 text-sky-400" /> Platform Administrator
+                            <p className="font-bold text-sky-700 dark:text-sky-400 text-sm flex items-center gap-1.5">
+                                <ShieldCheck className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Platform Administrator
                             </p>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
                                 Unrestricted administrator privileges with permanent lifetime access. You are exempt from all subscription plans, renewals, and expiration dates.
@@ -1632,17 +1632,17 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                                 <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Trial Status</span>
-                                    <p className="font-bold text-blue-400 text-sm">{daysLeft ?? 0} Days Left</p>
+                                    <p className="font-bold text-blue-700 dark:text-blue-400 text-sm">{daysLeft ?? 0} Days Left</p>
                                     <p className="text-[10px] text-muted-foreground">Ends {safeFormatDate(user?.trialEndsAt, "MMM d, yyyy")}</p>
                                 </div>
                                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">1st Year Prorated</span>
-                                    <p className="font-bold text-emerald-400 text-sm">{activeTrialProrated.amountDueText}</p>
+                                    <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">{activeTrialProrated.amountDueText}</p>
                                     <p className="text-[10px] text-muted-foreground">{activeTrialProrated.remainingMonthsText}</p>
                                 </div>
                                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Renewal</span>
-                                    <p className="font-bold text-amber-300 text-sm">${effectiveYearlyPrice} / yr</p>
+                                    <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">${effectiveYearlyPrice} / yr</p>
                                     <p className="text-[10px] text-muted-foreground">Renews {activeTrialProrated.nextRenewalDate}</p>
                                 </div>
                             </div>
@@ -1657,24 +1657,24 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     {user.subscriptionCadence === "MONTHLY" ? "Active Monthly Subscription" : "Active Annual Subscription"}
                                 </span>
                                 {referralInfo?.renewalSummary?.convertedReferralsCount > 0 && (
-                                    <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] gap-1 font-semibold">
-                                        <Gift className="h-3 w-3 text-amber-400" />
+                                    <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1 font-semibold">
+                                        <Gift className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                         {referralInfo.renewalSummary.convertedReferralsCount} Free Mo Earned
                                     </Badge>
                                 )}
                             </div>
-                            <p className="font-bold text-emerald-400 text-sm">
+                            <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">
                                 Valid until {safeFormatDate(user.subscriptionEndsAt, "MMMM d, yyyy", "Active")}
                             </p>
 
                             {referralInfo?.renewalSummary?.convertedReferralsCount > 0 ? (
-                                <div className="p-2.5 rounded-lg bg-black/30 border border-amber-500/25 space-y-1.5">
+                                <div className="p-2.5 rounded-lg bg-muted/60 dark:bg-black/30 border border-amber-500/25 space-y-1.5">
                                     <div className="flex items-center justify-between text-xs">
-                                        <span className="font-semibold text-amber-300 flex items-center gap-1">
-                                            <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                                        <span className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                                            <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                             Referral Reward Applied
                                         </span>
-                                        <span className="font-bold text-emerald-400">
+                                        <span className="font-bold text-emerald-700 dark:text-emerald-400">
                                             ${(referralInfo?.renewalSummary?.discountedYearlyPrice ?? 0).toFixed(2)}/yr
                                             <span className="line-through text-muted-foreground ml-1.5 font-normal text-[11px]">
                                                 ${(referralInfo?.renewalSummary?.baseYearlyPrice ?? effectiveYearlyPrice).toFixed(2)}
@@ -1697,7 +1697,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             )}
                         </div>
                     ) : (
-                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] text-xs space-y-1">
+                        <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] text-xs space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Access Level</span>
                             <p className="font-bold text-foreground">
                                 {user?.role === "ADMIN" ? "Server Administrator" : "Permanent Access"}
@@ -1714,7 +1714,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     </div>
 
                     {paymentConfig?.paymentInstructions && (
-                        <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
+                        <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
                             {paymentConfig.paymentInstructions}
                         </div>
                     )}
@@ -1736,26 +1736,26 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             />
 
             {/* HOUSEHOLD SUB-ACCOUNTS CARD */}
-            <Card id="subaccounts" className="border-sky-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+            <Card id="subaccounts" className="border-sky-500/30 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Users className="h-5 w-5 text-sky-400" /> Household Sub-Accounts & Profiles
+                                <Users className="h-5 w-5 text-sky-700 dark:text-sky-400" /> Household Sub-Accounts & Profiles
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Create secondary Plex profiles for your Living Room TV or Kids' tablets with zero extra billing.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-sky-500/15 text-sky-300 border-sky-500/35 text-xs w-fit flex items-center gap-1 font-semibold">
-                            <Sparkles className="h-3 w-3 text-sky-300" /> Coming Soon
+                        <Badge variant="outline" className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/35 text-xs w-fit flex items-center gap-1 font-semibold">
+                            <Sparkles className="h-3 w-3 text-sky-800 dark:text-sky-300" /> Coming Soon
                         </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="p-4 rounded-lg bg-slate-900/70 border border-sky-500/25 space-y-3">
+                    <div className="p-4 rounded-lg bg-card/95 dark:bg-slate-900/70 border border-sky-500/25 space-y-3">
                         <div className="flex items-center gap-2">
-                            <Badge className="bg-sky-500/15 text-sky-300 border border-sky-500/35 text-[11px] font-semibold">
+                            <Badge className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border border-sky-500/35 text-[11px] font-semibold">
                                 Feature in Active Development
                             </Badge>
                             <span className="text-xs text-muted-foreground">Tagging & Filtering Beta</span>
@@ -1764,17 +1764,17 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             Household Sub-Accounts (dedicated Kids tablet profiles and Living Room family screens) are currently coming soon while our automated content safety and IMDb/TMDb metadata tagging engine is calibrated. Once released, you will be able to provision dedicated child-safe and family-friendly profiles nested under your membership with zero extra billing.
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                            <div className="p-3 rounded-lg bg-muted/60 dark:bg-black/30 border border-border/70 dark:border-white/5 space-y-1">
                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Monitor className="h-4 w-4 text-sky-400 shrink-0" /> Living Room TV Profile
+                                    <Monitor className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" /> Living Room TV Profile
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
                                     Shared household viewing that automatically filters out severe nudity and explicit content for living room screens.
                                 </p>
                             </div>
-                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                            <div className="p-3 rounded-lg bg-muted/60 dark:bg-black/30 border border-border/70 dark:border-white/5 space-y-1">
                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Baby className="h-4 w-4 text-emerald-400 shrink-0" /> Kids Tablet Profile
+                                    <Baby className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" /> Kids Tablet Profile
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
                                     Dedicated child-safe profile restricted strictly to G/PG ratings and animated kids libraries.
@@ -1786,23 +1786,23 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* ACCOUNT ADD-ONS & FEATURES CARD */}
-            <Card id="addons" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+            <Card id="addons" className="border-amber-500/30 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Zap className="h-5 w-5 text-amber-400" /> Account Add-Ons & Features
+                                <Zap className="h-5 w-5 text-amber-700 dark:text-amber-400" /> Account Add-Ons & Features
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Enable optional features, live streaming channels, and extra household profile slots.
                             </CardDescription>
                         </div>
                         {isTrial ? (
-                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit flex items-center gap-1">
-                                <Sparkles className="h-3 w-3 text-amber-300" /> Full Member Perk
+                            <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs w-fit flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 text-amber-800 dark:text-amber-300" /> Full Member Perk
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit">
+                            <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs w-fit">
                                 {userEnabledAddons.filter((id) => addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon" && a.id !== "emby_access" && a.id !== "music_streaming" && a.id !== "priority_requests").some((a) => a.id === id)).length} of {addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon" && a.id !== "emby_access" && a.id !== "music_streaming" && a.id !== "priority_requests").length} Enabled
                             </Badge>
                         )}
@@ -1810,13 +1810,13 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {addonMsg && (
-                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{addonMsg}</span>
                         </div>
                     )}
                     {addonErr && (
-                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <XCircle className="h-4 w-4 shrink-0" />
                             <span>{addonErr}</span>
                         </div>
@@ -1836,39 +1836,39 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 transition-all ${
                                             isEnabled 
                                                 ? "bg-amber-500/[0.06] border-amber-500/40" 
-                                                : "bg-white/[0.02] border-white/[0.06]"
+                                                : "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06]"
                                         }`}
                                     >
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     {addon.icon === "server" ? (
-                                                        <Server className="h-4 w-4 text-amber-400 shrink-0" />
+                                                        <Server className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                                                     ) : addon.icon === "tv" ? (
-                                                        <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
+                                                        <Tv className="h-4 w-4 text-cyan-700 dark:text-cyan-400 shrink-0" />
                                                     ) : addon.icon === "music" ? (
-                                                        <Music className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                        <Music className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                     ) : addon.icon === "book" ? (
-                                                        <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
+                                                        <BookOpen className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                                                     ) : addon.icon === "headphones" ? (
-                                                        <Headphones className="h-4 w-4 text-sky-400 shrink-0" />
+                                                        <Headphones className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                                                     ) : addon.icon === "baby" ? (
-                                                        <Baby className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                        <Baby className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                     ) : addon.icon === "monitor" ? (
-                                                        <Monitor className="h-4 w-4 text-sky-400 shrink-0" />
+                                                        <Monitor className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                                                     ) : addon.icon === "sparkles" ? (
-                                                        <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                                                        <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                                                     ) : (
                                                         <Zap className="h-4 w-4 text-primary shrink-0" />
                                                     )}
                                                     <span className="font-bold text-xs text-foreground truncate">{addon.name}</span>
                                                 </div>
                                                 {isFree ? (
-                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-semibold shrink-0 inline-flex items-center gap-1">
+                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-semibold shrink-0 inline-flex items-center gap-1">
                                                         <Sparkles className="h-2.5 w-2.5 shrink-0" /> Free
                                                     </Badge>
                                                 ) : (
-                                                    <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 font-semibold shrink-0">
+                                                    <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 font-semibold shrink-0">
                                                         ${addon.price}/mo
                                                     </Badge>
                                                 )}
@@ -1882,7 +1882,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[11px] font-medium text-muted-foreground">
                                                 {isEnabled ? (
-                                                    <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                                                    <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-semibold">
                                                         <Check className="h-3 w-3" /> Active
                                                     </span>
                                                 ) : (
@@ -1898,7 +1898,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                                         setAddonGuideType("JELLYFIN");
                                                         setAddonGuideModalOpen(true);
                                                     }}
-                                                    className="h-6 text-[10px] px-2 font-semibold gap-1 border-sky-500/40 text-sky-300 hover:bg-sky-500/10 cursor-pointer"
+                                                    className="h-6 text-[10px] px-2 font-semibold gap-1 border-sky-500/40 text-sky-800 dark:text-sky-300 hover:bg-sky-500/10 cursor-pointer"
                                                 >
                                                     <BookOpen className="h-3 w-3 shrink-0" /> Setup Guide
                                                 </Button>
@@ -1912,13 +1912,13 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                                     onClick={() => {
                                                         document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
                                                     }}
-                                                    className="text-[11px] h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 gap-1 cursor-pointer transition-all active:scale-95"
+                                                    className="text-[11px] h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30 gap-1 cursor-pointer transition-all active:scale-95"
                                                 >
-                                                    <Sparkles className="h-3 w-3 text-amber-400" /> Unlocks with Full Membership
+                                                    <Sparkles className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Unlocks with Full Membership
                                                 </Button>
                                             ) : isFree ? (
                                                 <div className="flex items-center gap-2">
-                                                    {isToggling && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />}
+                                                    {isToggling && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" />}
                                                     <Switch
                                                         checked={isEnabled}
                                                         disabled={isToggling}
@@ -1935,7 +1935,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                                         setTargetTier(addon.id);
                                                         setUpgradeNote(`Interested in activating add-on: ${addon.name}`);
                                                     }}
-                                                    className="text-xs h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-pointer"
+                                                    className="text-xs h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30 cursor-pointer"
                                                 >
                                                     Request Add-On
                                                 </Button>
@@ -1949,14 +1949,14 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* NOTIFICATION PREFERENCES CARD */}
-            <Card id="notifications" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isNotifDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
+            <Card id="notifications" className={`transition-all duration-300 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isNotifDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Bell className="h-5 w-5 text-cyan-400" /> Notification & Email Preferences
+                                <Bell className="h-5 w-5 text-cyan-700 dark:text-cyan-400" /> Notification & Email Preferences
                                 {isNotifDirty && (
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
                                         ● Unsaved Changes
                                     </Badge>
                                 )}
@@ -1965,7 +1965,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 All server notices are enabled by default. Toggle off any updates you wish to opt out of receiving.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-cyan-500/15 text-cyan-300 border-cyan-500/30 text-xs font-semibold gap-1.5 w-fit shrink-0">
+                        <Badge variant="outline" className="bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30 text-xs font-semibold gap-1.5 w-fit shrink-0">
                             <Mail className="h-3 w-3" /> Email Notices
                         </Badge>
                     </div>
@@ -1973,13 +1973,13 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 <CardContent>
                     <form onSubmit={handleSaveNotifications} className="space-y-4">
                         {notifMsg && (
-                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                 <span>{notifMsg}</span>
                             </div>
                         )}
                         {notifErr && (
-                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                                 <XCircle className="h-4 w-4 shrink-0" />
                                 <span>{notifErr}</span>
                             </div>
@@ -1989,12 +1989,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             {/* 1. Media Request Approvals */}
                             <div className={`p-3.5 sm:p-4 rounded-xl border transition-all flex items-start justify-between gap-3 ${
                                 notifPrefs.emailRequestApproved
-                                    ? "bg-white/[0.03] border-white/[0.08] hover:border-emerald-500/30"
-                                    : "bg-white/[0.01] border-white/[0.04] opacity-60"
+                                    ? "bg-muted/50 dark:bg-white/[0.03] border-border/70 dark:border-white/[0.08] hover:border-emerald-500/30"
+                                    : "bg-muted/50 dark:bg-white/[0.01] border-border/70 dark:border-white/[0.04] opacity-60"
                             }`}>
                                 <div className="flex items-start gap-3 min-w-0">
                                     <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                     </div>
                                     <div className="space-y-1 min-w-0">
                                         <Label htmlFor="notif-req-approved" className="text-xs font-semibold text-foreground cursor-pointer block truncate">
@@ -2016,12 +2016,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             {/* 2. Media Available & Ready to Stream */}
                             <div className={`p-3.5 sm:p-4 rounded-xl border transition-all flex items-start justify-between gap-3 ${
                                 notifPrefs.emailMediaReady
-                                    ? "bg-white/[0.03] border-white/[0.08] hover:border-cyan-500/30"
-                                    : "bg-white/[0.01] border-white/[0.04] opacity-60"
+                                    ? "bg-muted/50 dark:bg-white/[0.03] border-border/70 dark:border-white/[0.08] hover:border-cyan-500/30"
+                                    : "bg-muted/50 dark:bg-white/[0.01] border-border/70 dark:border-white/[0.04] opacity-60"
                             }`}>
                                 <div className="flex items-start gap-3 min-w-0">
                                     <div className="h-8 w-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                                        <Tv className="h-4 w-4 text-cyan-400" />
+                                        <Tv className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                                     </div>
                                     <div className="space-y-1 min-w-0">
                                         <Label htmlFor="notif-media-ready" className="text-xs font-semibold text-foreground cursor-pointer block truncate">
@@ -2043,12 +2043,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             {/* 3. Subscription & Renewal Reminders */}
                             <div className={`p-3.5 sm:p-4 rounded-xl border transition-all flex items-start justify-between gap-3 ${
                                 notifPrefs.emailSubscriptionReminders
-                                    ? "bg-white/[0.03] border-white/[0.08] hover:border-amber-500/30"
-                                    : "bg-white/[0.01] border-white/[0.04] opacity-60"
+                                    ? "bg-muted/50 dark:bg-white/[0.03] border-border/70 dark:border-white/[0.08] hover:border-amber-500/30"
+                                    : "bg-muted/50 dark:bg-white/[0.01] border-border/70 dark:border-white/[0.04] opacity-60"
                             }`}>
                                 <div className="flex items-start gap-3 min-w-0">
                                     <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                                        <Calendar className="h-4 w-4 text-amber-400" />
+                                        <Calendar className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                     </div>
                                     <div className="space-y-1 min-w-0">
                                         <Label htmlFor="notif-sub-reminders" className="text-xs font-semibold text-foreground cursor-pointer block truncate">
@@ -2070,12 +2070,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             {/* 4. Server Announcements & Maintenance */}
                             <div className={`p-3.5 sm:p-4 rounded-xl border transition-all flex items-start justify-between gap-3 ${
                                 notifPrefs.emailAnnouncements
-                                    ? "bg-white/[0.03] border-white/[0.08] hover:border-amber-500/30"
-                                    : "bg-white/[0.01] border-white/[0.04] opacity-60"
+                                    ? "bg-muted/50 dark:bg-white/[0.03] border-border/70 dark:border-white/[0.08] hover:border-amber-500/30"
+                                    : "bg-muted/50 dark:bg-white/[0.01] border-border/70 dark:border-white/[0.04] opacity-60"
                             }`}>
                                 <div className="flex items-start gap-3 min-w-0">
                                     <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                                        <Bell className="h-4 w-4 text-amber-400" />
+                                        <Bell className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                     </div>
                                     <div className="space-y-1 min-w-0">
                                         <Label htmlFor="notif-announcements" className="text-xs font-semibold text-foreground cursor-pointer block truncate">
@@ -2097,12 +2097,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             {/* 5. Support Ticket Responses */}
                             <div className={`p-3.5 sm:p-4 rounded-xl border transition-all flex items-start justify-between gap-3 ${
                                 notifPrefs.emailSupportTickets
-                                    ? "bg-white/[0.03] border-white/[0.08] hover:border-rose-500/30"
-                                    : "bg-white/[0.01] border-white/[0.04] opacity-60"
+                                    ? "bg-muted/50 dark:bg-white/[0.03] border-border/70 dark:border-white/[0.08] hover:border-rose-500/30"
+                                    : "bg-muted/50 dark:bg-white/[0.01] border-border/70 dark:border-white/[0.04] opacity-60"
                             }`}>
                                 <div className="flex items-start gap-3 min-w-0">
                                     <div className="h-8 w-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                                        <MessageSquare className="h-4 w-4 text-rose-400" />
+                                        <MessageSquare className="h-4 w-4 text-rose-700 dark:text-rose-400" />
                                     </div>
                                     <div className="space-y-1 min-w-0">
                                         <Label htmlFor="notif-support-tickets" className="text-xs font-semibold text-foreground cursor-pointer block truncate">
@@ -2124,12 +2124,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             {/* 6. Referral Rewards & Credits */}
                             <div className={`p-3.5 sm:p-4 rounded-xl border transition-all flex items-start justify-between gap-3 ${
                                 notifPrefs.emailReferralRewards
-                                    ? "bg-white/[0.03] border-white/[0.08] hover:border-blue-500/30"
-                                    : "bg-white/[0.01] border-white/[0.04] opacity-60"
+                                    ? "bg-muted/50 dark:bg-white/[0.03] border-border/70 dark:border-white/[0.08] hover:border-blue-500/30"
+                                    : "bg-muted/50 dark:bg-white/[0.01] border-border/70 dark:border-white/[0.04] opacity-60"
                             }`}>
                                 <div className="flex items-start gap-3 min-w-0">
                                     <div className="h-8 w-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                                        <Sparkles className="h-4 w-4 text-blue-400" />
+                                        <Sparkles className="h-4 w-4 text-blue-700 dark:text-blue-400" />
                                     </div>
                                     <div className="space-y-1 min-w-0">
                                         <Label htmlFor="notif-referral-rewards" className="text-xs font-semibold text-foreground cursor-pointer block truncate">
@@ -2170,20 +2170,20 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             <LinkedEmailsManager />
 
             {/* DISCORD COMMUNITY & ROLE SYNC CARD */}
-            <Card id="discord" className="border-sky-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+            <Card id="discord" className="border-sky-500/30 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Gamepad2 className="h-5 w-5 text-sky-400" /> Discord Community & Role Sync
+                                <Gamepad2 className="h-5 w-5 text-sky-700 dark:text-sky-400" /> Discord Community & Role Sync
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Link your Discord account to gain automated access to community channels, live announcements, and support.
                             </CardDescription>
                         </div>
                         {user?.discordId ? (
-                            <Badge variant="outline" className="bg-sky-500/15 text-sky-300 border-sky-500/35 text-xs font-semibold gap-1.5 w-fit">
-                                <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Linked
+                            <Badge variant="outline" className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/35 text-xs font-semibold gap-1.5 w-fit">
+                                <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> Linked
                             </Badge>
                         ) : (
                             <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border text-xs w-fit">
@@ -2194,20 +2194,20 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {discordSuccessMsg && (
-                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{discordSuccessMsg}</span>
                         </div>
                     )}
                     {discordErrMsg && (
-                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <XCircle className="h-4 w-4 shrink-0" />
                             <span>{discordErrMsg}</span>
                         </div>
                     )}
 
                     {user?.discordId ? (
-                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                        <div className="p-4 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-4">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div className="flex items-center gap-3">
                                     {user.discordAvatar ? (
@@ -2217,7 +2217,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                             className="w-10 h-10 rounded-full border border-sky-500/30 object-cover shrink-0" 
                                         />
                                     ) : (
-                                        <div className="w-10 h-10 rounded-full bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-300 shrink-0 font-bold">
+                                        <div className="w-10 h-10 rounded-full bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-800 dark:text-sky-300 shrink-0 font-bold">
                                             {(user.discordUsername || "D").charAt(0).toUpperCase()}
                                         </div>
                                     )}
@@ -2230,15 +2230,15 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         </p>
                                         <div className="flex items-center gap-2 pt-0.5">
                                             <span className="text-[11px] text-muted-foreground">Server Role:</span>
-                                            <Badge variant="outline" className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border-emerald-500/30 inline-flex items-center gap-1">
+                                            <Badge variant="outline" className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 inline-flex items-center gap-1">
                                                 {user?.role === "ADMIN" ? (
-                                                    <><Crown className="h-3 w-3 text-amber-400 shrink-0" /><span>Admin</span></>
+                                                    <><Crown className="h-3 w-3 text-amber-700 dark:text-amber-400 shrink-0" /><span>Admin</span></>
                                                 ) : isTrial ? (
-                                                    <><Timer className="h-3 w-3 text-sky-400 shrink-0" /><span>Trial Pass</span></>
+                                                    <><Timer className="h-3 w-3 text-sky-700 dark:text-sky-400 shrink-0" /><span>Trial Pass</span></>
                                                 ) : currentAccountType === "KID" ? (
-                                                    <><Baby className="h-3 w-3 text-emerald-400 shrink-0" /><span>Kids Profile</span></>
+                                                    <><Baby className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" /><span>Kids Profile</span></>
                                                 ) : (
-                                                    <><ShieldCheck className="h-3 w-3 text-emerald-400 shrink-0" /><span>Member</span></>
+                                                    <><ShieldCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" /><span>Member</span></>
                                                 )}
                                             </Badge>
                                         </div>
@@ -2250,7 +2250,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         href={discordInviteUrl || paymentConfig?.discordInviteUrl || "https://discord.gg/KNvUSmPtD3"}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-xs h-8 px-2.5 inline-flex items-center rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 gap-1.5 cursor-pointer font-semibold shrink-0"
+                                        className="text-xs h-8 px-2.5 inline-flex items-center rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/30 gap-1.5 cursor-pointer font-semibold shrink-0"
                                     >
                                         <Gamepad2 className="h-3.5 w-3.5" />
                                         <span>Open Discord</span>
@@ -2262,7 +2262,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         variant="outline"
                                         disabled={discordLoading}
                                         onClick={handleSyncMyDiscordRole}
-                                        className="text-xs h-8 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border-sky-500/30 gap-1.5 cursor-pointer"
+                                        className="text-xs h-8 bg-sky-500/10 hover:bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/30 gap-1.5 cursor-pointer"
                                     >
                                         {discordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                                         Sync Role
@@ -2273,7 +2273,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         variant="outline"
                                         disabled={discordLoading}
                                         onClick={handleUnlinkDiscord}
-                                        className="text-xs h-8 bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 gap-1.5 cursor-pointer"
+                                        className="text-xs h-8 bg-red-500/10 hover:bg-red-500/20 text-red-800 dark:text-red-300 border-red-500/30 gap-1.5 cursor-pointer"
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
                                         Unlink
@@ -2286,7 +2286,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     Linked Discord ID: <code className="text-muted-foreground/80 font-mono text-[10px]">{user.discordId}</code>
                                     {user.discordLinkedAt && ` • Linked on ${safeFormatDate(user.discordLinkedAt, "MMM d, yyyy")}`}
                                 </span>
-                                <span className="text-emerald-400 flex items-center gap-1 text-[10px]">
+                                <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1 text-[10px]">
                                     <CheckCheck className="h-3 w-3" /> Automatic role sync active
                                 </span>
                             </div>
@@ -2294,10 +2294,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     ) : (
                         <div className="space-y-3">
                             {/* STEP 1: JOIN DISCORD INVITE CTA */}
-                            <div className="p-3.5 rounded-xl bg-gradient-to-r from-slate-900/95 via-sky-950/20 to-slate-900/90 border border-sky-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                            <div className="p-3.5 rounded-xl bg-gradient-to-r from-muted/60 dark:from-slate-900/95 via-sky-500/10 dark:via-sky-950/20 to-muted/60 dark:to-slate-900/90 border border-sky-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
                                 <div className="space-y-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <Gamepad2 className="h-4 w-4 text-sky-400 shrink-0" />
+                                        <Gamepad2 className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                                         <span className="font-bold text-xs text-foreground">Step 1: Join the Discord Server</span>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -2317,11 +2317,11 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </div>
 
                             {/* STEP 2: LINK DISCORD HANDLE */}
-                            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+                            <div className="p-3.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-3">
                                 <div>
                                     <span className="font-bold text-xs text-foreground block">Step 2: Link Your Discord Handle</span>
                                     <p className="text-xs text-muted-foreground leading-relaxed pt-0.5">
-                                        Enter your Discord username below. Linking your account automatically elevates you to <strong className="text-emerald-400">Member</strong> to unlock all community channels, movie &amp; TV chats, and 4K guides!
+                                        Enter your Discord username below. Linking your account automatically elevates you to <strong className="text-emerald-700 dark:text-emerald-400">Member</strong> to unlock all community channels, movie &amp; TV chats, and 4K guides!
                                     </p>
                                 </div>
                                 <form onSubmit={handleLinkDiscord} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -2351,26 +2351,26 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* CONTENT SAFETY & FAMILY PROFILE CARD */}
-            <Card id="safety" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+            <Card id="safety" className="border-amber-500/30 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Shield className="h-5 w-5 text-amber-400" /> Content Safety & Family Profile
+                                <Shield className="h-5 w-5 text-amber-700 dark:text-amber-400" /> Content Safety & Family Profile
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Configure parental rating ceilings, genre exclusions, and child-safe viewing filters.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/40 text-xs w-fit flex items-center gap-1 font-semibold">
-                            <Sparkles className="h-3 w-3 text-amber-300" /> Coming Soon
+                        <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs w-fit flex items-center gap-1 font-semibold">
+                            <Sparkles className="h-3 w-3 text-amber-800 dark:text-amber-300" /> Coming Soon
                         </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="p-4 rounded-lg bg-amber-950/20 border border-amber-500/30 space-y-3">
+                    <div className="p-4 rounded-lg bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/30 space-y-3">
                         <div className="flex items-center gap-2">
-                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-semibold">
+                            <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-[11px] font-semibold">
                                 Tagging Engine in Beta
                             </Badge>
                             <span className="text-xs text-muted-foreground">Metadata Calibration</span>
@@ -2379,7 +2379,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             Content safety controls, rating ceilings, and explicit genre exclusion filters (IMDb &amp; TMDb content advisories) are currently coming soon while our automated library metadata tagging engine is in beta. Once tagging verification is finalized across media servers, you will be able to customize parental ceilings and genre exclusions per profile directly from this panel.
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                            <div className="p-3 rounded-lg bg-muted/60 dark:bg-black/30 border border-border/70 dark:border-white/5 space-y-1">
                                 <div className="text-xs font-bold text-foreground">
                                     Rating Ceilings
                                 </div>
@@ -2387,7 +2387,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     Enforce TV-Y, PG, PG-13, or R rating caps that hide titles exceeding your chosen ceiling.
                                 </p>
                             </div>
-                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                            <div className="p-3 rounded-lg bg-muted/60 dark:bg-black/30 border border-border/70 dark:border-white/5 space-y-1">
                                 <div className="text-xs font-bold text-foreground">
                                     Explicit Filtering
                                 </div>
@@ -2395,7 +2395,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     One-click exclusion filters for severe nudity, extreme gore, and horror genres.
                                 </p>
                             </div>
-                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                            <div className="p-3 rounded-lg bg-muted/60 dark:bg-black/30 border border-border/70 dark:border-white/5 space-y-1">
                                 <div className="text-xs font-bold text-foreground">
                                     Per-Profile Safety
                                 </div>
@@ -2409,14 +2409,14 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* SEND-TO-KINDLE DELIVERY CARD */}
-            <Card id="kindle" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isKindleDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-amber-500/30 shadow-sm"}`}>
+            <Card id="kindle" className={`transition-all duration-300 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isKindleDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-amber-500/30 shadow-sm"}`}>
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <BookOpen className="h-5 w-5 text-amber-400" /> Send-to-Kindle Delivery
+                                <BookOpen className="h-5 w-5 text-amber-700 dark:text-amber-400" /> Send-to-Kindle Delivery
                                 {isKindleDirty && (
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
                                         ● Unsaved Changes
                                     </Badge>
                                 )}
@@ -2426,11 +2426,11 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </CardDescription>
                         </div>
                         {user?.kindleEmail ? (
-                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-xs font-semibold w-fit flex items-center gap-1">
                                 <CheckCircle2 className="h-3.5 w-3.5" /> Configured
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
                                 <AlertCircle className="h-3.5 w-3.5" /> Not Configured
                             </Badge>
                         )}
@@ -2439,20 +2439,20 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 <CardContent className="space-y-4">
                     <form onSubmit={handleUpdateKindleEmail} className="space-y-4" autoComplete="off">
                         {kindleMsg && (
-                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                 <span>{kindleMsg}</span>
                             </div>
                         )}
                         {kindleErr && (
-                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                                 <XCircle className="h-4 w-4 shrink-0" />
                                 <span>{kindleErr}</span>
                             </div>
                         )}
 
                         {/* BYPASS KINDLE OPTION */}
-                        <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 space-y-2">
+                        <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="bypassKindleToggle" className="text-xs font-semibold cursor-pointer">
                                     <span>I don't use a Kindle (Direct Download & In-Browser Reader)</span>
@@ -2478,11 +2478,11 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     </Label>
                                     {cleanKindleInput && (
                                         isKindleDomain ? (
-                                            <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
+                                            <span className="text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-medium">
                                                 <CheckCircle2 className="h-3 w-3" /> Kindle domain recognized
                                             </span>
                                         ) : hasAtSymbol ? (
-                                            <span className="text-[11px] text-amber-400 flex items-center gap-1 font-medium">
+                                            <span className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1 font-medium">
                                                 <AlertCircle className="h-3 w-3" /> Kindle addresses typically end with @kindle.com
                                             </span>
                                         ) : null
@@ -2509,8 +2509,8 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 </p>
                             </div>
                         ) : (
-                            <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                            <div className="p-3 rounded-lg bg-emerald-500/10 dark:bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
                                 <span>In-browser reading & direct download selected. Click Save to unlock full Book & Audiobook Library access.</span>
                             </div>
                         )}
@@ -2537,7 +2537,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     variant="outline"
                                     disabled={kindleSaving}
                                     onClick={handleClearKindleEmail}
-                                    className="w-full sm:w-auto text-xs h-9 text-muted-foreground hover:text-red-400 hover:border-red-500/40 gap-1.5 cursor-pointer"
+                                    className="w-full sm:w-auto text-xs h-9 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 hover:border-red-500/40 gap-1.5 cursor-pointer"
                                 >
                                     <Trash2 className="h-3.5 w-3.5" /> Remove Address
                                 </Button>
@@ -2549,13 +2549,13 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2.5 text-xs">
                         <div className="flex items-center justify-between gap-2">
                             <span className="font-bold text-foreground flex items-center gap-1.5 text-xs">
-                                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Amazon Approved Sender Whitelist
+                                <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Amazon Approved Sender Whitelist
                             </span>
                             <a
                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 underline underline-offset-2 shrink-0 font-medium"
+                                className="text-[11px] text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 flex items-center gap-1 underline underline-offset-2 shrink-0 font-medium"
                             >
                                 Amazon Settings <ExternalLink className="h-3 w-3" />
                             </a>
@@ -2564,9 +2564,9 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             Amazon requires that you authorize our outbound server email address in your Amazon account. Add the address below to your <strong className="text-foreground">Approved Personal Document E-mail List</strong>:
                         </p>
                         
-                        <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]">
-                            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                            <span><strong>Sender Email Update:</strong> Deliveries are dispatched from <code className="font-mono font-bold text-amber-200">{paymentConfig?.kindleSenderEmail || "kindle@domshomelab.com"}</code>. If you configured Amazon previously, ensure this exact address is authorized.</span>
+                        <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-[11px]">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                            <span><strong>Sender Email Update:</strong> Deliveries are dispatched from <code className="font-mono font-bold text-amber-900 dark:text-amber-200">{paymentConfig?.kindleSenderEmail || "kindle@domshomelab.com"}</code>. If you configured Amazon previously, ensure this exact address is authorized.</span>
                         </div>
                         
                         {paymentConfig?.kindleSenderEmail || paymentConfig?.smtpFrom ? (
@@ -2581,12 +2581,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     onClick={() => handleCopy(paymentConfig.kindleSenderEmail || paymentConfig.smtpFrom, "smtpFrom")}
                                     className="w-full sm:w-auto font-sans text-xs gap-1.5 shrink-0 border-amber-500/30 hover:bg-amber-500/10"
                                 >
-                                    {copiedHandle === "smtpFrom" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-amber-400" />}
+                                    {copiedHandle === "smtpFrom" ? <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                                     {copiedHandle === "smtpFrom" ? "Copied Sender!" : "Copy Sender Email"}
                                 </Button>
                             </div>
                         ) : (
-                            <p className="text-[11px] text-amber-400/90">
+                            <p className="text-[11px] text-amber-700/90 dark:text-amber-400/90">
                                 Note: Inbound server SMTP address will appear once configured by the administrator.
                             </p>
                         )}
@@ -2595,23 +2595,23 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* KIDS & FAMILY LIBRARY ACCESS CARD */}
-            <Card id="kids-library" className="border-emerald-500/30 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden shadow-sm scroll-mt-6">
+            <Card id="kids-library" className="border-emerald-500/30 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md relative overflow-hidden shadow-sm scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Baby className="h-5 w-5 text-emerald-400" /> Kids & Family Library Access
+                                <Baby className="h-5 w-5 text-emerald-700 dark:text-emerald-400" /> Kids & Family Library Access
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Add age-appropriate children's books, picture books, and family reading shelves to your accessible libraries list.
                             </CardDescription>
                         </div>
                         {isTrial ? (
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
                                 <Lock className="h-3.5 w-3.5" /> Full Member Perk
                             </Badge>
                         ) : hasKidsAccess ? (
-                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-xs font-semibold w-fit flex items-center gap-1">
                                 <CheckCircle2 className="h-3.5 w-3.5" /> Added to Access List
                             </Badge>
                         ) : (
@@ -2623,21 +2623,21 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {kidsAccessMsg && (
-                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{kidsAccessMsg}</span>
                         </div>
                     )}
                     {kidsAccessErr && (
-                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <XCircle className="h-4 w-4 shrink-0" />
                             <span>{kidsAccessErr}</span>
                         </div>
                     )}
 
                     {isTrial ? (
-                        <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300 space-y-1">
-                            <p className="font-semibold flex items-center gap-1.5 text-amber-400">
+                        <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                            <p className="font-semibold flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
                                 <Lock className="h-3.5 w-3.5" /> Available with Membership Upgrade
                             </p>
                             <p className="text-[11px] text-muted-foreground">
@@ -2646,7 +2646,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-border/50 gap-4">
+                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 gap-4">
                                 <div className="space-y-0.5">
                                     <Label htmlFor="kidsLibraryToggle" className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5">
                                         <span>Include Kids & Family Bookshelf</span>
@@ -2671,23 +2671,23 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* AUDIOBOOKS PLEX LIBRARY ACCESS CARD */}
-            <Card id="audiobooks-library" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden shadow-sm scroll-mt-6">
+            <Card id="audiobooks-library" className="border-amber-500/30 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md relative overflow-hidden shadow-sm scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Headphones className="h-5 w-5 text-amber-400" /> Audiobooks Plex Library Access
+                                <Headphones className="h-5 w-5 text-amber-700 dark:text-amber-400" /> Audiobooks Plex Library Access
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Opt in to stream narrated audiobooks, series collections, and spoken word media directly in Plex.
                             </CardDescription>
                         </div>
                         {isTrial ? (
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
                                 <Lock className="h-3.5 w-3.5" /> Full Member Perk
                             </Badge>
                         ) : hasAudiobooksAccess ? (
-                            <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
                                 <CheckCircle2 className="h-3.5 w-3.5" /> Plex Library Granted
                             </Badge>
                         ) : (
@@ -2699,21 +2699,21 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {audiobooksAccessMsg && (
-                        <div className="text-xs text-amber-300 bg-amber-950/40 border border-amber-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/40 dark:border-amber-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{audiobooksAccessMsg}</span>
                         </div>
                     )}
                     {audiobooksAccessErr && (
-                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <XCircle className="h-4 w-4 shrink-0" />
                             <span>{audiobooksAccessErr}</span>
                         </div>
                     )}
 
                     {isTrial ? (
-                        <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300 space-y-1">
-                            <p className="font-semibold flex items-center gap-1.5 text-amber-400">
+                        <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                            <p className="font-semibold flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
                                 <Lock className="h-3.5 w-3.5" /> Available with Membership Upgrade
                             </p>
                             <p className="text-[11px] text-muted-foreground">
@@ -2722,11 +2722,11 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-border/50 gap-4">
+                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 gap-4">
                                 <div className="space-y-0.5">
                                     <Label htmlFor="audiobooksLibraryToggle" className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5">
                                         <span>Grant Audiobooks Plex Library Access</span>
-                                        {savingAudiobooksAccess && <Loader2 className="h-3 w-3 animate-spin text-amber-400" />}
+                                        {savingAudiobooksAccess && <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-400" />}
                                     </Label>
                                     <p className="text-[11px] text-muted-foreground">
                                         When enabled, the server automatically updates your Plex account sharing permissions to grant access to the Audiobooks library section. Disabling will remove the Audiobooks library from your Plex dashboard.
@@ -2748,7 +2748,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* SUPER USER ACCESS CARD */}
             {isTrial ? (
-                <Card className="border-border/40 bg-[#121218]/60 backdrop-blur-md opacity-80">
+                <Card className="border-border/40 bg-muted/80 dark:bg-[#121218]/60 backdrop-blur-md opacity-80">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-bold flex items-center gap-2 text-muted-foreground">
                             <Lock className="h-4 w-4" /> Super User Access (Requires Active Membership)
@@ -2764,7 +2764,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             <div className="grid gap-6 md:grid-cols-2">
                 {/* ACCOUNT INFORMATION CARD */}
-                <Card id="details" className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
+                <Card id="details" className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
                     <CardHeader>
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <ShieldCheck className="h-5 w-5 text-primary" /> Account Details
@@ -2815,7 +2815,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     <span className="truncate">{user?.kindleEmail || "Not Configured"}</span>
                                 </div>
                                 {user?.kindleEmail ? (
-                                    <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] shrink-0 font-medium">
+                                    <Badge variant="outline" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px] shrink-0 font-medium">
                                         Active
                                     </Badge>
                                 ) : (
@@ -2830,23 +2830,23 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             <Label className="text-xs text-muted-foreground font-semibold">Account Access Status</Label>
                             <div className="flex items-center gap-2 pt-0.5">
                                 {isTrial ? (
-                                    <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500/40 gap-1.5 text-xs font-bold">
+                                    <Badge variant="outline" className="bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/40 gap-1.5 text-xs font-bold">
                                         <Timer className="h-3.5 w-3.5" /> {paymentConfig?.defaultTrialDays || 14}-Day Free Trial ({daysLeft ?? 0} days remaining)
                                     </Badge>
                                 ) : user?.role === "ADMIN" ? (
-                                    <Badge variant="outline" className="bg-sky-500/20 text-sky-300 border-sky-500/40 gap-1.5 text-xs font-bold">
-                                        <ShieldCheck className="h-3.5 w-3.5 text-sky-400" /> Platform Administrator (Permanent Access)
+                                    <Badge variant="outline" className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40 gap-1.5 text-xs font-bold">
+                                        <ShieldCheck className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Platform Administrator (Permanent Access)
                                     </Badge>
                                 ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
-                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
+                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
                                         <CheckCircle2 className="h-3.5 w-3.5" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} (Expires {safeFormatDate(user.subscriptionEndsAt, "MMM d, yyyy", "Active")})
                                     </Badge>
                                 ) : user?.status === "APPROVED" ? (
-                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
+                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
                                         <CheckCircle2 className="h-3.5 w-3.5" /> Permanent Access
                                     </Badge>
                                 ) : (
-                                    <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/30 gap-1.5 text-xs font-semibold">
+                                    <Badge variant="outline" className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1.5 text-xs font-semibold">
                                         {user?.status || "Pending"}
                                     </Badge>
                                 )}
@@ -2856,7 +2856,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 </Card>
 
                 {/* CHANGE PASSWORD CARD */}
-                <Card id="password" className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
+                <Card id="password" className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
                     <CardHeader>
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <KeyRound className="h-5 w-5 text-primary" /> Change Password
@@ -2866,13 +2866,13 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     <CardContent>
                         <form onSubmit={handleChangePassword} className="space-y-4" autoComplete="off">
                             {passMsg && (
-                                <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                                     <span>{passMsg}</span>
                                 </div>
                             )}
                             {passErr && (
-                                <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <XCircle className="h-4 w-4 shrink-0" />
                                     <span>{passErr}</span>
                                 </div>
@@ -2974,10 +2974,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* MEMBERSHIP TIER UPGRADE REQUEST MODAL */}
             <Dialog open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-950 border border-border dark:border-slate-800 shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                            <Sparkles className="h-5 w-5 text-amber-400" /> Request Feature or Add-On
+                            <Sparkles className="h-5 w-5 text-amber-700 dark:text-amber-400" /> Request Feature or Add-On
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
                             Submit a request to the server administrator to enable this feature or add-on for your account.
@@ -2986,13 +2986,13 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
                     <form onSubmit={handleSubmitUpgrade} className="space-y-4 py-2 flex-1 overflow-y-auto min-h-0">
                         {upgradeSuccessMsg && (
-                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                 <span>{upgradeSuccessMsg}</span>
                             </div>
                         )}
                         {upgradeErrMsg && (
-                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                            <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                 <XCircle className="h-4 w-4 shrink-0" />
                                 <span>{upgradeErrMsg}</span>
                             </div>
@@ -3044,10 +3044,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* SUB-ACCOUNT ADD / EDIT MODAL */}
             <Dialog open={subModalOpen} onOpenChange={setSubModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-950 border border-border dark:border-slate-800 shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                            <Users className="h-5 w-5 text-sky-400" />
+                            <Users className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                             {subEditingId ? "Edit Household Sub-Account" : "Add Household Sub-Account"}
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
@@ -3057,13 +3057,13 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
                     <form onSubmit={handleSaveSubAccount} className="space-y-4 py-2 flex-1 overflow-y-auto min-h-0">
                         {subModalMsg && (
-                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                 <span>{subModalMsg}</span>
                             </div>
                         )}
                         {subModalErr && (
-                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                            <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                 <XCircle className="h-4 w-4 shrink-0" />
                                 <span>{subModalErr}</span>
                             </div>
@@ -3078,13 +3078,13 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 <SelectContent>
                                     <SelectItem value="LIVING_ROOM">
                                         <span className="inline-flex items-center gap-1.5">
-                                            <Tv className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                            <Tv className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                                             <span>Living Room TV (Severe Nudity Excluded)</span>
                                         </span>
                                     </SelectItem>
                                     <SelectItem value="KID">
                                         <span className="inline-flex items-center gap-1.5">
-                                            <Baby className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                            <Baby className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                             <span>Kids Account (Kids-Only Server &amp; PG Ceiling)</span>
                                         </span>
                                     </SelectItem>
@@ -3119,7 +3119,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
                         <div className="p-3 rounded-lg bg-sky-500/10 border border-sky-500/20 text-[11px] text-muted-foreground space-y-1">
                             <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-                                {subType === "KID" ? <Baby className="h-3.5 w-3.5 text-sky-400 shrink-0" /> : <Tv className="h-3.5 w-3.5 text-sky-400 shrink-0" />}
+                                {subType === "KID" ? <Baby className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" /> : <Tv className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />}
                                 <span>{subType === "KID" ? "Kids Protection Policy" : "Living Room Policy"}</span>
                             </span>
                             <p>
@@ -3161,17 +3161,17 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     setDeleteSubErr("");
                 }
             }}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-950 border border-border dark:border-slate-800 shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
-                            <AlertTriangle className="h-5 w-5 text-red-400" /> Remove Household Sub-Account?
+                            <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400" /> Remove Household Sub-Account?
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
                             Are you sure you want to remove this sub-account? This will immediately revoke their Plex server access and delete the sub-profile.
                         </DialogDescription>
                     </DialogHeader>
                     {deleteSubErr && (
-                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <XCircle className="h-4 w-4 shrink-0" />
                             <span>{deleteSubErr}</span>
                         </div>
@@ -3216,7 +3216,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* UPDATE PRIMARY EMAIL MODAL */}
             <Dialog open={showEditEmailModal} onOpenChange={setShowEditEmailModal}>
-                <DialogContent className="sm:max-w-[425px] bg-[#121218]/95 border-border/60">
+                <DialogContent className="sm:max-w-[425px] bg-popover/95 dark:bg-[#121218]/95 border-border/60">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-bold">
                             <Mail className="h-5 w-5 text-primary" />
@@ -3228,13 +3228,13 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     </DialogHeader>
                     <div className="space-y-4 py-2">
                         {editEmailMsg && (
-                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2">
                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                 <span>{editEmailMsg}</span>
                             </div>
                         )}
                         {editEmailErr && (
-                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                            <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-2.5 rounded-lg flex items-center gap-2">
                                 <XCircle className="h-4 w-4 shrink-0" />
                                 <span>{editEmailErr}</span>
                             </div>

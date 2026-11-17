@@ -192,8 +192,8 @@ export function ScriptTerminalModal({
         // The top abort notice line
         if (line.includes("Note that closing this window will abort the execution of this script")) {
             return (
-                <div key={index} className="text-amber-300 font-semibold bg-amber-950/40 border border-amber-500/30 px-2 py-1 rounded my-1 flex items-center gap-1.5 select-none">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <div key={index} className="text-amber-800 dark:text-amber-300 font-semibold bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/30 px-2 py-1 rounded my-1 flex items-center gap-1.5 select-none">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
                     <span>{line}</span>
                 </div>
             );
@@ -218,7 +218,7 @@ export function ScriptTerminalModal({
             const [, timestamp, rest] = match;
             return (
                 <div key={index} className={`font-mono leading-relaxed whitespace-pre-wrap ${textColor}`}>
-                    <span className="text-sky-400/70 select-none mr-2">{timestamp}</span>
+                    <span className="text-sky-700/70 dark:text-sky-400/70 select-none mr-2">{timestamp}</span>
                     <span>{rest}</span>
                 </div>
             );
@@ -241,21 +241,21 @@ export function ScriptTerminalModal({
                 onClose();
             }
         }}>
-            <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-[#0b0c10] border-zinc-800 p-0 overflow-hidden shadow-2xl">
+            <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-popover dark:bg-[#0b0c10] border-border dark:border-zinc-800 p-0 overflow-hidden shadow-2xl">
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-zinc-800/80 bg-zinc-950/70">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-border dark:border-zinc-800/80 bg-muted/70 dark:bg-zinc-950/70">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+                        <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 shrink-0">
                             <Terminal className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
-                            <DialogTitle className="text-base font-semibold text-zinc-100 flex items-center gap-2 flex-wrap">
+                            <DialogTitle className="text-base font-semibold text-foreground dark:text-zinc-100 flex items-center gap-2 flex-wrap">
                                 <span>{script?.name || "Terminal Output"}</span>
-                                <Badge variant="outline" className="text-[10px] font-mono bg-zinc-900 border-zinc-700 text-zinc-300">
+                                <Badge variant="outline" className="text-[10px] font-mono bg-card/95 dark:bg-zinc-900 border-border dark:border-zinc-700 text-slate-700 dark:text-zinc-300">
                                     {script?.filename}
                                 </Badge>
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-zinc-400 mt-0.5">
+                            <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">
                                 Live Interactive Script Execution
                             </DialogDescription>
                         </div>
@@ -263,25 +263,25 @@ export function ScriptTerminalModal({
 
                     <div className="flex items-center gap-2 self-start sm:self-auto">
                         {status === "RUNNING" && (
-                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 animate-pulse text-xs">
+                            <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 flex items-center gap-1.5 animate-pulse text-xs">
                                 <Loader2 className="h-3 w-3 animate-spin" />
                                 <span>RUNNING ({formatTimer(elapsedSeconds)})</span>
                             </Badge>
                         )}
                         {status === "SUCCESS" && (
-                            <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 text-xs">
+                            <Badge className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 text-xs">
                                 <CheckCircle2 className="h-3 w-3" />
                                 <span>COMPLETED (Exit 0 • {formatTimer(elapsedSeconds)})</span>
                             </Badge>
                         )}
                         {status === "FAILED" && (
-                            <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1.5 text-xs">
+                            <Badge className="bg-rose-500/20 text-rose-800 dark:text-rose-300 border border-rose-500/40 flex items-center gap-1.5 text-xs">
                                 <XCircle className="h-3 w-3" />
                                 <span>FAILED (Exit {exitCode ?? 1})</span>
                             </Badge>
                         )}
                         {status === "ABORTED" && (
-                            <Badge className="bg-orange-500/20 text-orange-300 border border-orange-500/40 flex items-center gap-1.5 text-xs">
+                            <Badge className="bg-orange-500/20 text-orange-800 dark:text-orange-300 border border-orange-500/40 flex items-center gap-1.5 text-xs">
                                 <Square className="h-3 w-3" />
                                 <span>ABORTED</span>
                             </Badge>
@@ -290,9 +290,9 @@ export function ScriptTerminalModal({
                 </div>
 
                 {/* Prominent Unraid-Style Notice Banner */}
-                <div className="px-4 sm:px-5 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-200">
+                <div className="px-4 sm:px-5 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900 dark:text-amber-200">
                     <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                        <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                         <span>Note that closing this window will abort the execution of this script</span>
                     </div>
                     {status === "RUNNING" && (
@@ -309,9 +309,9 @@ export function ScriptTerminalModal({
                 </div>
 
                 {/* Monospace Terminal Body */}
-                <div className="flex-1 p-4 bg-[#07080b] font-mono text-xs overflow-y-auto max-h-[56vh] min-h-[350px] space-y-1 select-text scrollbar-thin scrollbar-thumb-zinc-800">
+                <div className="flex-1 p-4 bg-card dark:bg-[#07080b] font-mono text-xs overflow-y-auto max-h-[56vh] min-h-[350px] space-y-1 select-text scrollbar-thin scrollbar-thumb-zinc-800">
                     {logs.length === 0 ? (
-                        <div className="text-zinc-400 flex items-center gap-2 py-4">
+                        <div className="text-slate-600 dark:text-zinc-400 flex items-center gap-2 py-4">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             <span>Initializing process environment...</span>
                         </div>
@@ -322,13 +322,13 @@ export function ScriptTerminalModal({
                 </div>
 
                 {/* Footer Controls */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-t border-zinc-800 bg-zinc-950/80">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-t border-border dark:border-zinc-800 bg-muted/80 dark:bg-zinc-950/80">
                     <div className="flex items-center justify-between sm:justify-start gap-2">
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setAutoScroll(!autoScroll)}
-                            className={`h-8 text-xs ${autoScroll ? "text-emerald-400 bg-emerald-500/10" : "text-zinc-400"}`}
+                            className={`h-8 text-xs ${autoScroll ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10" : "text-slate-600 dark:text-zinc-400"}`}
                         >
                             <ArrowDown className="h-3.5 w-3.5 mr-1" />
                             Auto-scroll: {autoScroll ? "ON" : "OFF"}
@@ -337,7 +337,7 @@ export function ScriptTerminalModal({
                             variant="ghost"
                             size="sm"
                             onClick={handleClear}
-                            className="h-8 text-xs text-zinc-400 hover:text-zinc-200"
+                            className="h-8 text-xs text-slate-600 dark:text-zinc-400 hover:text-foreground dark:hover:text-zinc-200"
                         >
                             <Trash2 className="h-3.5 w-3.5 mr-1" />
                             Clear
@@ -349,17 +349,17 @@ export function ScriptTerminalModal({
                             variant="outline"
                             size="sm"
                             onClick={handleCopy}
-                            className="h-8 text-xs border-zinc-700 hover:bg-zinc-800 text-zinc-200 flex-1 sm:flex-initial"
+                            className="h-8 text-xs border-border dark:border-zinc-700 hover:bg-accent dark:hover:bg-zinc-800 text-foreground dark:text-zinc-200 flex-1 sm:flex-initial"
                             disabled={logs.length === 0}
                         >
-                            {copied ? <Check className="h-3.5 w-3.5 mr-1 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
+                            {copied ? <Check className="h-3.5 w-3.5 mr-1 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
                             <span>{copied ? "Copied" : "Copy"}</span>
                         </Button>
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={handleDownload}
-                            className="h-8 text-xs border-zinc-700 hover:bg-zinc-800 text-zinc-200 flex-1 sm:flex-initial"
+                            className="h-8 text-xs border-border dark:border-zinc-700 hover:bg-accent dark:hover:bg-zinc-800 text-foreground dark:text-zinc-200 flex-1 sm:flex-initial"
                             disabled={logs.length === 0}
                         >
                             <Download className="h-3.5 w-3.5 mr-1" />
@@ -372,7 +372,7 @@ export function ScriptTerminalModal({
                                 if (status === "RUNNING") handleAbort();
                                 onClose();
                             }}
-                            className="h-8 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-100 flex-1 sm:flex-initial"
+                            className="h-8 text-xs bg-muted dark:bg-zinc-800 hover:bg-zinc-700 text-foreground dark:text-zinc-100 flex-1 sm:flex-initial"
                         >
                             Close
                         </Button>

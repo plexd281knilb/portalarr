@@ -377,7 +377,7 @@ export default function AdminFleetMonitoringPage() {
         <div className="p-3 sm:p-6 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] mx-auto w-full space-y-6 min-w-0">
             {loadError && services.length === 0 && (
                 <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs text-rose-300">
+                    <div className="flex items-center gap-2 text-xs text-rose-800 dark:text-rose-300">
                         <AlertTriangle className="h-4 w-4 shrink-0" />
                         <span>{loadError}</span>
                     </div>
@@ -390,20 +390,20 @@ export default function AdminFleetMonitoringPage() {
             {toastMessage && (
                 <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-xl border text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200 ${
                     toastMessage.type === "success" 
-                        ? "bg-emerald-950/90 text-emerald-300 border-emerald-500/40" 
-                        : "bg-rose-950/90 text-rose-300 border-rose-500/40"
+                        ? "bg-emerald-500/15 dark:bg-emerald-950/90 text-emerald-800 dark:text-emerald-300 border-emerald-500/40" 
+                        : "bg-rose-500/15 dark:bg-rose-950/90 text-rose-800 dark:text-rose-300 border-rose-500/40"
                 }`}>
-                    {toastMessage.type === "success" ? <Check className="h-4 w-4 text-emerald-400" /> : <X className="h-4 w-4 text-rose-400" />}
+                    {toastMessage.type === "success" ? <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /> : <X className="h-4 w-4 text-rose-700 dark:text-rose-400" />}
                     <span>{toastMessage.text}</span>
                 </div>
             )}
 
             {/* DASHBOARD HERO HEADER */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-white/[0.08]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-border/70 dark:border-white/[0.08]">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
                         <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
-                            <Layers className="h-6 w-6 text-emerald-400 animate-pulse" />
+                            <Layers className="h-6 w-6 text-emerald-700 dark:text-emerald-400 animate-pulse" />
                         </div>
                         <div>
                             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent flex items-center gap-2.5">
@@ -418,7 +418,7 @@ export default function AdminFleetMonitoringPage() {
 
                 <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0">
                     <Link href="/settings?tab=monitoring">
-                        <Button variant="outline" size="sm" className="h-9 px-3 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04]">
+                        <Button variant="outline" size="sm" className="h-9 px-3 text-xs gap-1.5 border-border/60 hover:bg-accent dark:hover:bg-white/[0.04]">
                             <Settings className="h-4 w-4 text-muted-foreground" />
                             <span>Monitoring Settings</span>
                         </Button>
@@ -439,13 +439,13 @@ export default function AdminFleetMonitoringPage() {
             {/* TOP STATS SCORECARD ROW */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {/* CARD 1: FLEET 24H UPTIME */}
-                <div className="p-3.5 rounded-2xl bg-[#121218]/90 border border-white/[0.08] backdrop-blur-md shadow-md space-y-1">
+                <div className="p-3.5 rounded-2xl bg-card/95 dark:bg-[#121218]/90 border border-border/70 dark:border-white/[0.08] backdrop-blur-md shadow-md space-y-1">
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fleet 24h Uptime</span>
-                        <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                        <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                     </div>
                     <div className="flex items-baseline gap-2">
-                        <span className={`text-2xl font-black ${overall24h >= 99 ? "text-emerald-400" : overall24h >= 95 ? "text-amber-400" : "text-rose-400"}`}>
+                        <span className={`text-2xl font-black ${overall24h >= 99 ? "text-emerald-700 dark:text-emerald-400" : overall24h >= 95 ? "text-amber-700 dark:text-amber-400" : "text-rose-700 dark:text-rose-400"}`}>
                             {overall24h}%
                         </span>
                         <span className="text-[10px] text-muted-foreground">7d: {overall7d}%</span>
@@ -453,34 +453,34 @@ export default function AdminFleetMonitoringPage() {
                 </div>
 
                 {/* CARD 2: DOCKER FLEET RUNNING */}
-                <div className="p-3.5 rounded-2xl bg-[#121218]/90 border border-white/[0.08] backdrop-blur-md shadow-md space-y-1">
+                <div className="p-3.5 rounded-2xl bg-card/95 dark:bg-[#121218]/90 border border-border/70 dark:border-white/[0.08] backdrop-blur-md shadow-md space-y-1">
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Docker Containers</span>
-                        <Cpu className="h-4 w-4 text-sky-400" />
+                        <Cpu className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                     </div>
                     <div className="flex items-baseline gap-2">
                         <span className="text-2xl font-black text-foreground">
                             {fleetSummary.runningCount}
                             <span className="text-xs font-semibold text-muted-foreground">/{fleetSummary.totalContainers}</span>
                         </span>
-                        <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                        <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                             {fleetSummary.stoppedCount} stopped
                         </Badge>
                     </div>
                 </div>
 
                 {/* CARD 3: MONITORED SYSTEMS */}
-                <div className="p-3.5 rounded-2xl bg-[#121218]/90 border border-white/[0.08] backdrop-blur-md shadow-md space-y-1">
+                <div className="p-3.5 rounded-2xl bg-card/95 dark:bg-[#121218]/90 border border-border/70 dark:border-white/[0.08] backdrop-blur-md shadow-md space-y-1">
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Systems & Services</span>
-                        <Server className="h-4 w-4 text-sky-400" />
+                        <Server className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                     </div>
                     <div className="flex items-baseline gap-2">
                         <span className="text-2xl font-black text-foreground tabular-nums">
                             {services.filter(s => s.status === "ONLINE").length}
                             <span className="text-xs font-semibold text-muted-foreground">/{services.length}</span>
                         </span>
-                        <Badge variant="outline" className="text-[9px] bg-sky-500/10 text-sky-400 border-sky-500/30 tabular-nums">
+                        <Badge variant="outline" className="text-[9px] bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30 tabular-nums">
                             {services.filter(s => s.status === "OFFLINE").length} down
                         </Badge>
                     </div>
@@ -489,15 +489,15 @@ export default function AdminFleetMonitoringPage() {
                 {/* CARD 4: ACTIVE OUTAGES */}
                 <div className={`p-3.5 rounded-2xl border backdrop-blur-md shadow-md space-y-1 ${
                     activeIncidentsCount > 0 
-                        ? "bg-rose-950/20 border-rose-500/40" 
-                        : "bg-[#121218]/90 border-white/[0.08]"
+                        ? "bg-rose-500/10 dark:bg-rose-950/20 border-rose-500/40" 
+                        : "bg-card/95 dark:bg-[#121218]/90 border-border/70 dark:border-white/[0.08]"
                 }`}>
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Active Incidents</span>
-                        <AlertTriangle className={`h-4 w-4 ${activeIncidentsCount > 0 ? "text-rose-400" : "text-muted-foreground/70"}`} />
+                        <AlertTriangle className={`h-4 w-4 ${activeIncidentsCount > 0 ? "text-rose-700 dark:text-rose-400" : "text-muted-foreground/70"}`} />
                     </div>
                     <div className="flex items-baseline gap-2">
-                        <span className={`text-2xl font-black tabular-nums ${activeIncidentsCount > 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                        <span className={`text-2xl font-black tabular-nums ${activeIncidentsCount > 0 ? "text-rose-700 dark:text-rose-400" : "text-emerald-700 dark:text-emerald-400"}`}>
                             {activeIncidentsCount}
                         </span>
                         <span className="text-[10px] text-muted-foreground">
@@ -521,13 +521,13 @@ export default function AdminFleetMonitoringPage() {
                 className="w-full space-y-5"
             >
                 {/* HIGH-CONTRAST TAB SWITCHER */}
-                <TabsList className="bg-[#121218] border border-white/[0.08] p-1 rounded-xl w-full sm:w-auto grid grid-cols-3 gap-1 h-auto">
+                <TabsList className="bg-card dark:bg-[#121218] border border-border/70 dark:border-white/[0.08] p-1 rounded-xl w-full sm:w-auto grid grid-cols-3 gap-1 h-auto">
                     {/* TAB 1: SYSTEMS */}
                     <TabsTrigger
                         value="systems"
-                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-sky-400/80 hover:text-sky-300 data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/15 data-[state=active]:border data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm"
+                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-sky-700/80 dark:text-sky-400/80 hover:text-sky-800 dark:hover:text-sky-300 data-[state=active]:text-sky-700 dark:data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/15 data-[state=active]:border data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm"
                     >
-                        <Server className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-400 shrink-0" />
+                        <Server className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                         <span className="hidden sm:inline">Systems & Services ({services.length})</span>
                         <span className="sm:hidden">Systems ({services.length})</span>
                     </TabsTrigger>
@@ -535,9 +535,9 @@ export default function AdminFleetMonitoringPage() {
                     {/* TAB 2: DOCKER CONTAINERS */}
                     <TabsTrigger
                         value="containers"
-                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-emerald-400/80 hover:text-emerald-300 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/15 data-[state=active]:border data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm"
+                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-emerald-700/80 dark:text-emerald-400/80 hover:text-emerald-800 dark:hover:text-emerald-300 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/15 data-[state=active]:border data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm"
                     >
-                        <Cpu className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400 shrink-0" />
+                        <Cpu className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                         <span className="hidden sm:inline">Docker Fleet ({fleetSummary.totalContainers})</span>
                         <span className="sm:hidden">Fleet ({fleetSummary.totalContainers})</span>
                     </TabsTrigger>
@@ -545,9 +545,9 @@ export default function AdminFleetMonitoringPage() {
                     {/* TAB 3: INCIDENTS & ALERTS */}
                     <TabsTrigger
                         value="incidents"
-                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-amber-400/80 hover:text-amber-300 data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/15 data-[state=active]:border data-[state=active]:border-amber-500/40 data-[state=active]:shadow-sm"
+                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-amber-700/80 dark:text-amber-400/80 hover:text-amber-800 dark:hover:text-amber-300 data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/15 data-[state=active]:border data-[state=active]:border-amber-500/40 data-[state=active]:shadow-sm"
                     >
-                        <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 shrink-0" />
+                        <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                         <span className="hidden sm:inline">Outages & Alerts {activeIncidentsCount > 0 ? `(${activeIncidentsCount})` : ""}</span>
                         <span className="sm:hidden">Outages {activeIncidentsCount > 0 ? `(${activeIncidentsCount})` : ""}</span>
                     </TabsTrigger>
@@ -557,16 +557,16 @@ export default function AdminFleetMonitoringPage() {
                 {/* TAB 1 CONTENT: SYSTEMS & SERVICES HEALTH */}
                 {/* ========================================================================= */}
                 <TabsContent value="systems" className="space-y-4 focus-visible:outline-hidden">
-                    <Card className="border border-white/[0.08] bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl">
-                        <CardHeader className="p-4 sm:p-5 border-b border-white/[0.06] space-y-3">
+                    <Card className="border border-border/70 dark:border-white/[0.08] bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl">
+                        <CardHeader className="p-4 sm:p-5 border-b border-border/70 dark:border-white/[0.06] space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div>
                                     <div className="flex flex-wrap items-center gap-2">
                                         <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                                            <Server className="h-4 w-4 text-sky-400" />
+                                            <Server className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                                             Infrastructure Reachability & Uptime Telemetry
                                         </CardTitle>
-                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                             Direct Plex Telemetry Active
                                         </span>
@@ -584,8 +584,8 @@ export default function AdminFleetMonitoringPage() {
                                         onClick={() => setSystemStatusFilter("ALL")}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                             systemStatusFilter === "ALL" 
-                                                ? "bg-white/10 text-foreground border border-white/20 shadow-xs" 
-                                                : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                ? "bg-muted/50 dark:bg-white/10 text-foreground border border-border/70 dark:border-white/20 shadow-xs" 
+                                                : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                         }`}
                                     >
                                         All ({services.length})
@@ -594,8 +594,8 @@ export default function AdminFleetMonitoringPage() {
                                         onClick={() => setSystemStatusFilter("ONLINE")}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                             systemStatusFilter === "ONLINE" 
-                                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-xs" 
-                                                : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 shadow-xs" 
+                                                : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                         }`}
                                     >
                                         Online ({services.filter(s => s.status === "ONLINE").length})
@@ -604,8 +604,8 @@ export default function AdminFleetMonitoringPage() {
                                         onClick={() => setSystemStatusFilter("OFFLINE")}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                             systemStatusFilter === "OFFLINE" 
-                                                ? "bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-xs" 
-                                                : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                ? "bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/40 shadow-xs" 
+                                                : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                         }`}
                                     >
                                         Down ({services.filter(s => s.status === "OFFLINE").length})
@@ -614,8 +614,8 @@ export default function AdminFleetMonitoringPage() {
                                         onClick={() => setSystemStatusFilter("PAUSED")}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                             systemStatusFilter === "PAUSED" 
-                                                ? "bg-slate-500/20 text-slate-300 border border-slate-500/40 shadow-xs" 
-                                                : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                ? "bg-slate-500/20 text-slate-700 dark:text-slate-300 border border-slate-500/40 shadow-xs" 
+                                                : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                         }`}
                                     >
                                         Paused ({services.filter(s => s.status === "PAUSED").length})
@@ -627,7 +627,7 @@ export default function AdminFleetMonitoringPage() {
                                         value={systemCategoryFilter}
                                         onChange={(e) => setSystemCategoryFilter(e.target.value)}
                                         aria-label="Filter by category"
-                                        className="bg-black/40 border border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50 w-full sm:w-auto truncate"
+                                        className="bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50 w-full sm:w-auto truncate"
                                     >
                                         <option value="ALL">All Categories</option>
                                         <option value="plex">Plex Media Servers (Live Telemetry)</option>
@@ -645,7 +645,7 @@ export default function AdminFleetMonitoringPage() {
                                             placeholder="Search systems..."
                                             value={systemSearch}
                                             onChange={(e) => setSystemSearch(e.target.value)}
-                                            className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10 w-full"
+                                            className="h-8 pl-8 pr-2.5 text-xs bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10 w-full"
                                         />
                                     </div>
                                 </div>
@@ -669,10 +669,10 @@ export default function AdminFleetMonitoringPage() {
                                                 key={srv.id}
                                                 className={`p-3.5 rounded-xl border transition-all space-y-3 ${
                                                     isOnline 
-                                                        ? "bg-white/[0.02] border-white/[0.06] hover:border-white/[0.15]" 
+                                                        ? "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06] hover:border-border/70 dark:hover:border-white/[0.15]" 
                                                         : isOffline 
-                                                            ? "bg-rose-950/20 border-rose-500/40 shadow-xs" 
-                                                            : "bg-white/[0.01] border-dashed border-white/[0.06] opacity-75"
+                                                            ? "bg-rose-500/10 dark:bg-rose-950/20 border-rose-500/40 shadow-xs" 
+                                                            : "bg-muted/50 dark:bg-white/[0.01] border-dashed border-border/70 dark:border-white/[0.06] opacity-75"
                                                 }`}
                                             >
                                                 {/* ROW 1: HEADER & BADGES */}
@@ -682,7 +682,7 @@ export default function AdminFleetMonitoringPage() {
                                                             <h4 className="text-xs font-bold text-foreground truncate" title={srv.name}>
                                                                 {srv.name}
                                                             </h4>
-                                                            <Badge variant="outline" className="text-[9px] font-semibold px-1.5 py-0 bg-white/[0.04] border-white/10 text-muted-foreground">
+                                                            <Badge variant="outline" className="text-[9px] font-semibold px-1.5 py-0 bg-muted/50 dark:bg-white/[0.04] border-border/70 dark:border-white/10 text-muted-foreground">
                                                                 {srv.type}
                                                             </Badge>
                                                         </div>
@@ -696,7 +696,7 @@ export default function AdminFleetMonitoringPage() {
                                                             href={srv.url.startsWith("http") ? srv.url : `http://${srv.url}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/[0.06] shrink-0"
+                                                            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.06] shrink-0"
                                                         >
                                                             <ExternalLink className="h-3.5 w-3.5" />
                                                         </a>
@@ -704,39 +704,39 @@ export default function AdminFleetMonitoringPage() {
                                                 </div>
 
                                                 {/* ROW 2: STATUS & LATENCY */}
-                                                <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/[0.04]">
+                                                <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/70 dark:border-white/[0.04]">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className={`w-2 h-2 rounded-full ${isOnline ? "bg-emerald-400" : isOffline ? "bg-rose-500 animate-pulse" : "bg-slate-500"}`} />
-                                                        <span className={`text-[11px] font-bold uppercase tracking-wider ${isOnline ? "text-emerald-400" : isOffline ? "text-rose-400" : "text-slate-400"}`}>
+                                                        <span className={`text-[11px] font-bold uppercase tracking-wider ${isOnline ? "text-emerald-700 dark:text-emerald-400" : isOffline ? "text-rose-700 dark:text-rose-400" : "text-slate-600 dark:text-slate-400"}`}>
                                                             {srv.status}
                                                         </span>
                                                         <span className="text-[10px] text-muted-foreground/80">&middot; {srv.currentStreak}</span>
                                                     </div>
 
                                                     {isOnline && srv.latencyMs !== undefined && (
-                                                        <span className="font-mono text-[10px] text-muted-foreground bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.06]">
+                                                        <span className="font-mono text-[10px] text-muted-foreground bg-muted/50 dark:bg-white/[0.04] px-1.5 py-0.5 rounded border border-border/70 dark:border-white/[0.06]">
                                                             {srv.latencyMs}ms
                                                         </span>
                                                     )}
                                                 </div>
 
                                                 {/* ROW 3: UPTIME PERCENTAGE SCORECARD */}
-                                                <div className="grid grid-cols-3 gap-1.5 p-2 rounded-lg bg-black/40 border border-white/[0.04] text-center">
+                                                <div className="grid grid-cols-3 gap-1.5 p-2 rounded-lg bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/[0.04] text-center">
                                                     <div>
                                                         <span className="text-[9px] text-muted-foreground block uppercase">24h Uptime</span>
-                                                        <span className={`text-xs font-extrabold ${srv.uptimePercentage24h >= 99 ? "text-emerald-400" : srv.uptimePercentage24h >= 95 ? "text-amber-400" : "text-rose-400"}`}>
+                                                        <span className={`text-xs font-extrabold ${srv.uptimePercentage24h >= 99 ? "text-emerald-700 dark:text-emerald-400" : srv.uptimePercentage24h >= 95 ? "text-amber-700 dark:text-amber-400" : "text-rose-700 dark:text-rose-400"}`}>
                                                             {srv.uptimePercentage24h}%
                                                         </span>
                                                     </div>
                                                     <div>
                                                         <span className="text-[9px] text-muted-foreground block uppercase">7d Uptime</span>
-                                                        <span className={`text-xs font-extrabold ${srv.uptimePercentage7d >= 99 ? "text-emerald-400" : srv.uptimePercentage7d >= 95 ? "text-amber-400" : "text-rose-400"}`}>
+                                                        <span className={`text-xs font-extrabold ${srv.uptimePercentage7d >= 99 ? "text-emerald-700 dark:text-emerald-400" : srv.uptimePercentage7d >= 95 ? "text-amber-700 dark:text-amber-400" : "text-rose-700 dark:text-rose-400"}`}>
                                                             {srv.uptimePercentage7d}%
                                                         </span>
                                                     </div>
                                                     <div>
                                                         <span className="text-[9px] text-muted-foreground block uppercase">30d Uptime</span>
-                                                        <span className={`text-xs font-extrabold ${srv.uptimePercentage30d >= 99 ? "text-emerald-400" : srv.uptimePercentage30d >= 95 ? "text-amber-400" : "text-rose-400"}`}>
+                                                        <span className={`text-xs font-extrabold ${srv.uptimePercentage30d >= 99 ? "text-emerald-700 dark:text-emerald-400" : srv.uptimePercentage30d >= 95 ? "text-amber-700 dark:text-amber-400" : "text-rose-700 dark:text-rose-400"}`}>
                                                             {srv.uptimePercentage30d}%
                                                         </span>
                                                     </div>
@@ -770,16 +770,16 @@ export default function AdminFleetMonitoringPage() {
                 {/* TAB 2 CONTENT: DOCKER CONTAINER FLEET */}
                 {/* ========================================================================= */}
                 <TabsContent value="containers" className="space-y-4 focus-visible:outline-hidden">
-                    <Card className="border border-white/[0.08] bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl">
-                        <CardHeader className="p-4 sm:p-5 border-b border-white/[0.06] space-y-3">
+                    <Card className="border border-border/70 dark:border-white/[0.08] bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl">
+                        <CardHeader className="p-4 sm:p-5 border-b border-border/70 dark:border-white/[0.06] space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div className="space-y-0.5">
                                     <div className="flex items-center gap-2">
                                         <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                                            <Cpu className="h-4 w-4 text-emerald-400" />
+                                            <Cpu className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                             Docker Container Fleet Manager
                                         </CardTitle>
-                                        <Badge variant="outline" className="text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                        <Badge variant="outline" className="text-[9px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                             {fleetSummary.source}
                                         </Badge>
                                     </div>
@@ -796,8 +796,8 @@ export default function AdminFleetMonitoringPage() {
                                         onClick={() => setContainerStateFilter("ALL")}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                             containerStateFilter === "ALL" 
-                                                ? "bg-white/10 text-foreground border border-white/20 shadow-xs" 
-                                                : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                ? "bg-muted/50 dark:bg-white/10 text-foreground border border-border/70 dark:border-white/20 shadow-xs" 
+                                                : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                         }`}
                                     >
                                         All ({containers.length})
@@ -806,8 +806,8 @@ export default function AdminFleetMonitoringPage() {
                                         onClick={() => setContainerStateFilter("running")}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                             containerStateFilter === "running" 
-                                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-xs" 
-                                                : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 shadow-xs" 
+                                                : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                         }`}
                                     >
                                         Running ({fleetSummary.runningCount})
@@ -816,8 +816,8 @@ export default function AdminFleetMonitoringPage() {
                                         onClick={() => setContainerStateFilter("exited")}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                             containerStateFilter === "exited" 
-                                                ? "bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-xs" 
-                                                : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                ? "bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/40 shadow-xs" 
+                                                : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                         }`}
                                     >
                                         Stopped ({fleetSummary.stoppedCount})
@@ -827,8 +827,8 @@ export default function AdminFleetMonitoringPage() {
                                             onClick={() => setContainerStateFilter("unhealthy")}
                                             className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                                 containerStateFilter === "unhealthy" 
-                                                    ? "bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-xs" 
-                                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 shadow-xs" 
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                             }`}
                                         >
                                             Unhealthy ({fleetSummary.unhealthyCount})
@@ -837,7 +837,7 @@ export default function AdminFleetMonitoringPage() {
                                 </div>
 
                                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
-                                    <div className="flex items-center justify-center bg-black/40 border border-white/10 rounded-lg p-0.5 h-8 shrink-0">
+                                    <div className="flex items-center justify-center bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/10 rounded-lg p-0.5 h-8 shrink-0">
                                         <button
                                             onClick={() => setContainerSort("name_asc")}
                                             title="Sort A-Z"
@@ -854,8 +854,8 @@ export default function AdminFleetMonitoringPage() {
                                             title="Sort by Highest CPU load"
                                             className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer flex-1 sm:flex-none text-center ${
                                                 containerSort === "cpu_desc" 
-                                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs" 
-                                                    : "text-muted-foreground hover:text-amber-400"
+                                                    ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 shadow-xs" 
+                                                    : "text-muted-foreground hover:text-amber-700 dark:hover:text-amber-400"
                                             }`}
                                         >
                                             🔥 CPU
@@ -865,8 +865,8 @@ export default function AdminFleetMonitoringPage() {
                                             title="Sort by Highest RAM usage"
                                             className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer flex-1 sm:flex-none text-center ${
                                                 containerSort === "mem_desc" 
-                                                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-xs" 
-                                                    : "text-muted-foreground hover:text-sky-400"
+                                                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/40 shadow-xs" 
+                                                    : "text-muted-foreground hover:text-sky-700 dark:hover:text-sky-400"
                                             }`}
                                         >
                                             💾 RAM
@@ -879,7 +879,7 @@ export default function AdminFleetMonitoringPage() {
                                             placeholder="Search container or image..."
                                             value={containerSearch}
                                             onChange={(e) => setContainerSearch(e.target.value)}
-                                            className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10 w-full"
+                                            className="h-8 pl-8 pr-2.5 text-xs bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10 w-full"
                                         />
                                     </div>
                                 </div>
@@ -918,12 +918,12 @@ export default function AdminFleetMonitoringPage() {
                                                 key={c.id}
                                                 className={`p-3.5 rounded-xl border transition-all space-y-3 ${
                                                     isRunning 
-                                                        ? "bg-white/[0.02] border-white/[0.06] hover:border-white/[0.15]" 
+                                                        ? "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06] hover:border-border/70 dark:hover:border-white/[0.15]" 
                                                         : isUnhealthy 
-                                                            ? "bg-amber-950/20 border-amber-500/40" 
+                                                            ? "bg-amber-500/10 dark:bg-amber-950/20 border-amber-500/40" 
                                                             : isExited 
-                                                                ? "bg-rose-950/20 border-rose-500/40" 
-                                                                : "bg-white/[0.01] border-white/[0.06]"
+                                                                ? "bg-rose-500/10 dark:bg-rose-950/20 border-rose-500/40" 
+                                                                : "bg-muted/50 dark:bg-white/[0.01] border-border/70 dark:border-white/[0.06]"
                                                 }`}
                                             >
                                                 {/* ROW 1: BRANDED APP ICON + NAME + STATE + SHORT ID */}
@@ -941,12 +941,12 @@ export default function AdminFleetMonitoringPage() {
                                                                     variant="outline"
                                                                     className={`text-[9px] font-semibold px-1.5 py-0 ${
                                                                         isRunning 
-                                                                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
+                                                                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" 
                                                                             : isUnhealthy 
-                                                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30" 
+                                                                                ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30" 
                                                                                 : isExited 
-                                                                                    ? "bg-rose-500/10 text-rose-400 border-rose-500/30" 
-                                                                                    : "bg-slate-500/10 text-slate-400 border-slate-500/30"
+                                                                                    ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30" 
+                                                                                    : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30"
                                                                     }`}
                                                                 >
                                                                     {c.state}
@@ -958,20 +958,20 @@ export default function AdminFleetMonitoringPage() {
                                                         </div>
                                                     </div>
 
-                                                    <span className="font-mono text-[9px] text-muted-foreground/60 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 shrink-0">
+                                                    <span className="font-mono text-[9px] text-muted-foreground/60 bg-muted/60 dark:bg-black/40 px-1.5 py-0.5 rounded border border-border/70 dark:border-white/5 shrink-0">
                                                         #{c.id}
                                                     </span>
                                                 </div>
 
                                                 {/* ROW 2: UPTIME / STATUS TEXT & HOST SOURCE */}
-                                                <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-white/[0.04] pt-1">
+                                                <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/70 dark:border-white/[0.04] pt-1">
                                                     <span className="flex items-center gap-1.5 truncate">
                                                         <Clock className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
                                                         <span className="truncate">{cleanStatus}</span>
                                                     </span>
 
                                                     {c.hostName && (
-                                                        <span className="text-[9px] font-medium text-muted-foreground/80 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.06] flex items-center gap-1 shrink-0">
+                                                        <span className="text-[9px] font-medium text-muted-foreground/80 bg-muted/50 dark:bg-white/[0.04] px-1.5 py-0.5 rounded border border-border/70 dark:border-white/[0.06] flex items-center gap-1 shrink-0">
                                                             <Server className="h-2.5 w-2.5 text-muted-foreground/70" />
                                                             <span>{c.hostName}</span>
                                                         </span>
@@ -980,30 +980,30 @@ export default function AdminFleetMonitoringPage() {
 
                                                 {/* ROW 3: RESOURCE USAGE BARS (WITH MULTI-CORE HOT ENGINE) */}
                                                 {(c.cpuPercent > 0 || c.memoryUsage > 0) && (
-                                                    <div className="space-y-2 p-2.5 rounded-lg bg-black/40 border border-white/[0.04] text-[10px]">
+                                                    <div className="space-y-2 p-2.5 rounded-lg bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/[0.04] text-[10px]">
                                                         {/* CPU ROW */}
                                                         <div className="space-y-1">
                                                             <div className="flex items-center justify-between text-muted-foreground">
-                                                                <span className={`flex items-center gap-1 font-semibold ${isHighCpu ? "text-rose-400" : isMediumCpu ? "text-amber-400" : "text-muted-foreground"}`}>
+                                                                <span className={`flex items-center gap-1 font-semibold ${isHighCpu ? "text-rose-700 dark:text-rose-400" : isMediumCpu ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
                                                                     {isHighCpu ? (
-                                                                        <Flame className="h-3 w-3 text-rose-400 animate-pulse" />
+                                                                        <Flame className="h-3 w-3 text-rose-700 dark:text-rose-400 animate-pulse" />
                                                                     ) : (
-                                                                        <Cpu className={`h-3 w-3 ${isMediumCpu ? "text-amber-400" : "text-emerald-400"}`} />
+                                                                        <Cpu className={`h-3 w-3 ${isMediumCpu ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`} />
                                                                     )}
                                                                     <span>CPU</span>
                                                                 </span>
                                                                 <span className="font-mono font-bold flex items-center gap-1.5">
-                                                                    <span className={isHighCpu ? "text-rose-400 font-black" : isMediumCpu ? "text-amber-400" : "text-foreground"}>
+                                                                    <span className={isHighCpu ? "text-rose-700 dark:text-rose-400 font-black" : isMediumCpu ? "text-amber-700 dark:text-amber-400" : "text-foreground"}>
                                                                         {c.cpuPercent}%
                                                                     </span>
                                                                     {isHighCpu && (
-                                                                        <span className="text-[9px] text-rose-400/80 font-normal">
+                                                                        <span className="text-[9px] text-rose-700/80 dark:text-rose-400/80 font-normal">
                                                                             (~{(c.cpuPercent / 100).toFixed(1)} cores)
                                                                         </span>
                                                                     )}
                                                                 </span>
                                                             </div>
-                                                            <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                                                            <div className="w-full bg-muted/50 dark:bg-white/5 h-1.5 rounded-full overflow-hidden">
                                                                 <div 
                                                                     className={`h-full rounded-full transition-all ${
                                                                         isHighCpu 
@@ -1020,15 +1020,15 @@ export default function AdminFleetMonitoringPage() {
                                                         {/* RAM ROW */}
                                                         <div className="space-y-1 pt-0.5">
                                                             <div className="flex items-center justify-between text-muted-foreground">
-                                                                <span className={`flex items-center gap-1 font-semibold ${c.memoryPercent >= 85 ? "text-rose-400" : c.memoryPercent >= 70 ? "text-amber-400" : "text-muted-foreground"}`}>
-                                                                    <HardDrive className={`h-3 w-3 ${c.memoryPercent >= 85 ? "text-rose-400" : c.memoryPercent >= 70 ? "text-amber-400" : "text-sky-400"}`} />
+                                                                <span className={`flex items-center gap-1 font-semibold ${c.memoryPercent >= 85 ? "text-rose-700 dark:text-rose-400" : c.memoryPercent >= 70 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
+                                                                    <HardDrive className={`h-3 w-3 ${c.memoryPercent >= 85 ? "text-rose-700 dark:text-rose-400" : c.memoryPercent >= 70 ? "text-amber-700 dark:text-amber-400" : "text-sky-700 dark:text-sky-400"}`} />
                                                                     <span>RAM</span>
                                                                 </span>
-                                                                <span className={`font-mono font-bold ${c.memoryPercent >= 85 ? "text-rose-400" : c.memoryPercent >= 70 ? "text-amber-400" : "text-foreground"}`}>
+                                                                <span className={`font-mono font-bold ${c.memoryPercent >= 85 ? "text-rose-700 dark:text-rose-400" : c.memoryPercent >= 70 ? "text-amber-700 dark:text-amber-400" : "text-foreground"}`}>
                                                                     {formatBytes(c.memoryUsage)} ({c.memoryPercent}%)
                                                                 </span>
                                                             </div>
-                                                            <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                                                            <div className="w-full bg-muted/50 dark:bg-white/5 h-1.5 rounded-full overflow-hidden">
                                                                 <div 
                                                                     className={`h-full rounded-full transition-all ${
                                                                         c.memoryPercent >= 85 
@@ -1048,7 +1048,7 @@ export default function AdminFleetMonitoringPage() {
                                                 {c.ports && c.ports.length > 0 && (
                                                     <div className="flex flex-wrap gap-1 pt-0.5">
                                                         {c.ports.slice(0, 3).map((p, idx) => (
-                                                            <span key={idx} className="font-mono text-[9px] bg-white/[0.03] text-muted-foreground px-1.5 py-0.5 rounded border border-white/5">
+                                                            <span key={idx} className="font-mono text-[9px] bg-muted/50 dark:bg-white/[0.03] text-muted-foreground px-1.5 py-0.5 rounded border border-border/70 dark:border-white/5">
                                                                 {p.publicPort ? `${p.publicPort}:${p.privatePort}` : `${p.privatePort}/${p.type}`}
                                                             </span>
                                                         ))}
@@ -1061,15 +1061,15 @@ export default function AdminFleetMonitoringPage() {
                                                 )}
 
                                                 {/* ROW 5: ACTION BUTTONS (RESTART, STOP, START) */}
-                                                <div className="flex items-center gap-2 pt-1 border-t border-white/[0.04]">
+                                                <div className="flex items-center gap-2 pt-1 border-t border-border/70 dark:border-white/[0.04]">
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
                                                         onClick={() => handleRestartContainer(c)}
                                                         disabled={isBusy}
-                                                        className="flex-1 h-8 text-xs font-bold gap-1.5 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                                                        className="flex-1 h-8 text-xs font-bold gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-800 dark:hover:text-emerald-300"
                                                     >
-                                                        <RefreshCw className={`h-3.5 w-3.5 ${isBusy ? "animate-spin text-emerald-400" : ""}`} />
+                                                        <RefreshCw className={`h-3.5 w-3.5 ${isBusy ? "animate-spin text-emerald-700 dark:text-emerald-400" : ""}`} />
                                                         <span>{isBusy ? "Restarting..." : "Restart"}</span>
                                                     </Button>
 
@@ -1079,7 +1079,7 @@ export default function AdminFleetMonitoringPage() {
                                                             size="sm"
                                                             onClick={() => handleStopContainer(c)}
                                                             disabled={isBusy}
-                                                            className="h-8 px-2.5 text-xs gap-1 border-border/50 text-muted-foreground hover:text-rose-400 hover:border-rose-500/30"
+                                                            className="h-8 px-2.5 text-xs gap-1 border-border/50 text-muted-foreground hover:text-rose-700 dark:hover:text-rose-400 hover:border-rose-500/30"
                                                             title="Stop container"
                                                         >
                                                             <Square className="h-3.5 w-3.5" />
@@ -1091,7 +1091,7 @@ export default function AdminFleetMonitoringPage() {
                                                             size="sm"
                                                             onClick={() => handleStartContainer(c)}
                                                             disabled={isBusy}
-                                                            className="h-8 px-2.5 text-xs gap-1 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                                                            className="h-8 px-2.5 text-xs gap-1 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
                                                             title="Start container"
                                                         >
                                                             <Play className="h-3.5 w-3.5" />
@@ -1114,10 +1114,10 @@ export default function AdminFleetMonitoringPage() {
                 <TabsContent value="incidents" className="space-y-4 focus-visible:outline-hidden">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         {/* LEFT COLUMN: ALERT DISPATCH CONFIGURATION */}
-                        <Card className="border border-white/[0.08] bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl lg:col-span-1">
-                            <CardHeader className="p-4 sm:p-5 border-b border-white/[0.06]">
+                        <Card className="border border-border/70 dark:border-white/[0.08] bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl lg:col-span-1">
+                            <CardHeader className="p-4 sm:p-5 border-b border-border/70 dark:border-white/[0.06]">
                                 <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                                    <Bell className="h-4 w-4 text-amber-400" />
+                                    <Bell className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                     Outage Alert Settings
                                 </CardTitle>
                                 <CardDescription className="text-xs text-muted-foreground">
@@ -1133,7 +1133,7 @@ export default function AdminFleetMonitoringPage() {
                                         placeholder="https://discord.com/api/webhooks/..."
                                         value={webhookUrlInput}
                                         onChange={(e) => setWebhookUrlInput(e.target.value)}
-                                        className="h-8 text-xs bg-black/40 border-white/10"
+                                        className="h-8 text-xs bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10"
                                     />
                                     <p className="text-[11px] text-muted-foreground">
                                         Leave empty to use built-in Discord Bot with #system-status channel.
@@ -1154,9 +1154,9 @@ export default function AdminFleetMonitoringPage() {
                                         variant="outline"
                                         onClick={handleTestAlert}
                                         disabled={testingAlert}
-                                        className="w-full h-8 text-xs font-semibold gap-1.5 border-border/60 hover:bg-white/[0.04]"
+                                        className="w-full h-8 text-xs font-semibold gap-1.5 border-border/60 hover:bg-accent dark:hover:bg-white/[0.04]"
                                     >
-                                        <Radio className={`h-3.5 w-3.5 ${testingAlert ? "animate-spin text-amber-400" : "text-muted-foreground"}`} />
+                                        <Radio className={`h-3.5 w-3.5 ${testingAlert ? "animate-spin text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`} />
                                         <span>{testingAlert ? "Sending..." : "Send Test Discord Alert"}</span>
                                     </Button>
                                 </div>
@@ -1164,11 +1164,11 @@ export default function AdminFleetMonitoringPage() {
                         </Card>
 
                         {/* RIGHT COLUMN: INCIDENT HISTORY LOG */}
-                        <Card className="border border-white/[0.08] bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl lg:col-span-2">
-                            <CardHeader className="p-4 sm:p-5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <Card className="border border-border/70 dark:border-white/[0.08] bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl lg:col-span-2">
+                            <CardHeader className="p-4 sm:p-5 border-b border-border/70 dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div>
                                     <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                                        <AlertTriangle className="h-4 w-4 text-rose-400" />
+                                        <AlertTriangle className="h-4 w-4 text-rose-700 dark:text-rose-400" />
                                         Outage & Incident History
                                     </CardTitle>
                                     <CardDescription className="text-xs text-muted-foreground">
@@ -1191,7 +1191,7 @@ export default function AdminFleetMonitoringPage() {
                             <CardContent className="p-4 sm:p-5">
                                 {incidents.length === 0 ? (
                                     <div className="py-12 text-center space-y-2">
-                                        <div className="p-3 rounded-full bg-emerald-500/10 text-emerald-400 inline-block">
+                                        <div className="p-3 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 inline-block">
                                             <CheckCircle2 className="h-6 w-6" />
                                         </div>
                                         <h4 className="text-sm font-bold text-foreground">Zero Outage Incidents!</h4>
@@ -1209,8 +1209,8 @@ export default function AdminFleetMonitoringPage() {
                                                     key={inc.id}
                                                     className={`p-3.5 rounded-xl border space-y-2 ${
                                                         isActive 
-                                                            ? "bg-rose-950/20 border-rose-500/40" 
-                                                            : "bg-white/[0.02] border-white/[0.06]"
+                                                            ? "bg-rose-500/10 dark:bg-rose-950/20 border-rose-500/40" 
+                                                            : "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06]"
                                                     }`}
                                                 >
                                                     <div className="flex items-start justify-between gap-2">
@@ -1223,8 +1223,8 @@ export default function AdminFleetMonitoringPage() {
                                                                     variant="outline"
                                                                     className={`text-[9px] font-semibold ${
                                                                         isActive 
-                                                                            ? "bg-rose-500/15 text-rose-400 border-rose-500/30" 
-                                                                            : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                                                            ? "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30" 
+                                                                            : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
                                                                     }`}
                                                                 >
                                                                     {inc.status}
@@ -1236,13 +1236,13 @@ export default function AdminFleetMonitoringPage() {
                                                         </div>
 
                                                         {inc.durationMinutes !== undefined && (
-                                                            <Badge variant="outline" className="text-[10px] bg-white/[0.04] text-muted-foreground border-white/10 shrink-0">
+                                                            <Badge variant="outline" className="text-[10px] bg-muted/50 dark:bg-white/[0.04] text-muted-foreground border-border/70 dark:border-white/10 shrink-0">
                                                                 Down for {inc.durationMinutes}m
                                                             </Badge>
                                                         )}
                                                     </div>
 
-                                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground/60 border-t border-white/[0.04] pt-1">
+                                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground/60 border-t border-border/70 dark:border-white/[0.04] pt-1">
                                                         <span>Started: {new Date(inc.startedAt).toLocaleString()}</span>
                                                         {inc.resolvedAt && (
                                                             <span>Resolved: {new Date(inc.resolvedAt).toLocaleString()}</span>

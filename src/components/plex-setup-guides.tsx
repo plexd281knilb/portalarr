@@ -37,15 +37,15 @@ export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) 
 
     const getDeviceIcon = (id: string) => {
         switch (id) {
-            case "appletv": return <Tv className="h-4 w-4 text-cyan-400" />;
-            case "roku": return <Tv2 className="h-4 w-4 text-teal-400" />;
-            case "firetv": return <Flame className="h-4 w-4 text-orange-400" />;
-            case "smarttv": return <Monitor className="h-4 w-4 text-blue-400" />;
-            case "googletv": return <Smartphone className="h-4 w-4 text-emerald-400" />;
-            case "mobile": return <Smartphone className="h-4 w-4 text-pink-400" />;
-            case "web": return <Globe className="h-4 w-4 text-amber-400" />;
-            case "jellyfin": return <Server className="h-4 w-4 text-sky-400" />;
-            case "emby": return <Server className="h-4 w-4 text-emerald-400" />;
+            case "appletv": return <Tv className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />;
+            case "roku": return <Tv2 className="h-4 w-4 text-teal-700 dark:text-teal-400" />;
+            case "firetv": return <Flame className="h-4 w-4 text-orange-700 dark:text-orange-400" />;
+            case "smarttv": return <Monitor className="h-4 w-4 text-blue-700 dark:text-blue-400" />;
+            case "googletv": return <Smartphone className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />;
+            case "mobile": return <Smartphone className="h-4 w-4 text-pink-700 dark:text-pink-400" />;
+            case "web": return <Globe className="h-4 w-4 text-amber-700 dark:text-amber-400" />;
+            case "jellyfin": return <Server className="h-4 w-4 text-sky-700 dark:text-sky-400" />;
+            case "emby": return <Server className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />;
             default: return <Tv className="h-4 w-4 text-primary" />;
         }
     };
@@ -64,7 +64,7 @@ export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) 
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="w-[95vw] sm:max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
+            <DialogContent className="w-[95vw] sm:max-w-3xl max-h-[85vh] flex flex-col bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-4 border-b border-border/40">
                     <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
                         <Sparkles className="h-5 w-5 text-primary" />
@@ -78,9 +78,9 @@ export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) 
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     {/* Golden Rule Callout */}
                     <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
-                        <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                        <AlertCircle className="h-5 w-5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                         <div className="space-y-1">
-                            <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wide">The #1 Rule for Zero Buffering:</h4>
+                            <h4 className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wide">The #1 Rule for Zero Buffering:</h4>
                             <p className="text-xs text-muted-foreground leading-relaxed">
                                 Most Plex apps default to a restricted <strong className="text-foreground">2 Mbps (720p)</strong> remote limit. Changing <strong className="text-foreground">Remote Video Quality</strong> to <strong className="text-foreground">"Maximum / Original"</strong> stops the server from transcoding and gives you crisp, original picture quality.
                             </p>
@@ -120,9 +120,9 @@ export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) 
 
                                     <div className="space-y-3">
                                         {guide.steps.map((step: any, idx: number) => (
-                                            <div key={idx} className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-primary/30 transition-colors space-y-1">
+                                            <div key={idx} className="p-3.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] hover:border-primary/30 transition-colors space-y-1">
                                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                     {step.title}
                                                 </div>
                                                 <p className="text-xs text-muted-foreground/90 pl-5.5 leading-relaxed">
@@ -138,7 +138,7 @@ export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) 
                 </div>
 
                 <div className="p-4 border-t border-border/40 bg-muted/10 flex items-center justify-between">
-                    <Button asChild variant="ghost" size="sm" className="text-xs text-sky-400 hover:text-sky-300 gap-1.5" onClick={() => setIsOpen(false)}>
+                    <Button asChild variant="ghost" size="sm" className="text-xs text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 gap-1.5" onClick={() => setIsOpen(false)}>
                         <Link href="/guides">
                             <span>Open Full Guides Page</span>
                             <ExternalLink className="h-3.5 w-3.5" />

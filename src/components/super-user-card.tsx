@@ -43,21 +43,21 @@ export default function SuperUserCard({ initialRole = "USER" }: SuperUserCardPro
     };
 
     return (
-        <Card className="border-cyan-500/30 bg-gradient-to-br from-cyan-950/20 via-[#121218]/90 to-[#0d0d12] backdrop-blur-md shadow-md relative overflow-hidden">
+        <Card className="border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 dark:from-cyan-950/20 via-card dark:via-[#121218]/90 to-muted/60 dark:to-[#0d0d12] backdrop-blur-md shadow-md relative overflow-hidden">
             <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
                             <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Zap className="h-5 w-5 text-cyan-400" />
+                                <Zap className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
                                 {isSuper ? "Super User Mode Active" : "Don't Want to Wait for the Admin? Become a Super User"}
                             </CardTitle>
                             <Badge 
                                 variant="outline" 
                                 className={`text-[10px] font-semibold ${
                                     isSuper 
-                                        ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/40" 
-                                        : "bg-white/[0.05] text-muted-foreground border-border/40"
+                                        ? "bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/40" 
+                                        : "bg-muted/50 dark:bg-white/[0.05] text-muted-foreground border-border/40"
                                 }`}
                             >
                                 {isSuper ? "Super User" : "Standard User"}
@@ -95,25 +95,25 @@ export default function SuperUserCard({ initialRole = "USER" }: SuperUserCardPro
             </CardHeader>
             <CardContent className="pt-0">
                 {msg && (
-                    <div className="mb-2 p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                    <div className="mb-2 p-2.5 rounded-lg bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
                         <span>{msg}</span>
                     </div>
                 )}
                 {err && (
-                    <div className="mb-2 p-2.5 rounded-lg bg-red-950/40 border border-red-500/40 text-red-300 text-xs">
+                    <div className="mb-2 p-2.5 rounded-lg bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 text-red-800 dark:text-red-300 text-xs">
                         {err}
                     </div>
                 )}
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/30">
-                    <span>You can toggle this option anytime here or on your <Link href="/profile" className="text-cyan-400 hover:underline">Account Profile</Link> page.</span>
+                    <span>You can toggle this option anytime here or on your <Link href="/profile" className="text-cyan-700 dark:text-cyan-400 hover:underline">Account Profile</Link> page.</span>
                     {isSuper && (
                         <div className="flex items-center gap-2">
-                            <Link href="/radarr" className="text-cyan-400 hover:underline flex items-center gap-0.5">
+                            <Link href="/radarr" className="text-cyan-700 dark:text-cyan-400 hover:underline flex items-center gap-0.5">
                                 Radarr <ArrowRight className="h-3 w-3" />
                             </Link>
                             <span>•</span>
-                            <Link href="/sonarr" className="text-cyan-400 hover:underline flex items-center gap-0.5">
+                            <Link href="/sonarr" className="text-cyan-700 dark:text-cyan-400 hover:underline flex items-center gap-0.5">
                                 Sonarr <ArrowRight className="h-3 w-3" />
                             </Link>
                         </div>

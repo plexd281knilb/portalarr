@@ -650,7 +650,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
   if (loadError && instances.length === 0)
     return (
       <div className="p-8 max-w-3xl mx-auto text-center space-y-4">
-        <AlertCircle className="h-12 w-12 mx-auto text-rose-400" />
+        <AlertCircle className="h-12 w-12 mx-auto text-rose-700 dark:text-rose-400" />
         <h2 className="text-xl font-bold">Failed to Load Sonarr</h2>
         <p className="text-sm text-muted-foreground">{loadError}</p>
         <Button onClick={loadInstances} variant="outline" size="sm" className="gap-2">
@@ -719,7 +719,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
     <div className="space-y-4 sm:space-y-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto pb-12 w-full min-w-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-2xl font-bold text-cyan-400">
+          <h3 className="text-2xl font-bold text-cyan-700 dark:text-cyan-400">
             Sonarr (TV Shows)
           </h3>
           <p className="text-sm text-muted-foreground">
@@ -746,9 +746,9 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
       </div>
 
       {syncError && (
-        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3">
+        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-800 dark:text-rose-300 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+            <AlertCircle className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />
             <span>{syncError}</span>
           </div>
           <Button variant="outline" size="sm" onClick={() => { setSyncError(""); fetchLibrary(); fetchQueue(); }} className="h-7 text-[11px] shrink-0">
@@ -760,21 +760,21 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-1 sm:grid-cols-3 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger value="search" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-cyan-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:bg-muted/80 min-w-0">
-            <Search className="h-4 w-4 text-cyan-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            <Search className="h-4 w-4 text-cyan-700 dark:text-cyan-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
             <span className="truncate">Search TVDB</span>
           </TabsTrigger>
           <TabsTrigger value="library" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-cyan-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:bg-muted/80 min-w-0">
             <span className="truncate">Library ({libraryLoading ? "..." : library.length})</span>
           </TabsTrigger>
           <TabsTrigger value="queue" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-cyan-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:bg-muted/80 min-w-0">
-            <Download className="h-4 w-4 text-cyan-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            <Download className="h-4 w-4 text-cyan-700 dark:text-cyan-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
             <span className="truncate">Activity / Queue</span>
           </TabsTrigger>
         </TabsList>
 
         {/* SEARCH TAB */}
         <TabsContent value="search" className="space-y-4 mt-4">
-          <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+          <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
             <CardHeader>
               <CardTitle className="text-xl font-bold">Search New TV Shows</CardTitle>
               <CardDescription>
@@ -856,7 +856,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                   return (
                     <div
                       key={series.tvdbId}
-                      className={`flex gap-3.5 p-3.5 rounded-xl border border-border/50 bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/40 hover:ring-2 hover:ring-cyan-500/20 hover:shadow-lg transition-all duration-200 relative overflow-hidden ${
+                      className={`flex gap-3.5 p-3.5 rounded-xl border border-border/50 bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/40 hover:ring-2 hover:ring-cyan-500/20 hover:shadow-lg transition-all duration-200 relative overflow-hidden ${
                         series.id && series.id > 0
                           ? "ring-1 ring-cyan-500/30"
                           : ""
@@ -904,7 +904,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                           {series.overview}
                         </p>
                         <div className="mt-2 flex items-center justify-between">
-                          <span className="text-[10px] uppercase font-bold text-cyan-400">
+                          <span className="text-[10px] uppercase font-bold text-cyan-700 dark:text-cyan-400">
                             {series.status}
                           </span>
                           <Button
@@ -961,7 +961,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
 
         {/* LIBRARY TAB */}
         <TabsContent value="library" className="space-y-4 mt-4">
-          <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+          <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
             <CardHeader>
               <CardTitle className="text-xl font-bold">Library Management</CardTitle>
               <CardDescription>
@@ -971,7 +971,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
             <CardContent className="space-y-6">
               {libraryLoading ? (
                 <div className="py-12 text-center">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-cyan-400" />
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-cyan-700 dark:text-cyan-400" />
                   <p className="text-xs text-muted-foreground mt-2">Loading TV show library...</p>
                 </div>
               ) : (
@@ -1058,7 +1058,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                       return (
                         <div
                           key={series.id}
-                          className="flex gap-4 border border-border/50 rounded-xl p-3.5 bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/40 hover:ring-2 hover:ring-cyan-500/20 hover:shadow-lg transition-all duration-200"
+                          className="flex gap-4 border border-border/50 rounded-xl p-3.5 bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/40 hover:ring-2 hover:ring-cyan-500/20 hover:shadow-lg transition-all duration-200"
                         >
                           <div className="w-16 sm:w-20 h-24 sm:h-28 shrink-0 bg-muted/30 border border-border/40 rounded-lg overflow-hidden relative shadow-sm">
                             {coverImg ? (
@@ -1097,7 +1097,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                                   {modifyingId === series.id ? (
                                     <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                   ) : series.monitored ? (
-                                    <Eye className="h-3.5 w-3.5 text-emerald-400" />
+                                    <Eye className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                   ) : (
                                     <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
                                   )}
@@ -1108,7 +1108,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                                   className={`text-[9px] px-1.5 font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity ${
                                     series.monitored
                                       ? monitoredSeasons > 0
-                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                        ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
                                         : "bg-amber-500/20 text-amber-500 border-amber-500/30"
                                       : "bg-muted/40 text-muted-foreground border-border/40"
                                   }`}
@@ -1176,7 +1176,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-7 text-xs border-border/60 hover:bg-cyan-500/10 hover:border-cyan-500/40 text-cyan-400 font-semibold transition-all duration-200"
+                                className="h-7 text-xs border-border/60 hover:bg-cyan-500/10 hover:border-cyan-500/40 text-cyan-700 dark:text-cyan-400 font-semibold transition-all duration-200"
                                 title="Auto Search Series"
                                 disabled={modifyingId === series.id}
                                 onClick={() => handleTriggerSearch(series)}
@@ -1191,7 +1191,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-7 w-7 p-0 border-border/60 hover:bg-red-500/10 hover:border-red-500/40 text-muted-foreground hover:text-red-400 transition-all duration-200 shrink-0"
+                                className="h-7 w-7 p-0 border-border/60 hover:bg-red-500/10 hover:border-red-500/40 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 transition-all duration-200 shrink-0"
                                 title="Delete Series"
                                 disabled={modifyingId === series.id}
                                 onClick={() => openDeleteSeriesDialog(series)}
@@ -1217,7 +1217,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
 
         {/* QUEUE TAB */}
         <TabsContent value="queue" className="space-y-4 mt-4">
-          <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+          <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0 pb-4 border-b border-border/40">
               <div className="space-y-1">
                 <CardTitle className="text-xl font-bold">Activity / Queue</CardTitle>
@@ -1280,7 +1280,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                     return (
                       <div
                         key={item.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 border border-border/40 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/30 transition-all duration-200"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 border border-border/40 rounded-xl bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/30 transition-all duration-200"
                       >
                         <div className="flex-1 min-w-0">
                           <div
@@ -1301,7 +1301,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                             </div>
                           )}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
-                            <span className="text-cyan-400 font-medium">
+                            <span className="text-cyan-700 dark:text-cyan-400 font-medium">
                               {item.status}
                             </span>
                             {item.size > 0 && (
@@ -1388,7 +1388,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 w-8 p-0 border-border/60 hover:bg-red-500/10 hover:border-red-500/40 text-muted-foreground hover:text-red-400 transition-all duration-200"
+                            className="h-8 w-8 p-0 border-border/60 hover:bg-red-500/10 hover:border-red-500/40 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 transition-all duration-200"
                             title="Cancel & Remove Download"
                             disabled={deletingQueueId === item.id}
                             onClick={() => handleDeleteQueueItem(item)}
@@ -1412,9 +1412,9 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
 
       {/* INTERACTIVE RELEASE MODAL */}
       <Dialog open={releasesModalOpen} onOpenChange={setReleasesModalOpen}>
-        <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60">
+        <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col p-0 bg-popover dark:bg-[#121218] border-border/60">
           <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
-            <DialogTitle className="text-lg font-bold text-cyan-400">
+            <DialogTitle className="text-lg font-bold text-cyan-700 dark:text-cyan-400">
               Releases - {activeSeries?.title}{" "}
               {activeSeasonNumber !== undefined
                 ? `- Season ${activeSeasonNumber}`
@@ -1428,7 +1428,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
           <div className="flex-1 overflow-y-auto min-h-[50vh] p-6">
             {releasesLoading ? (
               <div className="h-full flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin mb-4 text-cyan-400" />
+                <Loader2 className="h-8 w-8 animate-spin mb-4 text-cyan-700 dark:text-cyan-400" />
                 <p className="text-sm">Searching indexers for TV releases...</p>
               </div>
             ) : (
@@ -1464,7 +1464,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                           className={`border rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center transition-all duration-200 ${
                             rejected
                               ? "opacity-60 bg-muted/20 border-border/30"
-                              : "bg-[#101014]/90 border-border/50 hover:border-cyan-500/40 hover:ring-2 hover:ring-cyan-500/20"
+                              : "bg-card/95 dark:bg-[#101014]/90 border-border/50 hover:border-cyan-500/40 hover:ring-2 hover:ring-cyan-500/20"
                           }`}
                         >
                           <div className="flex-1 min-w-0">
@@ -1482,9 +1482,9 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                                   variant="outline"
                                   className={`text-[10px] font-mono font-semibold ${
                                     release.customFormatScore > 0
-                                      ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
+                                      ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30"
                                       : release.customFormatScore < 0
-                                        ? "bg-red-500/10 text-red-400 border-red-500/30"
+                                        ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30"
                                         : "border-border/60 text-muted-foreground"
                                   }`}
                                 >
@@ -1507,10 +1507,10 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                               <span className="bg-muted/40 px-2 py-0.5 rounded text-foreground border border-border/30">
                                 {release.indexer}
                               </span>
-                              <span className="text-emerald-400 font-medium">
+                              <span className="text-emerald-700 dark:text-emerald-400 font-medium">
                                 {release.seeders} S
                               </span>
-                              <span className="text-red-400 font-medium">
+                              <span className="text-red-700 dark:text-red-400 font-medium">
                                 {release.leechers} L
                               </span>
                             </div>
@@ -1520,7 +1520,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                                   {release.rejections.map((rej: string, rIdx: number) => (
                                     <div
                                       key={rIdx}
-                                      className={`text-xs flex items-start gap-1 ${rejected ? "text-red-400" : "text-amber-500"}`}
+                                      className={`text-xs flex items-start gap-1 ${rejected ? "text-red-700 dark:text-red-400" : "text-amber-500"}`}
                                     >
                                       <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
                                       <span>{rej}</span>
@@ -1562,9 +1562,9 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
 
       {/* MANAGE SEASONS MODAL */}
       <Dialog open={seasonsModalOpen} onOpenChange={setSeasonsModalOpen}>
-        <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60">
+        <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-0 bg-popover dark:bg-[#121218] border-border/60">
           <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
-            <DialogTitle className="text-cyan-400 font-bold">Manage Seasons</DialogTitle>
+            <DialogTitle className="text-cyan-700 dark:text-cyan-400 font-bold">Manage Seasons</DialogTitle>
             <DialogDescription>
               {activeSeasonsSeries?.title} ({activeSeasonsSeries?.year})
             </DialogDescription>
@@ -1640,9 +1640,9 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
 
       {/* MANAGE EPISODES MODAL */}
       <Dialog open={episodesModalOpen} onOpenChange={setEpisodesModalOpen}>
-        <DialogContent className="w-[96vw] sm:max-w-xl max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60">
+        <DialogContent className="w-[96vw] sm:max-w-xl max-h-[85vh] flex flex-col p-0 bg-popover dark:bg-[#121218] border-border/60">
           <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
-            <DialogTitle className="text-cyan-400 font-bold">
+            <DialogTitle className="text-cyan-700 dark:text-cyan-400 font-bold">
               Season {activeSeasonNumberForEpisodes} Episodes
             </DialogTitle>
             <DialogDescription>{activeSeasonsSeries?.title}</DialogDescription>
@@ -1651,7 +1651,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {episodesLoading ? (
               <div className="py-12 flex justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-cyan-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-cyan-700 dark:text-cyan-400" />
               </div>
             ) : episodes.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground border border-dashed border-border/40 rounded-xl">
@@ -1662,11 +1662,11 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                 {episodes.map((ep: any) => (
                   <div
                     key={ep.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-border/40 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/30 transition-all duration-200 gap-3"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-border/40 rounded-xl bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/30 transition-all duration-200 gap-3"
                   >
                     <div className="flex flex-col min-w-0 flex-1 pr-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-cyan-400 whitespace-nowrap bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                        <span className="font-bold text-xs text-cyan-700 dark:text-cyan-400 whitespace-nowrap bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
                           EP {ep.episodeNumber}
                         </span>
                         <span className="text-sm font-medium truncate text-foreground">
@@ -1736,10 +1736,10 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
           setDeleteSeriesDialog((prev) => ({ ...prev, open }))
         }
       >
-        <DialogContent className="sm:max-w-md w-[95vw] bg-[#121218] border-border/60">
+        <DialogContent className="sm:max-w-md w-[95vw] bg-popover dark:bg-[#121218] border-border/60">
           <DialogHeader>
-            <DialogTitle className="text-red-400 font-bold flex items-center gap-2">
-              <Trash2 className="h-5 w-5 text-red-400" /> Delete Series
+            <DialogTitle className="text-red-700 dark:text-red-400 font-bold flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-700 dark:text-red-400" /> Delete Series
             </DialogTitle>
             <DialogDescription>
               Are you sure you want to remove{" "}
@@ -1751,7 +1751,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-red-950/20 border border-red-900/30">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 dark:bg-red-950/20 border border-red-500/30 dark:border-red-900/30">
               <div className="space-y-0.5">
                 <div className="text-sm font-semibold text-foreground">
                   Delete Episode Files From Disk
@@ -1801,15 +1801,15 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
 
       {/* FLOATING TOAST NOTIFICATION */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-[#121218]/95 border border-cyan-500/40 shadow-xl backdrop-blur-md text-sm text-foreground animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-card/95 dark:bg-[#121218]/95 border border-cyan-500/40 shadow-xl backdrop-blur-md text-sm text-foreground animate-in fade-in slide-in-from-bottom-2 duration-200">
           {toast.type === "success" && (
-            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
           )}
           {toast.type === "error" && (
-            <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+            <AlertCircle className="h-4 w-4 text-red-700 dark:text-red-400 shrink-0" />
           )}
           {toast.type === "info" && (
-            <Sparkles className="h-4 w-4 text-cyan-400 shrink-0" />
+            <Sparkles className="h-4 w-4 text-cyan-700 dark:text-cyan-400 shrink-0" />
           )}
           <span className="font-medium">{toast.message}</span>
         </div>

@@ -274,21 +274,21 @@ export function ServerGuardRailsModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[92dvh] bg-slate-950 border-slate-800 text-white flex flex-col p-4 sm:p-6 overflow-hidden shadow-2xl">
+            <DialogContent className="max-w-4xl max-h-[92dvh] bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-white flex flex-col p-4 sm:p-6 overflow-hidden shadow-2xl">
                 {/* Header */}
-                <DialogHeader className="pb-3 border-b border-slate-800/80 shrink-0">
+                <DialogHeader className="pb-3 border-b border-border dark:border-slate-800/80 shrink-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
-                            <DialogTitle className="text-xl font-black flex items-center gap-2 text-white">
-                                <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                            <DialogTitle className="text-xl font-black flex items-center gap-2 text-foreground dark:text-white">
+                                <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/30">
                                     <ShieldCheck className="h-5 w-5" />
                                 </div>
                                 <span>Strict Server Guard Rails</span>
-                                <Badge variant="outline" className="border-sky-500/40 text-sky-300 bg-sky-950/40 text-[10px] ml-1.5 font-bold">
+                                <Badge variant="outline" className="border-sky-500/40 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/40 text-[10px] ml-1.5 font-bold">
                                     Per-Server Isolation
                                 </Badge>
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                            <DialogDescription className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
                                 <span>Configure strict content rating ceilings, blocked ratings, genres, and parental severity levels per Plex server.</span>
                             </DialogDescription>
                         </div>
@@ -297,11 +297,11 @@ export function ServerGuardRailsModal({
                         {servers.length > 0 && (
                             <div className="flex items-center gap-2">
                                 <Select value={selectedServerId} onValueChange={setSelectedServerId}>
-                                    <SelectTrigger className="h-9 bg-slate-900 border-slate-800 text-xs w-full sm:w-[190px] text-slate-200">
-                                        <HardDrive className="h-3.5 w-3.5 text-sky-400 mr-1.5 shrink-0" />
+                                    <SelectTrigger className="h-9 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-xs w-full sm:w-[190px] text-foreground dark:text-slate-200">
+                                        <HardDrive className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 mr-1.5 shrink-0" />
                                         <SelectValue placeholder="Select Server" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                    <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
                                         {servers.map(s => {
                                             const cfg = guardRailsMap[s.serverId];
                                             const isGuarded = cfg?.enabled;
@@ -310,7 +310,7 @@ export function ServerGuardRailsModal({
                                                     <div className="flex items-center justify-between gap-2 w-full">
                                                         <span>{s.serverName}</span>
                                                         {isGuarded && (
-                                                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-bold shrink-0">
+                                                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 font-bold shrink-0">
                                                                 <Shield className="w-2.5 h-2.5" /> {cfg.maxRating}
                                                             </span>
                                                         )}
@@ -327,8 +327,8 @@ export function ServerGuardRailsModal({
 
                 {/* Save Feedback Banner */}
                 {saveSuccessMsg && (
-                    <div className="p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center gap-2 animate-in fade-in shrink-0">
-                        <Check className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <div className="p-2.5 rounded-xl bg-emerald-500/15 dark:bg-emerald-950/80 border border-emerald-500/50 text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2 animate-in fade-in shrink-0">
+                        <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                         <span className="font-semibold">{saveSuccessMsg}</span>
                     </div>
                 )}
@@ -336,8 +336,8 @@ export function ServerGuardRailsModal({
                 {/* Body Content */}
                 <div className="flex-1 overflow-y-auto pr-1 -mr-1 space-y-5 py-2">
                     {loading ? (
-                        <div className="flex flex-col items-center justify-center h-64 gap-2 text-slate-400">
-                            <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+                        <div className="flex flex-col items-center justify-center h-64 gap-2 text-slate-600 dark:text-slate-400">
+                            <Loader2 className="h-8 w-8 animate-spin text-amber-700 dark:text-amber-400" />
                             <p className="text-xs">Loading guard rail configurations...</p>
                         </div>
                     ) : (
@@ -345,21 +345,21 @@ export function ServerGuardRailsModal({
                             {/* Server Master Switch Card */}
                             <div className={`p-4 rounded-xl border transition-all ${
                                 activeConfig.enabled
-                                    ? "bg-gradient-to-r from-amber-950/30 via-slate-900/95 to-slate-900/95 border-amber-500/40 shadow-lg"
-                                    : "bg-slate-900/50 border-slate-800"
+                                    ? "bg-gradient-to-r from-amber-500/10 dark:from-amber-950/30 via-card dark:via-slate-900/95 to-muted/60 dark:to-slate-900/95 border-amber-500/40 shadow-lg"
+                                    : "bg-muted/70 dark:bg-slate-900/50 border-border dark:border-slate-800"
                             }`}>
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex items-center gap-3">
                                         <div className={`p-2.5 rounded-lg border ${
                                             activeConfig.enabled
-                                                ? "bg-amber-500/15 text-amber-400 border-amber-500/35"
-                                                : "bg-slate-800 text-slate-400 border-slate-700"
+                                                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/35"
+                                                : "bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-border dark:border-slate-700"
                                         }`}>
                                             {activeConfig.enabled ? <ShieldCheck className="h-6 w-6" /> : <ShieldAlert className="h-6 w-6" />}
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <h3 className="text-sm font-black text-white">
+                                                <h3 className="text-sm font-black text-foreground dark:text-white">
                                                     Strict Guard Rails for &ldquo;{activeServer.serverName}&rdquo;
                                                 </h3>
                                                 {activeConfig.enabled ? (
@@ -367,19 +367,19 @@ export function ServerGuardRailsModal({
                                                         ACTIVE &amp; ENFORCED
                                                     </Badge>
                                                 ) : (
-                                                    <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px]">
+                                                    <Badge variant="outline" className="border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px]">
                                                         DISABLED (UNRESTRICTED)
                                                     </Badge>
                                                 )}
                                             </div>
-                                            <p className="text-xs text-slate-400 mt-0.5">
+                                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                                                 When enabled, media exceeding this server&apos;s ratings or severity limits are strictly blocked across search, simulation, and curation.
                                             </p>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center gap-3 shrink-0">
-                                        <Label htmlFor="guard-rail-toggle" className="text-xs font-bold cursor-pointer text-slate-300">
+                                        <Label htmlFor="guard-rail-toggle" className="text-xs font-bold cursor-pointer text-slate-700 dark:text-slate-300">
                                             {activeConfig.enabled ? "Enabled" : "Disabled"}
                                         </Label>
                                         <Switch
@@ -393,8 +393,8 @@ export function ServerGuardRailsModal({
 
                             {/* 1-Click Guard Rail Presets */}
                             <div className="space-y-2">
-                                <Label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                     <span>1-Click Guard Rail Profiles</span>
                                 </Label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -404,17 +404,17 @@ export function ServerGuardRailsModal({
                                         onClick={() => applyPreset("kid_safe")}
                                         className={`p-3 rounded-xl border text-left transition-all ${
                                             activeConfig.preset === "kid_safe"
-                                                ? "bg-sky-950/80 border-sky-500 ring-1 ring-sky-500/50 shadow-md"
-                                                : "bg-slate-900/80 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700"
+                                                ? "bg-sky-500/15 dark:bg-sky-950/80 border-sky-500 ring-1 ring-sky-500/50 shadow-md"
+                                                : "bg-card/95 dark:bg-slate-900/80 border-border dark:border-slate-800 hover:bg-accent dark:hover:bg-slate-800/80 hover:border-border dark:hover:border-slate-700"
                                         }`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
-                                            <Baby className="h-4 w-4 text-sky-400" />
-                                            {activeConfig.preset === "kid_safe" && <Check className="h-3.5 w-3.5 text-sky-400" />}
+                                            <Baby className="h-4 w-4 text-sky-700 dark:text-sky-400" />
+                                            {activeConfig.preset === "kid_safe" && <Check className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />}
                                         </div>
-                                        <div className="text-xs font-black text-white">Kid-Safe Mode</div>
-                                        <div className="text-[10px] text-sky-300/90 font-bold mt-0.5">Max G / TV-Y7</div>
-                                        <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">
+                                        <div className="text-xs font-black text-foreground dark:text-white">Kid-Safe Mode</div>
+                                        <div className="text-[10px] text-sky-800/90 dark:text-sky-300/90 font-bold mt-0.5">Max G / TV-Y7</div>
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
                                             Toddlers &amp; young kids. Zero adult themes, horror, or violence.
                                         </p>
                                     </button>
@@ -425,17 +425,17 @@ export function ServerGuardRailsModal({
                                         onClick={() => applyPreset("family")}
                                         className={`p-3 rounded-xl border text-left transition-all ${
                                             activeConfig.preset === "family"
-                                                ? "bg-emerald-950/80 border-emerald-500 ring-1 ring-emerald-500/50 shadow-md"
-                                                : "bg-slate-900/80 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700"
+                                                ? "bg-emerald-500/15 dark:bg-emerald-950/80 border-emerald-500 ring-1 ring-emerald-500/50 shadow-md"
+                                                : "bg-card/95 dark:bg-slate-900/80 border-border dark:border-slate-800 hover:bg-accent dark:hover:bg-slate-800/80 hover:border-border dark:hover:border-slate-700"
                                         }`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
-                                            <Users className="h-4 w-4 text-emerald-400" />
-                                            {activeConfig.preset === "family" && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                                            <Users className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                                            {activeConfig.preset === "family" && <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />}
                                         </div>
-                                        <div className="text-xs font-black text-white">Family-Safe</div>
-                                        <div className="text-[10px] text-emerald-300/80 font-bold mt-0.5">Max PG / TV-PG</div>
-                                        <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">
+                                        <div className="text-xs font-black text-foreground dark:text-white">Family-Safe</div>
+                                        <div className="text-[10px] text-emerald-800/80 dark:text-emerald-300/80 font-bold mt-0.5">Max PG / TV-PG</div>
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
                                             Pre-teens &amp; family living room. Blocks PG-13, R, TV-MA.
                                         </p>
                                     </button>
@@ -446,17 +446,17 @@ export function ServerGuardRailsModal({
                                         onClick={() => applyPreset("teen")}
                                         className={`p-3 rounded-xl border text-left transition-all ${
                                             activeConfig.preset === "teen"
-                                                ? "bg-amber-950/80 border-amber-500 ring-1 ring-amber-500/50 shadow-md"
-                                                : "bg-slate-900/80 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700"
+                                                ? "bg-amber-500/15 dark:bg-amber-950/80 border-amber-500 ring-1 ring-amber-500/50 shadow-md"
+                                                : "bg-card/95 dark:bg-slate-900/80 border-border dark:border-slate-800 hover:bg-accent dark:hover:bg-slate-800/80 hover:border-border dark:hover:border-slate-700"
                                         }`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
-                                            <UserCheck className="h-4 w-4 text-amber-400" />
-                                            {activeConfig.preset === "teen" && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                                            <UserCheck className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                                            {activeConfig.preset === "teen" && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                                         </div>
-                                        <div className="text-xs font-black text-white">Teen-Friendly</div>
-                                        <div className="text-[10px] text-amber-300/80 font-bold mt-0.5">Max PG-13 / TV-14</div>
-                                        <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">
+                                        <div className="text-xs font-black text-foreground dark:text-white">Teen-Friendly</div>
+                                        <div className="text-[10px] text-amber-800/80 dark:text-amber-300/80 font-bold mt-0.5">Max PG-13 / TV-14</div>
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
                                             Teens &amp; high school. Blocks Rated R, NC-17, TV-MA.
                                         </p>
                                     </button>
@@ -467,19 +467,19 @@ export function ServerGuardRailsModal({
                                         onClick={() => applyPreset("unrestricted")}
                                         className={`p-3 rounded-xl border text-left transition-all ${
                                             activeConfig.preset === "unrestricted" || (!activeConfig.enabled && activeConfig.maxRating === "UNRESTRICTED")
-                                                ? "bg-slate-900 border-slate-600 ring-1 ring-slate-500 shadow-md"
-                                                : "bg-slate-900/80 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700"
+                                                ? "bg-card/95 dark:bg-slate-900 border-slate-600 ring-1 ring-slate-500 shadow-md"
+                                                : "bg-card/95 dark:bg-slate-900/80 border-border dark:border-slate-800 hover:bg-accent dark:hover:bg-slate-800/80 hover:border-border dark:hover:border-slate-700"
                                         }`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
-                                            <Unlock className="h-4 w-4 text-slate-300" />
+                                            <Unlock className="h-4 w-4 text-slate-700 dark:text-slate-300" />
                                             {(activeConfig.preset === "unrestricted" || (!activeConfig.enabled && activeConfig.maxRating === "UNRESTRICTED")) && (
-                                                <Check className="h-3.5 w-3.5 text-slate-300" />
+                                                <Check className="h-3.5 w-3.5 text-slate-700 dark:text-slate-300" />
                                             )}
                                         </div>
-                                        <div className="text-xs font-black text-white">Unrestricted</div>
-                                        <div className="text-[10px] text-slate-400 font-bold mt-0.5">All Ratings Allowed</div>
-                                        <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">
+                                        <div className="text-xs font-black text-foreground dark:text-white">Unrestricted</div>
+                                        <div className="text-[10px] text-slate-600 dark:text-slate-400 font-bold mt-0.5">All Ratings Allowed</div>
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
                                             Full unrestricted adult access. No guard rail filters applied.
                                         </p>
                                     </button>
@@ -489,11 +489,11 @@ export function ServerGuardRailsModal({
                             {/* Detailed Policy Controls */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {/* Left Column: Rating Ceiling & Blocked Ratings */}
-                                <div className="space-y-4 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
+                                <div className="space-y-4 p-4 rounded-2xl bg-muted/70 dark:bg-slate-900/60 border border-border dark:border-slate-800">
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                                        <Label className="text-xs font-bold text-foreground dark:text-slate-200 flex items-center justify-between">
                                             <span>Content Rating Ceiling (Max Allowed)</span>
-                                            <Badge variant="outline" className="text-[10px] border-sky-500/40 text-sky-300">
+                                            <Badge variant="outline" className="text-[10px] border-sky-500/40 text-sky-800 dark:text-sky-300">
                                                 Ceiling: {activeConfig.maxRating}
                                             </Badge>
                                         </Label>
@@ -501,10 +501,10 @@ export function ServerGuardRailsModal({
                                             value={activeConfig.maxRating}
                                             onValueChange={(val) => updateActiveConfig({ maxRating: val, preset: "custom" })}
                                         >
-                                            <SelectTrigger className="h-9 bg-slate-950 border-slate-800 text-xs text-slate-100">
+                                            <SelectTrigger className="h-9 bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs text-foreground dark:text-slate-100">
                                                 <SelectValue placeholder="Select Rating Ceiling" />
                                             </SelectTrigger>
-                                            <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
                                                 <SelectItem value="G" className="text-xs">G / TV-Y / TV-G (Toddlers &amp; All Ages)</SelectItem>
                                                 <SelectItem value="PG" className="text-xs">PG / TV-PG (Children &amp; Family)</SelectItem>
                                                 <SelectItem value="PG-13" className="text-xs">PG-13 / TV-14 (Teens &amp; Young Adults)</SelectItem>
@@ -516,10 +516,10 @@ export function ServerGuardRailsModal({
                                     </div>
 
                                     {/* Block Unrated Toggle */}
-                                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                                    <div className="flex items-center justify-between p-3 rounded-xl bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800">
                                         <div>
-                                            <div className="text-xs font-bold text-slate-200">Block Unrated &amp; NR Titles</div>
-                                            <div className="text-[10px] text-slate-400">Strictly exclude items with missing rating or &ldquo;NR/UR&rdquo; tags</div>
+                                            <div className="text-xs font-bold text-foreground dark:text-slate-200">Block Unrated &amp; NR Titles</div>
+                                            <div className="text-[10px] text-slate-600 dark:text-slate-400">Strictly exclude items with missing rating or &ldquo;NR/UR&rdquo; tags</div>
                                         </div>
                                         <Switch
                                             checked={activeConfig.blockUnrated}
@@ -529,11 +529,11 @@ export function ServerGuardRailsModal({
 
                                     {/* Blocked Ratings Tag Selector */}
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                                        <Label className="text-xs font-bold text-foreground dark:text-slate-200 flex items-center justify-between">
                                             <span>Explicitly Blocked Content Ratings</span>
-                                            <span className="text-[10px] text-slate-400">Tap to toggle block</span>
+                                            <span className="text-[10px] text-slate-600 dark:text-slate-400">Tap to toggle block</span>
                                         </Label>
-                                        <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 min-h-[50px]">
+                                        <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800 min-h-[50px]">
                                             {COMMON_RATINGS.map(r => {
                                                 const isBlocked = activeConfig.blockedRatings?.some(br => br.toUpperCase() === r.toUpperCase());
                                                 return (
@@ -543,8 +543,8 @@ export function ServerGuardRailsModal({
                                                         onClick={() => toggleBlockedRating(r)}
                                                         className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all border ${
                                                             isBlocked
-                                                                ? "bg-rose-950/90 text-rose-300 border-rose-500 shadow-sm"
-                                                                : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                                                                ? "bg-rose-500/15 dark:bg-rose-950/90 text-rose-800 dark:text-rose-300 border-rose-500 shadow-sm"
+                                                                : "bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200 hover:border-border dark:hover:border-slate-700"
                                                         }`}
                                                     >
                                                         {isBlocked ? `🚫 ${r}` : r}
@@ -556,20 +556,20 @@ export function ServerGuardRailsModal({
                                 </div>
 
                                 {/* Right Column: Parental Severities & Genres */}
-                                <div className="space-y-4 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
+                                <div className="space-y-4 p-4 rounded-2xl bg-muted/70 dark:bg-slate-900/60 border border-border dark:border-slate-800">
                                     {/* IMDb Parental Advisory Maximum Severities */}
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                                            <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                                        <Label className="text-xs font-bold text-foreground dark:text-slate-200 flex items-center gap-1.5">
+                                            <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                             <span>IMDb Parental Advisory Severity Limits</span>
                                         </Label>
-                                        <div className="space-y-2 p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                                        <div className="space-y-2 p-3 rounded-xl bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800">
                                             {(["nudity", "violence", "profanity", "alcohol", "frightening"] as ParentalCategoryKey[]).map(cat => {
                                                 const info = PARENTAL_CATEGORY_INFO[cat];
                                                 const currentVal = activeConfig.maxParentalSeverity?.[cat] || "Severe";
                                                 return (
                                                     <div key={cat} className="flex items-center justify-between gap-2 text-xs">
-                                                        <span className="text-slate-300 flex items-center gap-1.5">
+                                                        <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                                                             <span>{info.icon}</span>
                                                             <span className="font-semibold">{info.label}</span>
                                                         </span>
@@ -585,14 +585,14 @@ export function ServerGuardRailsModal({
                                                                 });
                                                             }}
                                                         >
-                                                            <SelectTrigger className="h-7 bg-slate-900 border-slate-800 text-[11px] w-[110px] text-slate-200">
+                                                            <SelectTrigger className="h-7 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 text-[11px] w-[110px] text-foreground dark:text-slate-200">
                                                                 <SelectValue />
                                                             </SelectTrigger>
-                                                            <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                                                <SelectItem value="None" className="text-xs text-emerald-400 font-bold">Max None</SelectItem>
-                                                                <SelectItem value="Mild" className="text-xs text-amber-400 font-bold">Max Mild</SelectItem>
-                                                                <SelectItem value="Moderate" className="text-xs text-orange-400 font-bold">Max Moderate</SelectItem>
-                                                                <SelectItem value="Severe" className="text-xs text-rose-400 font-bold">Max Severe (All)</SelectItem>
+                                                            <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
+                                                                <SelectItem value="None" className="text-xs text-emerald-700 dark:text-emerald-400 font-bold">Max None</SelectItem>
+                                                                <SelectItem value="Mild" className="text-xs text-amber-700 dark:text-amber-400 font-bold">Max Mild</SelectItem>
+                                                                <SelectItem value="Moderate" className="text-xs text-orange-700 dark:text-orange-400 font-bold">Max Moderate</SelectItem>
+                                                                <SelectItem value="Severe" className="text-xs text-rose-700 dark:text-rose-400 font-bold">Max Severe (All)</SelectItem>
                                                             </SelectContent>
                                                         </Select>
                                                     </div>
@@ -603,10 +603,10 @@ export function ServerGuardRailsModal({
 
                                     {/* Blocked Genres */}
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-200">
+                                        <Label className="text-xs font-bold text-foreground dark:text-slate-200">
                                             Blocked Genres
                                         </Label>
-                                        <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                                        <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800">
                                             {COMMON_GENRES.map(g => {
                                                 const isBlocked = activeConfig.blockedGenres?.some(bg => bg.toLowerCase() === g.toLowerCase());
                                                 return (
@@ -616,8 +616,8 @@ export function ServerGuardRailsModal({
                                                         onClick={() => toggleBlockedGenre(g)}
                                                         className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all border ${
                                                             isBlocked
-                                                                ? "bg-rose-950/90 text-rose-300 border-rose-500 shadow-sm"
-                                                                : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                                                                ? "bg-rose-500/15 dark:bg-rose-950/90 text-rose-800 dark:text-rose-300 border-rose-500 shadow-sm"
+                                                                : "bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-slate-200 hover:border-border dark:hover:border-slate-700"
                                                         }`}
                                                     >
                                                         {isBlocked ? `🚫 ${g}` : g}
@@ -633,14 +633,14 @@ export function ServerGuardRailsModal({
                                                 onChange={(e) => setNewGenre(e.target.value)}
                                                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomGenre(); } }}
                                                 placeholder="Add custom blocked genre (e.g. Slasher)..."
-                                                className="bg-slate-950 border-slate-800 text-xs h-7 text-slate-200 rounded-lg placeholder:text-slate-500"
+                                                className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-7 text-foreground dark:text-slate-200 rounded-lg placeholder:text-slate-500"
                                             />
                                             <Button
                                                 type="button"
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={addCustomGenre}
-                                                className="h-7 text-xs border-slate-800 bg-slate-900 text-slate-300 hover:text-white shrink-0 px-2.5"
+                                                className="h-7 text-xs border-border dark:border-slate-800 bg-card/95 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white shrink-0 px-2.5"
                                             >
                                                 <Plus className="h-3.5 w-3.5 mr-1" /> Add
                                             </Button>
@@ -650,10 +650,10 @@ export function ServerGuardRailsModal({
                             </div>
 
                             {/* Blocked Keywords & Custom Title Filter */}
-                            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
-                                <Label className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                            <div className="p-4 rounded-2xl bg-muted/70 dark:bg-slate-900/60 border border-border dark:border-slate-800 space-y-2">
+                                <Label className="text-xs font-bold text-foreground dark:text-slate-200 flex items-center justify-between">
                                     <span>Custom Keyword Blocklist (Title Matches)</span>
-                                    <span className="text-[10px] text-slate-400">Case-insensitive substring match</span>
+                                    <span className="text-[10px] text-slate-600 dark:text-slate-400">Case-insensitive substring match</span>
                                 </Label>
                                 <div className="flex items-center gap-2">
                                     <Input
@@ -661,7 +661,7 @@ export function ServerGuardRailsModal({
                                         onChange={(e) => setNewKeyword(e.target.value)}
                                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomKeyword(); } }}
                                         placeholder="Add keyword or phrase to block (e.g. Deadpool, Saw, Fifty Shades)..."
-                                        className="bg-slate-950 border-slate-800 text-xs h-8 text-slate-200 rounded-xl placeholder:text-slate-500"
+                                        className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-8 text-foreground dark:text-slate-200 rounded-xl placeholder:text-slate-500"
                                     />
                                     <Button
                                         type="button"
@@ -678,13 +678,13 @@ export function ServerGuardRailsModal({
                                         {activeConfig.blockedKeywords.map(kw => (
                                             <span
                                                 key={kw}
-                                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-950/80 border border-rose-500/50 text-rose-300 text-[11px] font-bold"
+                                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 dark:bg-rose-950/80 border border-rose-500/50 text-rose-800 dark:text-rose-300 text-[11px] font-bold"
                                             >
                                                 <span>🚫 {kw}</span>
                                                 <button
                                                     type="button"
                                                     onClick={() => removeKeyword(kw)}
-                                                    className="hover:text-white"
+                                                    className="hover:text-foreground dark:hover:text-white"
                                                 >
                                                     <X className="h-3 w-3" />
                                                 </button>
@@ -695,15 +695,15 @@ export function ServerGuardRailsModal({
                             </div>
 
                             {/* Enforcement Scopes */}
-                            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
-                                <Label className="text-xs font-bold text-slate-200">
+                            <div className="p-4 rounded-2xl bg-muted/70 dark:bg-slate-900/60 border border-border dark:border-slate-800 space-y-3">
+                                <Label className="text-xs font-bold text-foreground dark:text-slate-200">
                                     Enforcement Scopes &amp; Protection
                                 </Label>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                                    <div className="flex items-center justify-between p-3 rounded-xl bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800">
                                         <div>
-                                            <div className="text-xs font-bold text-slate-200">Search &amp; Simulator</div>
-                                            <div className="text-[10px] text-slate-400">Strictly filter poster picker</div>
+                                            <div className="text-xs font-bold text-foreground dark:text-slate-200">Search &amp; Simulator</div>
+                                            <div className="text-[10px] text-slate-600 dark:text-slate-400">Strictly filter poster picker</div>
                                         </div>
                                         <Switch
                                             checked={activeConfig.enforceInSearch}
@@ -711,10 +711,10 @@ export function ServerGuardRailsModal({
                                         />
                                     </div>
 
-                                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                                    <div className="flex items-center justify-between p-3 rounded-xl bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800">
                                         <div>
-                                            <div className="text-xs font-bold text-slate-200">Collections &amp; Hubs</div>
-                                            <div className="text-[10px] text-slate-400">Prevent adult collection items</div>
+                                            <div className="text-xs font-bold text-foreground dark:text-slate-200">Collections &amp; Hubs</div>
+                                            <div className="text-[10px] text-slate-600 dark:text-slate-400">Prevent adult collection items</div>
                                         </div>
                                         <Switch
                                             checked={activeConfig.enforceInCuration}
@@ -722,10 +722,10 @@ export function ServerGuardRailsModal({
                                         />
                                     </div>
 
-                                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                                    <div className="flex items-center justify-between p-3 rounded-xl bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800">
                                         <div>
-                                            <div className="text-xs font-bold text-slate-200">Storage Prune Shield</div>
-                                            <div className="text-[10px] text-slate-400">Protect kid media from cleanup</div>
+                                            <div className="text-xs font-bold text-foreground dark:text-slate-200">Storage Prune Shield</div>
+                                            <div className="text-[10px] text-slate-600 dark:text-slate-400">Protect kid media from cleanup</div>
                                         </div>
                                         <Switch
                                             checked={activeConfig.enforceInPruning}
@@ -739,9 +739,9 @@ export function ServerGuardRailsModal({
                 </div>
 
                 {/* Footer Actions */}
-                <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
-                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                        <Info className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                <div className="pt-3 border-t border-border dark:border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                        <Info className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                         <span>Changes take effect immediately across all curation workflows for {activeServer.serverName}.</span>
                     </div>
 
@@ -751,7 +751,7 @@ export function ServerGuardRailsModal({
                             variant="outline"
                             size="sm"
                             onClick={() => onOpenChange(false)}
-                            className="h-9 text-xs border-slate-800 bg-slate-900 text-slate-300 hover:text-white"
+                            className="h-9 text-xs border-border dark:border-slate-800 bg-card/95 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                         >
                             Close
                         </Button>

@@ -108,16 +108,16 @@ export default function AdminSystemHealthGrid() {
 
     const getServiceIcon = (category: string, type: string) => {
         const t = (type || "").toLowerCase();
-        if (category === "plex") return <Tv className="h-4 w-4 text-amber-400" />;
-        if (category === "jellyfin") return <Tv className="h-4 w-4 text-sky-400" />;
-        if (category === "emby") return <Tv className="h-4 w-4 text-emerald-400" />;
-        if (category === "glances") return <Cpu className="h-4 w-4 text-emerald-400" />;
-        if (category === "tautulli") return <Activity className="h-4 w-4 text-amber-400" />;
-        if (t.includes("sonarr")) return <Tv className="h-4 w-4 text-sky-400" />;
+        if (category === "plex") return <Tv className="h-4 w-4 text-amber-700 dark:text-amber-400" />;
+        if (category === "jellyfin") return <Tv className="h-4 w-4 text-sky-700 dark:text-sky-400" />;
+        if (category === "emby") return <Tv className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />;
+        if (category === "glances") return <Cpu className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />;
+        if (category === "tautulli") return <Activity className="h-4 w-4 text-amber-700 dark:text-amber-400" />;
+        if (t.includes("sonarr")) return <Tv className="h-4 w-4 text-sky-700 dark:text-sky-400" />;
         if (t.includes("radarr")) return <Film className="h-4 w-4 text-amber-500" />;
-        if (t.includes("seerr") || t.includes("ombi")) return <Compass className="h-4 w-4 text-rose-400" />;
-        if (t.includes("prowlarr")) return <Layers className="h-4 w-4 text-orange-400" />;
-        if (t.includes("sabnzb") || t.includes("qbit") || t.includes("nzbget")) return <ArrowDownCircle className="h-4 w-4 text-blue-400" />;
+        if (t.includes("seerr") || t.includes("ombi")) return <Compass className="h-4 w-4 text-rose-700 dark:text-rose-400" />;
+        if (t.includes("prowlarr")) return <Layers className="h-4 w-4 text-orange-700 dark:text-orange-400" />;
+        if (t.includes("sabnzb") || t.includes("qbit") || t.includes("nzbget")) return <ArrowDownCircle className="h-4 w-4 text-blue-700 dark:text-blue-400" />;
         return <Server className="h-4 w-4 text-primary" />;
     };
 
@@ -147,9 +147,9 @@ export default function AdminSystemHealthGrid() {
     };
 
     return (
-        <Card className="border border-white/[0.08] bg-[#121218]/90 backdrop-blur-xl shadow-xl overflow-hidden rounded-2xl">
+        <Card className="border border-border/70 dark:border-white/[0.08] bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-xl overflow-hidden rounded-2xl">
             {/* CARD HEADER */}
-            <CardHeader className="p-4 sm:p-6 pb-3 border-b border-white/[0.06] space-y-4">
+            <CardHeader className="p-4 sm:p-6 pb-3 border-b border-border/70 dark:border-white/[0.06] space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1">
                         <div className="flex items-center gap-2.5">
@@ -161,7 +161,7 @@ export default function AdminSystemHealthGrid() {
                                     <CardTitle className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
                                         Infrastructure Health & Monitoring
                                     </CardTitle>
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                         Direct Plex Telemetry Active
                                     </span>
@@ -179,9 +179,9 @@ export default function AdminSystemHealthGrid() {
                             <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-sky-500/30 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 w-full sm:w-auto justify-center"
+                                className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-sky-500/30 text-sky-700 dark:text-sky-400 hover:bg-sky-500/10 hover:text-sky-800 dark:hover:text-sky-300 w-full sm:w-auto justify-center"
                             >
-                                <Layers className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                <Layers className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                                 <span className="hidden sm:inline">Docker Fleet &amp; Uptime</span>
                                 <span className="sm:hidden">Fleet</span>
                             </Button>
@@ -190,7 +190,7 @@ export default function AdminSystemHealthGrid() {
                             <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04] w-full sm:w-auto justify-center"
+                                className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-border/60 hover:bg-accent dark:hover:bg-white/[0.04] w-full sm:w-auto justify-center"
                             >
                                 <Settings className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                 <span className="hidden sm:inline">Manage Apps</span>
@@ -202,10 +202,10 @@ export default function AdminSystemHealthGrid() {
                             size="sm"
                             onClick={handlePrewarmAll}
                             disabled={prewarming || refreshing}
-                            className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 flex-1 sm:flex-initial justify-center"
+                            className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 hover:text-amber-800 dark:hover:text-amber-300 flex-1 sm:flex-initial justify-center"
                             title="Prewarm Discovery carousels, Plex availability indices, system stats, and Docker fleet in RAM"
                         >
-                            <Zap className={`h-3.5 w-3.5 shrink-0 ${prewarming ? "animate-spin text-amber-300" : "text-amber-400"}`} />
+                            <Zap className={`h-3.5 w-3.5 shrink-0 ${prewarming ? "animate-spin text-amber-800 dark:text-amber-300" : "text-amber-700 dark:text-amber-400"}`} />
                             <span className="hidden sm:inline">{prewarming ? "Warming..." : prewarmSuccessMessage ? prewarmSuccessMessage : "Prewarm Caches"}</span>
                             <span className="sm:hidden">{prewarming ? "Warming..." : "Prewarm"}</span>
                         </Button>
@@ -214,7 +214,7 @@ export default function AdminSystemHealthGrid() {
                             size="sm"
                             onClick={() => loadStatus(true)}
                             disabled={refreshing}
-                            className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04] shrink-0"
+                            className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-border/60 hover:bg-accent dark:hover:bg-white/[0.04] shrink-0"
                         >
                             <RefreshCw className={`h-3.5 w-3.5 shrink-0 ${refreshing ? "animate-spin text-primary" : ""}`} />
                             <span className="hidden sm:inline">Refresh</span>
@@ -224,7 +224,7 @@ export default function AdminSystemHealthGrid() {
 
                 {/* SUMMARY METRIC PILLS */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-                    <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                    <div className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] flex items-center justify-between">
                         <div>
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Total Services</span>
                             <span className="text-lg font-black text-foreground">{summary.totalConfigured}</span>
@@ -232,32 +232,32 @@ export default function AdminSystemHealthGrid() {
                         <Server className="h-5 w-5 text-muted-foreground/70" />
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                    <div className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] flex items-center justify-between">
                         <div>
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Operational</span>
-                            <span className="text-lg font-black text-emerald-400 flex items-center gap-1.5 tabular-nums">
+                            <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 tabular-nums">
                                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                                 {summary.onlineCount}
                             </span>
                         </div>
-                        <ShieldCheck className="h-5 w-5 text-emerald-400/70" />
+                        <ShieldCheck className="h-5 w-5 text-emerald-700/70 dark:text-emerald-400/70" />
                     </div>
 
-                    <div className={`p-2.5 rounded-xl border flex items-center justify-between ${summary.offlineCount > 0 ? "bg-rose-500/10 border-rose-500/30" : "bg-white/[0.02] border-white/[0.06]"}`}>
+                    <div className={`p-2.5 rounded-xl border flex items-center justify-between ${summary.offlineCount > 0 ? "bg-rose-500/10 border-rose-500/30" : "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06]"}`}>
                         <div>
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Unreachable</span>
-                            <span className={`text-lg font-black flex items-center gap-1.5 tabular-nums ${summary.offlineCount > 0 ? "text-rose-400" : "text-muted-foreground"}`}>
+                            <span className={`text-lg font-black flex items-center gap-1.5 tabular-nums ${summary.offlineCount > 0 ? "text-rose-700 dark:text-rose-400" : "text-muted-foreground"}`}>
                                 {summary.offlineCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />}
                                 {summary.offlineCount}
                             </span>
                         </div>
-                        <AlertTriangle className={`h-5 w-5 ${summary.offlineCount > 0 ? "text-rose-400" : "text-muted-foreground/70"}`} />
+                        <AlertTriangle className={`h-5 w-5 ${summary.offlineCount > 0 ? "text-rose-700 dark:text-rose-400" : "text-muted-foreground/70"}`} />
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                    <div className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] flex items-center justify-between">
                         <div>
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Paused</span>
-                            <span className="text-lg font-black text-slate-400">{summary.pausedCount}</span>
+                            <span className="text-lg font-black text-slate-600 dark:text-slate-400">{summary.pausedCount}</span>
                         </div>
                         <PauseCircle className="h-5 w-5 text-slate-500/40" />
                     </div>
@@ -271,8 +271,8 @@ export default function AdminSystemHealthGrid() {
                             onClick={() => setStatusFilter("ALL")}
                             className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                 statusFilter === "ALL" 
-                                    ? "bg-white/10 text-foreground border border-white/20 shadow-xs" 
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                    ? "bg-muted/50 dark:bg-white/10 text-foreground border border-border/70 dark:border-white/20 shadow-xs" 
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                             }`}
                         >
                             All ({summary.totalConfigured})
@@ -281,10 +281,10 @@ export default function AdminSystemHealthGrid() {
                             onClick={() => setStatusFilter("OFFLINE")}
                             className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                                 statusFilter === "OFFLINE"
-                                    ? "bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-xs"
+                                    ? "bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/40 shadow-xs"
                                     : summary.offlineCount > 0 
-                                        ? "text-rose-400 hover:bg-rose-500/10" 
-                                        : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                        ? "text-rose-700 dark:text-rose-400 hover:bg-rose-500/10" 
+                                        : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                             }`}
                         >
                             {summary.offlineCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />}
@@ -294,8 +294,8 @@ export default function AdminSystemHealthGrid() {
                             onClick={() => setStatusFilter("ONLINE")}
                             className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                                 statusFilter === "ONLINE"
-                                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                    ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                             }`}
                         >
                             Online ({summary.onlineCount})
@@ -304,8 +304,8 @@ export default function AdminSystemHealthGrid() {
                             onClick={() => setStatusFilter("PAUSED")}
                             className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                                 statusFilter === "PAUSED"
-                                    ? "bg-slate-500/20 text-slate-300 border border-slate-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                    ? "bg-slate-500/20 text-slate-700 dark:text-slate-300 border border-slate-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                             }`}
                         >
                             Paused ({summary.pausedCount})
@@ -318,7 +318,7 @@ export default function AdminSystemHealthGrid() {
                             value={categoryFilter}
                             onChange={(e) => setCategoryFilter(e.target.value)}
                             aria-label="Filter by category"
-                            className="bg-black/40 border border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50 w-full sm:w-auto"
+                            className="bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50 w-full sm:w-auto"
                         >
                             <option value="ALL">All Categories</option>
                             <option value="plex">Plex Media Servers (Live Telemetry)</option>
@@ -336,7 +336,7 @@ export default function AdminSystemHealthGrid() {
                                 placeholder="Search services..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10 focus-visible:ring-0 focus-visible:border-primary/50 w-full"
+                                className="h-8 pl-8 pr-2.5 text-xs bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10 focus-visible:ring-0 focus-visible:border-primary/50 w-full"
                             />
                         </div>
                     </div>
@@ -354,7 +354,7 @@ export default function AdminSystemHealthGrid() {
                     <div className="py-12 text-center space-y-2">
                         {statusFilter === "OFFLINE" ? (
                             <div className="space-y-2">
-                                <div className="p-3 rounded-full bg-emerald-500/10 text-emerald-400 inline-block">
+                                <div className="p-3 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 inline-block">
                                     <CheckCircle2 className="h-6 w-6" />
                                 </div>
                                 <h4 className="text-sm font-bold text-foreground">Zero Services Down!</h4>
@@ -381,16 +381,16 @@ export default function AdminSystemHealthGrid() {
                                     key={srv.id}
                                     className={`p-3 rounded-xl border transition-all space-y-2.5 ${
                                         isOnline 
-                                            ? "bg-white/[0.02] border-white/[0.06] hover:border-white/[0.15]" 
+                                            ? "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06] hover:border-border/70 dark:hover:border-white/[0.15]" 
                                             : isOffline 
-                                                ? "bg-rose-950/20 border-rose-500/30 shadow-xs hover:border-rose-500/50" 
-                                                : "bg-white/[0.01] border-dashed border-white/[0.06] opacity-75 hover:opacity-100"
+                                                ? "bg-rose-500/10 dark:bg-rose-950/20 border-rose-500/30 shadow-xs hover:border-rose-500/50" 
+                                                : "bg-muted/50 dark:bg-white/[0.01] border-dashed border-border/70 dark:border-white/[0.06] opacity-75 hover:opacity-100"
                                     }`}
                                 >
                                     {/* ROW 1: ICON + NAME + BADGES */}
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <div className="p-1.5 rounded-lg bg-black/40 border border-white/10 shrink-0">
+                                            <div className="p-1.5 rounded-lg bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/10 shrink-0">
                                                 {getServiceIcon(srv.category, srv.type)}
                                             </div>
                                             <div className="min-w-0">
@@ -417,7 +417,7 @@ export default function AdminSystemHealthGrid() {
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 title={`Open ${srv.name} in browser`}
-                                                className="p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.06] shrink-0 transition-colors"
+                                                className="p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.06] shrink-0 transition-colors"
                                             >
                                                 <ExternalLink className="h-3.5 w-3.5" />
                                             </a>
@@ -425,7 +425,7 @@ export default function AdminSystemHealthGrid() {
                                     </div>
 
                                     {/* ROW 2: STATUS PILL + TELEMETRY */}
-                                    <div className="flex items-center justify-between gap-2 pt-0.5 border-t border-white/[0.04]">
+                                    <div className="flex items-center justify-between gap-2 pt-0.5 border-t border-border/70 dark:border-white/[0.04]">
                                         <div className="flex items-center gap-1.5">
                                             <span 
                                                 className={`w-2 h-2 rounded-full ${
@@ -438,27 +438,27 @@ export default function AdminSystemHealthGrid() {
                                             />
                                             <span className={`text-[11px] font-bold tracking-wide uppercase ${
                                                 isOnline 
-                                                    ? "text-emerald-400" 
+                                                    ? "text-emerald-700 dark:text-emerald-400" 
                                                     : isOffline 
-                                                        ? "text-rose-400" 
-                                                        : "text-slate-400"
+                                                        ? "text-rose-700 dark:text-rose-400" 
+                                                        : "text-slate-600 dark:text-slate-400"
                                             }`}>
                                                 {srv.status}
                                             </span>
                                         </div>
 
                                         {isOnline && srv.latencyMs !== undefined && (
-                                            <span className="font-mono text-[10px] text-muted-foreground bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.06]">
+                                            <span className="font-mono text-[10px] text-muted-foreground bg-muted/50 dark:bg-white/[0.04] px-1.5 py-0.5 rounded border border-border/70 dark:border-white/[0.06]">
                                                 {srv.latencyMs}ms
                                             </span>
                                         )}
                                         {isPaused && (
-                                            <span className="text-[10px] text-slate-400">
+                                            <span className="text-[10px] text-slate-600 dark:text-slate-400">
                                                 Monitoring Paused
                                             </span>
                                         )}
                                         {isOffline && (
-                                            <span className="text-[10px] text-rose-400 font-medium">
+                                            <span className="text-[10px] text-rose-700 dark:text-rose-400 font-medium">
                                                 Unreachable
                                             </span>
                                         )}
@@ -466,15 +466,15 @@ export default function AdminSystemHealthGrid() {
 
                                     {/* EXTRA HARDWARE / STREAM TELEMETRY IF AVAILABLE */}
                                     {srv.metrics && (srv.metrics.cpu !== undefined || srv.metrics.streamCount !== undefined) && (
-                                        <div className="text-[10px] bg-black/30 p-1.5 rounded-lg border border-white/[0.04] flex flex-wrap items-center justify-between gap-1 text-muted-foreground">
+                                        <div className="text-[10px] bg-muted/60 dark:bg-black/30 p-1.5 rounded-lg border border-border/70 dark:border-white/[0.04] flex flex-wrap items-center justify-between gap-1 text-muted-foreground">
                                             {srv.metrics.cpu !== undefined && (
                                                 <span className="flex items-center gap-1 font-mono">
-                                                    <Cpu className="h-3 w-3 text-emerald-400" />
+                                                    <Cpu className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                                                     CPU {srv.metrics.cpu}% &middot; RAM {srv.metrics.ram}%
                                                 </span>
                                             )}
                                             {srv.metrics.streamCount !== undefined && (
-                                                <span className="flex items-center gap-1 font-mono text-sky-400 tabular-nums">
+                                                <span className="flex items-center gap-1 font-mono text-sky-700 dark:text-sky-400 tabular-nums">
                                                     <Activity className="h-3 w-3" />
                                                     {srv.metrics.streamCount} {srv.metrics.streamCount === 1 ? "stream" : "streams"}
                                                 </span>

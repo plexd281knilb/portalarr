@@ -545,7 +545,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
   if (loadError && instances.length === 0)
     return (
       <div className="p-8 max-w-3xl mx-auto text-center space-y-4">
-        <AlertCircle className="h-12 w-12 mx-auto text-rose-400" />
+        <AlertCircle className="h-12 w-12 mx-auto text-rose-700 dark:text-rose-400" />
         <h2 className="text-xl font-bold">Failed to Load Radarr</h2>
         <p className="text-sm text-muted-foreground">{loadError}</p>
         <Button onClick={loadInstances} variant="outline" size="sm" className="gap-2">
@@ -617,7 +617,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
     <div className="space-y-4 sm:space-y-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto pb-12 w-full min-w-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-2xl font-bold text-blue-400">Radarr (Movies)</h3>
+          <h3 className="text-2xl font-bold text-blue-700 dark:text-blue-400">Radarr (Movies)</h3>
           <p className="text-sm text-muted-foreground">
             Self-serve movie downloads, library management, and active queue telemetry.
           </p>
@@ -642,9 +642,9 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
       </div>
 
       {syncError && (
-        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3">
+        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-800 dark:text-rose-300 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+            <AlertCircle className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />
             <span>{syncError}</span>
           </div>
           <Button variant="outline" size="sm" onClick={() => { setSyncError(""); fetchLibrary(); fetchQueue(); }} className="h-7 text-[11px] shrink-0">
@@ -656,22 +656,22 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-1 sm:grid-cols-3 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger value="search" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 min-w-0">
-            <Search className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            <Search className="h-4 w-4 text-blue-700 dark:text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
             <span className="truncate">Search TMDB</span>
           </TabsTrigger>
           <TabsTrigger value="library" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 min-w-0">
-            <Film className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            <Film className="h-4 w-4 text-blue-700 dark:text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
             <span className="truncate">Library ({libraryLoading ? "..." : library.length})</span>
           </TabsTrigger>
           <TabsTrigger value="queue" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 min-w-0">
-            <Download className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            <Download className="h-4 w-4 text-blue-700 dark:text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
             <span className="truncate">Activity / Queue {queue.length > 0 ? `(${queue.length})` : ""}</span>
           </TabsTrigger>
         </TabsList>
 
         {/* SEARCH TAB */}
         <TabsContent value="search" className="space-y-4 mt-4">
-          <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+          <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
             <CardHeader>
               <CardTitle className="text-xl font-bold">Search New Movies</CardTitle>
               <CardDescription>
@@ -753,7 +753,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                   return (
                     <div
                       key={movie.tmdbId}
-                      className={`flex flex-row gap-3 p-3.5 rounded-xl border border-border/50 bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20 hover:shadow-lg transition-all duration-200 relative overflow-hidden ${
+                      className={`flex flex-row gap-3 p-3.5 rounded-xl border border-border/50 bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20 hover:shadow-lg transition-all duration-200 relative overflow-hidden ${
                         movie.id && movie.id > 0
                           ? "ring-1 ring-blue-500/30"
                           : ""
@@ -807,7 +807,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                           {movie.overview}
                         </p>
                         <div className="mt-2 flex items-center justify-between">
-                          <span className="text-[10px] uppercase font-bold text-blue-400">
+                          <span className="text-[10px] uppercase font-bold text-blue-700 dark:text-blue-400">
                             {movie.status}
                           </span>
                           <Button
@@ -864,7 +864,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
 
         {/* LIBRARY TAB */}
         <TabsContent value="library" className="space-y-4 mt-4">
-          <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+          <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
             <CardHeader>
               <CardTitle className="text-xl font-bold">Library Management</CardTitle>
               <CardDescription>
@@ -874,7 +874,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
             <CardContent className="space-y-6">
               {libraryLoading ? (
                 <div className="py-12 text-center">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-400" />
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-700 dark:text-blue-400" />
                   <p className="text-xs text-muted-foreground mt-2">Loading movie library...</p>
                 </div>
               ) : (
@@ -950,7 +950,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                       return (
                         <div
                           key={movie.id}
-                          className="flex gap-4 border border-border/50 rounded-xl p-3.5 bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20 hover:shadow-lg transition-all duration-200"
+                          className="flex gap-4 border border-border/50 rounded-xl p-3.5 bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20 hover:shadow-lg transition-all duration-200"
                         >
                           <div className="w-16 sm:w-20 h-24 sm:h-28 shrink-0 bg-muted/30 border border-border/40 rounded-lg overflow-hidden relative shadow-sm">
                             {coverImg ? (
@@ -993,7 +993,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                                   }}
                                   className={`text-[9px] px-1.5 font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity ${
                                     movie.monitored
-                                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                      ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
                                       : "bg-muted/40 text-muted-foreground border-border/40"
                                   }`}
                                   title={movie.monitored ? "Click to unmonitor" : "Click to monitor"}
@@ -1107,7 +1107,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
                                   <>
-                                    <Sparkles className="h-3 w-3 sm:mr-1 shrink-0 text-amber-400" />
+                                    <Sparkles className="h-3 w-3 sm:mr-1 shrink-0 text-amber-700 dark:text-amber-400" />
                                     <span className="hidden sm:inline">Auto</span>
                                   </>
                                 )}
@@ -1127,7 +1127,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 shrink-0 transition-all duration-200"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 hover:bg-red-500/10 shrink-0 transition-all duration-200"
                                 onClick={() => openDeleteMovieDialog(movie)}
                                 title={`Delete "${movie.title}" from Radarr`}
                               >
@@ -1152,7 +1152,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
 
         {/* QUEUE TAB */}
         <TabsContent value="queue" className="space-y-4 mt-4">
-          <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+          <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0 pb-4 border-b border-border/40">
               <div className="space-y-1">
                 <CardTitle className="text-xl font-bold">Activity / Queue</CardTitle>
@@ -1205,7 +1205,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                     return (
                       <div
                         key={item.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 border border-border/40 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/30 transition-all duration-200"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 border border-border/40 rounded-xl bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/30 transition-all duration-200"
                       >
                         <div className="flex-1 min-w-0">
                           <div
@@ -1223,7 +1223,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                             </div>
                           )}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
-                            <span className="text-blue-400 font-medium">{item.status}</span>
+                            <span className="text-blue-700 dark:text-blue-400 font-medium">{item.status}</span>
                             {item.size > 0 && (
                               <span>
                                 {formatBytes(item.size - (item.sizeleft || 0))} of {formatBytes(item.size)} ({percent}%)
@@ -1305,7 +1305,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 shrink-0 transition-all duration-200"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 hover:bg-red-500/10 shrink-0 transition-all duration-200"
                             onClick={() => handleDeleteQueueItem(item)}
                             disabled={deletingQueueId === item.id}
                             title="Cancel and remove from queue"
@@ -1329,9 +1329,9 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
 
       {/* INTERACTIVE RELEASE MODAL */}
       <Dialog open={releasesModalOpen} onOpenChange={setReleasesModalOpen}>
-        <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60 overflow-hidden">
+        <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col p-0 bg-popover dark:bg-[#121218] border-border/60 overflow-hidden">
           <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
-            <DialogTitle className="text-lg font-bold text-blue-400">Interactive Search</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-blue-700 dark:text-blue-400">Interactive Search</DialogTitle>
             <DialogDescription>
               {activeMovie?.title} ({activeMovie?.year})
             </DialogDescription>
@@ -1340,7 +1340,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
           <div className="flex-1 overflow-y-auto min-h-[50vh] p-4 sm:p-6">
             {releasesLoading ? (
               <div className="h-full flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin mb-4 text-blue-400" />
+                <Loader2 className="h-8 w-8 animate-spin mb-4 text-blue-700 dark:text-blue-400" />
                 <p className="text-sm">Searching indexers for movie releases...</p>
               </div>
             ) : (
@@ -1376,7 +1376,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                           className={`border rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center transition-all duration-200 ${
                             rejected
                               ? "opacity-60 bg-muted/20 border-border/30"
-                              : "bg-[#101014]/90 border-border/50 hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20"
+                              : "bg-card/95 dark:bg-[#101014]/90 border-border/50 hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20"
                           }`}
                         >
                           <div className="flex-1 min-w-0">
@@ -1396,9 +1396,9 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                                   variant="outline"
                                   className={`text-[10px] font-mono border-border/60 ${
                                     release.customFormatScore > 0
-                                      ? "text-emerald-400 border-emerald-500/40 bg-emerald-500/10 font-bold"
+                                      ? "text-emerald-700 dark:text-emerald-400 border-emerald-500/40 bg-emerald-500/10 font-bold"
                                       : release.customFormatScore < 0
-                                        ? "text-rose-400 border-rose-500/40 bg-rose-500/10"
+                                        ? "text-rose-700 dark:text-rose-400 border-rose-500/40 bg-rose-500/10"
                                         : "text-muted-foreground"
                                   }`}
                                 >
@@ -1416,10 +1416,10 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                               <span className="bg-muted/40 px-2 py-0.5 rounded text-foreground border border-border/30">
                                 {release.indexer}
                               </span>
-                              <span className="text-emerald-400 font-medium">
+                              <span className="text-emerald-700 dark:text-emerald-400 font-medium">
                                 {release.seeders} S
                               </span>
-                              <span className="text-red-400 font-medium">
+                              <span className="text-red-700 dark:text-red-400 font-medium">
                                 {release.leechers} L
                               </span>
 
@@ -1436,7 +1436,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
                             {release.rejected &&
                               release.rejections?.length > 0 && (
                                 <div
-                                  className={`mt-2 text-xs flex flex-col gap-1 ${rejected ? "text-red-400" : "text-amber-500"}`}
+                                  className={`mt-2 text-xs flex flex-col gap-1 ${rejected ? "text-red-700 dark:text-red-400" : "text-amber-500"}`}
                                 >
                                   {release.rejections.map((rej: string, rIdx: number) => (
                                     <div key={rIdx} className="flex items-start gap-1">
@@ -1486,9 +1486,9 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
           setDeleteMovieDialog((prev) => ({ ...prev, open }))
         }
       >
-        <DialogContent className="max-w-md w-[95vw] bg-[#121218] border-border/60 text-foreground">
+        <DialogContent className="max-w-md w-[95vw] bg-popover dark:bg-[#121218] border-border/60 text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-red-400 flex items-center gap-2">
+            <DialogTitle className="text-lg font-bold text-red-700 dark:text-red-400 flex items-center gap-2">
               <Trash2 className="h-5 w-5" /> Delete Movie from Radarr
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground pt-1">
@@ -1560,15 +1560,15 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
 
       {/* FLOATING TOAST NOTIFICATION */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-xl bg-[#121218]/95 border-border/80 text-foreground animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-xl bg-card/95 dark:bg-[#121218]/95 border-border/80 text-foreground animate-in fade-in slide-in-from-bottom-5 duration-200">
           {toast.type === "success" && (
-            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
           )}
           {toast.type === "error" && (
-            <XCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />
           )}
           {toast.type === "info" && (
-            <AlertCircle className="h-4 w-4 text-blue-400 shrink-0" />
+            <AlertCircle className="h-4 w-4 text-blue-700 dark:text-blue-400 shrink-0" />
           )}
           <span className="text-xs font-semibold">{toast.message}</span>
         </div>

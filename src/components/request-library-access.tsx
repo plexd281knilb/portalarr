@@ -84,7 +84,7 @@ export default function RequestLibraryAccess() {
 
             {isOpen && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-md border-border/50 shadow-2xl relative bg-[#121218]/95 backdrop-blur-md">
+                    <Card className="w-full max-w-md border-border/50 shadow-2xl relative bg-card/95 dark:bg-[#121218]/95 backdrop-blur-md">
                         <Button 
                             variant="ghost" 
                             size="icon" 
@@ -96,8 +96,8 @@ export default function RequestLibraryAccess() {
                         </Button>
 
                         <CardHeader className="pb-3 pt-5">
-                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-emerald-400">
-                                <BookOpen className="h-5 w-5 text-emerald-400" /> Unlock Book & Audiobook Library
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                                <BookOpen className="h-5 w-5 text-emerald-700 dark:text-emerald-400" /> Unlock Book & Audiobook Library
                             </CardTitle>
                             <CardDescription className="text-xs text-muted-foreground">
                                 Choose how you want to receive your books (Kindle wireless delivery or direct download).
@@ -107,12 +107,12 @@ export default function RequestLibraryAccess() {
                         <CardContent>
                             {loadingProfile ? (
                                 <div className="flex flex-col items-center justify-center py-8 space-y-2">
-                                    <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+                                    <Loader2 className="h-6 w-6 animate-spin text-emerald-700 dark:text-emerald-400" />
                                     <p className="text-xs text-muted-foreground">Loading account details...</p>
                                 </div>
                             ) : success ? (
                                 <div className="flex flex-col items-center justify-center py-8 space-y-3 text-center animate-in zoom-in-95 duration-200">
-                                    <div className="h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.2)]">
+                                    <div className="h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.2)]">
                                         <Check className="h-6 w-6" />
                                     </div>
                                     <h3 className="font-semibold text-sm text-foreground">{successMsg}</h3>
@@ -123,20 +123,20 @@ export default function RequestLibraryAccess() {
                             ) : (
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     {error && (
-                                        <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-400 font-medium flex gap-2">
+                                        <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium flex gap-2">
                                             <ShieldAlert className="h-4 w-4 shrink-0" />
                                             <span>{error}</span>
                                         </div>
                                     )}
 
                                     {/* Option 1: Send-to-Kindle */}
-                                    <div className={`p-3.5 rounded-xl border transition-all space-y-2 ${!bypassKindle ? "bg-emerald-950/20 border-emerald-500/40" : "bg-muted/10 border-border/40 opacity-70"}`}>
+                                    <div className={`p-3.5 rounded-xl border transition-all space-y-2 ${!bypassKindle ? "bg-emerald-500/10 dark:bg-emerald-950/20 border-emerald-500/40" : "bg-muted/10 border-border/40 opacity-70"}`}>
                                         <div className="flex items-center justify-between">
                                             <Label htmlFor="reqKindleEmail" className="text-xs font-bold flex items-center gap-1.5 text-foreground cursor-pointer">
-                                                <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                                                <Mail className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                                 Send-to-Kindle Email
                                             </Label>
-                                            <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider">Wireless Delivery</span>
+                                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold uppercase tracking-wider">Wireless Delivery</span>
                                         </div>
                                         <Input
                                             id="reqKindleEmail"
@@ -148,7 +148,7 @@ export default function RequestLibraryAccess() {
                                                 if (e.target.value) setBypassKindle(false);
                                             }}
                                             disabled={bypassKindle}
-                                            className="bg-black/40 border-border/60 text-xs h-9"
+                                            className="bg-muted/60 dark:bg-black/40 border-border/60 text-xs h-9"
                                         />
                                         <p className="text-[11px] text-muted-foreground leading-relaxed">
                                             Find your Send-to-Kindle address in Amazon&apos;s Personal Document Settings:{" "}
@@ -156,10 +156,10 @@ export default function RequestLibraryAccess() {
                                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-emerald-400 hover:text-emerald-300 underline font-semibold break-all inline-flex items-center gap-0.5"
+                                                className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300 underline font-semibold break-all inline"
                                             >
                                                 <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
-                                                <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
+                                                <ExternalLink className="h-2.5 w-2.5 inline ml-1 align-text-bottom" />
                                             </a>
                                         </p>
                                     </div>
@@ -167,7 +167,7 @@ export default function RequestLibraryAccess() {
                                     {/* Option 2: Direct Download Bypass */}
                                     <div 
                                         onClick={() => setBypassKindle(!bypassKindle)}
-                                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${bypassKindle ? "bg-emerald-950/30 border-emerald-500/50 ring-1 ring-emerald-500/40" : "bg-muted/10 border-border/40 hover:bg-muted/20"}`}
+                                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${bypassKindle ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-emerald-500/50 ring-1 ring-emerald-500/40" : "bg-muted/10 border-border/40 hover:bg-muted/20"}`}
                                     >
                                         <input 
                                             type="checkbox"
@@ -177,7 +177,7 @@ export default function RequestLibraryAccess() {
                                         />
                                         <div className="space-y-0.5">
                                             <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                                <Download className="h-3.5 w-3.5 text-emerald-400" />
+                                                <Download className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                                 Bypass Kindle (Direct Phone/PC Download)
                                             </div>
                                             <p className="text-[11px] text-muted-foreground leading-relaxed">

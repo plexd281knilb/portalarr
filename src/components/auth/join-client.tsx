@@ -146,13 +146,13 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
 
     const getDeviceIcon = (id: string) => {
         switch (id) {
-            case "appletv": return <Tv className="h-4 w-4 text-cyan-400" />;
-            case "roku": return <Tv2 className="h-4 w-4 text-teal-400" />;
-            case "firetv": return <Flame className="h-4 w-4 text-orange-400" />;
-            case "smarttv": return <Monitor className="h-4 w-4 text-blue-400" />;
-            case "googletv": return <Smartphone className="h-4 w-4 text-emerald-400" />;
-            case "mobile": return <Smartphone className="h-4 w-4 text-pink-400" />;
-            case "web": return <Globe className="h-4 w-4 text-amber-400" />;
+            case "appletv": return <Tv className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />;
+            case "roku": return <Tv2 className="h-4 w-4 text-teal-700 dark:text-teal-400" />;
+            case "firetv": return <Flame className="h-4 w-4 text-orange-700 dark:text-orange-400" />;
+            case "smarttv": return <Monitor className="h-4 w-4 text-blue-700 dark:text-blue-400" />;
+            case "googletv": return <Smartphone className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />;
+            case "mobile": return <Smartphone className="h-4 w-4 text-pink-700 dark:text-pink-400" />;
+            case "web": return <Globe className="h-4 w-4 text-amber-700 dark:text-amber-400" />;
             default: return <Tv className="h-4 w-4 text-primary" />;
         }
     };
@@ -178,19 +178,19 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                 {isInviteVerified && (
                     <div className="flex items-center justify-center gap-2 sm:gap-4 text-xs font-bold text-muted-foreground">
                         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
-                            step === 1 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 1 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
+                            step === 1 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 1 ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
                         }`}>
                             <span>1. Welcome</span>
                         </div>
                         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/75" />
                         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
-                            step === 2 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 2 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
+                            step === 2 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 2 ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
                         }`}>
                             <span>2. Account</span>
                         </div>
                         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/75" />
                         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
-                            step === 3 || step === 4 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 4 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
+                            step === 3 || step === 4 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 4 ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
                         }`}>
                             <span>3. Devices</span>
                         </div>
@@ -207,9 +207,9 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                 {/* STEP 0: INVITATION / MEMBER REFERENCE GATE */}
                 {/* ========================================================================= */}
                 {!isInviteVerified && (
-                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-md shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
+                    <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-md shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
                         <CardHeader className="text-center space-y-4 pt-8 pb-4">
-                            <div className="mx-auto bg-amber-500/15 border border-amber-500/30 p-3.5 rounded-xl w-fit shadow-sm text-amber-400">
+                            <div className="mx-auto bg-amber-500/15 border border-amber-500/30 p-3.5 rounded-xl w-fit shadow-sm text-amber-700 dark:text-amber-400">
                                 <LockKeyhole className="h-9 w-9" />
                             </div>
 
@@ -224,7 +224,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                         <CardContent className="space-y-4 max-w-md mx-auto">
                             <form onSubmit={handleVerifyReference} className="space-y-4">
                                 {gateError && (
-                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-xl flex items-center gap-2">
+                                    <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-xl flex items-center gap-2">
                                         <AlertCircle className="h-4 w-4 shrink-0" />
                                         <span>{gateError}</span>
                                     </div>
@@ -280,14 +280,14 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                 {/* STEP 1: WELCOME & PERKS COMPARISON (TRIAL VS FULL MEMBERSHIP) */}
                 {/* ========================================================================= */}
                 {isInviteVerified && step === 1 && (
-                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-md shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
+                    <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-md shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
                         <CardHeader className="text-center space-y-4 pt-8 pb-4">
-                            <div className="mx-auto bg-amber-500/15 border border-amber-500/30 p-3.5 rounded-xl w-fit shadow-sm text-amber-400">
+                            <div className="mx-auto bg-amber-500/15 border border-amber-500/30 p-3.5 rounded-xl w-fit shadow-sm text-amber-700 dark:text-amber-400">
                                 <Gift className="h-9 w-9" />
                             </div>
 
                             {config?.referrerName && (
-                                <Badge variant="outline" className="mx-auto bg-emerald-500/15 text-emerald-300 border-emerald-500/35 text-xs px-3 py-1 gap-1.5 font-semibold">
+                                <Badge variant="outline" className="mx-auto bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/35 text-xs px-3 py-1 gap-1.5 font-semibold">
                                     <Sparkles className="h-3.5 w-3.5" /> Invited by @{config.referrerName}
                                 </Badge>
                             )}
@@ -306,34 +306,34 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                 {/* TRIAL MEMBER PERKS */}
                                 <div className="p-4 rounded-2xl bg-emerald-500/[0.04] border border-emerald-500/20 space-y-3">
                                     <div className="flex items-center gap-2 border-b border-emerald-500/20 pb-2">
-                                        <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg">
+                                        <div className="p-1.5 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-lg">
                                             <Play className="h-4 w-4 fill-current" />
                                         </div>
                                         <div>
-                                            <h4 className="text-xs font-bold text-emerald-300 uppercase tracking-wider">Free Trial ({trialDays} Days)</h4>
+                                            <h4 className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">Free Trial ({trialDays} Days)</h4>
                                             <p className="text-[11px] text-muted-foreground">Included with your trial pass</p>
                                         </div>
                                     </div>
 
                                     <ul className="space-y-2 text-xs">
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Movies & TV Streaming:</strong> Full access to thousands of movies and TV series on Plex.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Original Studio Quality:</strong> 4K HDR, Dolby Vision, and immersive Dolby Atmos with 100% Direct Play.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">All Your Devices:</strong> Apple TV, Roku, Fire TV, Smart TVs, iPhone, Android, and Web Browser.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Movie & TV Requests:</strong> Request any movie or series with instant auto-approval.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">No Payment Up Front:</strong> Stream completely free during your trial without any commitment.</span>
                                         </li>
                                     </ul>
@@ -342,34 +342,34 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                 {/* FULL MEMBERSHIP UPGRADE PERKS */}
                                 <div className="p-4 rounded-2xl bg-sky-500/[0.04] border border-sky-500/20 space-y-3">
                                     <div className="flex items-center gap-2 border-b border-sky-500/20 pb-2">
-                                        <div className="p-1.5 bg-sky-500/20 text-sky-300 rounded-lg">
+                                        <div className="p-1.5 bg-sky-500/20 text-sky-800 dark:text-sky-300 rounded-lg">
                                             <Crown className="h-4 w-4" />
                                         </div>
                                         <div>
-                                            <h4 className="text-xs font-bold text-sky-300 uppercase tracking-wider">Upgrade to Full Membership</h4>
+                                            <h4 className="text-xs font-bold text-sky-800 dark:text-sky-300 uppercase tracking-wider">Upgrade to Full Membership</h4>
                                             <p className="text-[11px] text-muted-foreground">Unlock all extra server perks & features</p>
                                         </div>
                                     </div>
 
                                     <ul className="space-y-2 text-xs">
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <Sparkles className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
+                                            <Sparkles className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Priority Streaming:</strong> Highest server bandwidth priority & uninterrupted playback.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <BookOpen className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <BookOpen className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Digital Ebook & Audiobook Library:</strong> Read in-browser with Kindle Paperwhite mode, stream on Plex, or Send-to-Kindle.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <Users className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
+                                            <Users className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Dedicated Kids & Living Room Profiles (Coming Soon):</strong> Managed sub-accounts with custom age ratings, PIN safety, and kid-safe library curation.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <Sparkles className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
+                                            <Sparkles className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Book & Audiobook Requests:</strong> 1-click requests for bestsellers, new books, and audiobooks.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <Gift className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                            <Gift className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Discord VIP & Referral Rewards (Coming Soon):</strong> Real-time server status alerts, direct support, and upcoming referral reward discounts.</span>
                                         </li>
                                     </ul>
@@ -377,12 +377,12 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                             </div>
 
                             {/* UPGRADE PERKS CALLOUT */}
-                            <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-slate-900/80 to-amber-500/5 border border-amber-500/25 flex items-start sm:items-center gap-3 text-xs">
-                                <div className="p-2 bg-amber-500/15 text-amber-400 rounded-lg shrink-0">
+                            <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-card dark:via-slate-900/80 to-amber-500/5 border border-amber-500/25 flex items-start sm:items-center gap-3 text-xs">
+                                <div className="p-2 bg-amber-500/15 text-amber-700 dark:text-amber-400 rounded-lg shrink-0">
                                     <Crown className="h-4 w-4" />
                                 </div>
                                 <div className="space-y-0.5">
-                                    <h4 className="font-bold text-amber-200">The Trial is Just the Preview</h4>
+                                    <h4 className="font-bold text-amber-900 dark:text-amber-200">The Trial is Just the Preview</h4>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                                         Your free trial gives you full access to test out our movies and TV shows streaming. When you upgrade to full membership, you unlock all the premium perks — including our complete digital Ebook & Audiobook collection, priority bandwidth, and upcoming community rewards!
                                     </p>
@@ -395,7 +395,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                     <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                         <DollarSign className="h-3.5 w-3.5 text-primary" /> Transparent Membership Pricing (Post-Trial)
                                     </span>
-                                    <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-500/10 font-bold">
+                                    <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10 font-bold">
                                         Zero Upfront Cost
                                     </Badge>
                                 </div>
@@ -405,10 +405,10 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                     <div className="p-3.5 rounded-2xl bg-amber-500/[0.04] border border-amber-500/25 flex flex-col justify-between space-y-2">
                                         <div>
                                             <div className="flex items-center justify-between">
-                                                <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                                                    <Calendar className="h-3.5 w-3.5 text-amber-400" /> Monthly Plan
+                                                <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                                                    <Calendar className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Monthly Plan
                                                 </span>
-                                                <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/30 font-semibold">
+                                                <Badge variant="outline" className="text-[10px] text-amber-800 dark:text-amber-300 border-amber-500/30 font-semibold">
                                                     Flexible
                                                 </Badge>
                                             </div>
@@ -425,14 +425,14 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                     <div className="p-3.5 rounded-2xl bg-emerald-500/[0.04] border border-emerald-500/25 flex flex-col justify-between space-y-2">
                                         <div>
                                             <div className="flex items-center justify-between">
-                                                <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-                                                    <DollarSign className="h-3.5 w-3.5 text-emerald-400" /> Rest of Year (Annual Pass)
+                                                <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                                                    <DollarSign className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Rest of Year (Annual Pass)
                                                 </span>
-                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-semibold">
+                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 font-semibold">
                                                     Best Value
                                                 </Badge>
                                             </div>
-                                            <div className="text-lg font-black text-emerald-400 pt-1">
+                                            <div className="text-lg font-black text-emerald-700 dark:text-emerald-400 pt-1">
                                                 {config?.proratedBilling?.amountDueText || `$${config?.yearlyPrice ?? 180}/yr`}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
@@ -464,7 +464,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                 {/* STEP 2: ACCOUNT CREATION */}
                 {/* ========================================================================= */}
                 {isInviteVerified && step === 2 && (
-                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
+                    <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
                         <CardHeader className="space-y-1 pb-4">
                             <div className="flex items-center gap-2">
                                 <Button 
@@ -486,7 +486,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                         <CardContent>
                             <form onSubmit={handleRegister} className="space-y-4">
                                 {registerError && (
-                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-xl flex items-center gap-2">
+                                    <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-xl flex items-center gap-2">
                                         <AlertCircle className="h-4 w-4 shrink-0" />
                                         <span>{registerError}</span>
                                     </div>
@@ -562,7 +562,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                 <div className="space-y-1.5 pt-2 border-t border-border/40">
                                     <div className="flex items-center justify-between">
                                         <Label className="text-xs font-semibold">Verified Referrer</Label>
-                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px] gap-1 font-semibold">
+                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px] gap-1 font-semibold">
                                             <CheckCircle2 className="h-3 w-3" /> Invitation Verified
                                         </Badge>
                                     </div>
@@ -600,9 +600,9 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                 {/* STEP 3: PROVISION SUCCESS & ACCEPT PLEX INVITE */}
                 {/* ========================================================================= */}
                 {isInviteVerified && step === 3 && (
-                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
+                    <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
                         <CardHeader className="text-center space-y-3 pt-8 pb-4">
-                            <div className="mx-auto bg-emerald-500/15 border border-emerald-500/30 p-4 rounded-3xl w-fit shadow-lg text-emerald-400">
+                            <div className="mx-auto bg-emerald-500/15 border border-emerald-500/30 p-4 rounded-3xl w-fit shadow-lg text-emerald-700 dark:text-emerald-400">
                                 <CheckCircle2 className="h-10 w-10" />
                             </div>
                             <CardTitle className="text-2xl font-black text-foreground">
@@ -614,9 +614,9 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                         </CardHeader>
 
                         <CardContent className="space-y-4">
-                            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3 text-xs">
+                            <div className="p-4 rounded-2xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-3 text-xs">
                                 <div className="flex items-center gap-2 font-bold text-foreground uppercase tracking-wider">
-                                    <Sparkles className="h-4 w-4 text-amber-400" />
+                                    <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                     <span>Accept Your Server Invitation</span>
                                 </div>
                                 <p className="text-muted-foreground leading-relaxed">
@@ -624,7 +624,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                 </p>
                             </div>
 
-                            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1.5 text-xs text-amber-300">
+                            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1.5 text-xs text-amber-800 dark:text-amber-300">
                                 <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
                                     <AlertCircle className="h-4 w-4 shrink-0" />
                                     <span>Crucial Step: Device Configuration</span>
@@ -638,10 +638,10 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                 <div className="p-4 rounded-2xl bg-sky-500/10 border border-sky-500/30 space-y-2.5 text-xs">
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-2 font-bold text-foreground">
-                                            <MessageSquare className="h-4 w-4 text-sky-400" />
+                                            <MessageSquare className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                                             <span>Join Our Community Discord</span>
                                         </div>
-                                        <Badge variant="outline" className="bg-sky-500/20 text-sky-300 border-sky-500/40 text-[10px]">
+                                        <Badge variant="outline" className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40 text-[10px]">
                                             Community
                                         </Badge>
                                     </div>
@@ -684,7 +684,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                 {/* STEP 4: DEVICE SETUP GUIDES */}
                 {/* ========================================================================= */}
                 {isInviteVerified && step === 4 && (
-                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
+                    <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
                         <CardHeader className="space-y-1 pb-4">
                             <CardTitle className="text-xl font-bold text-foreground flex items-center gap-2">
                                 <Tv className="h-5 w-5 text-primary" /> Setup Your Streaming Device
@@ -697,9 +697,9 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                         <CardContent className="space-y-4">
                             {/* The #1 Rule */}
                             <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
-                                <AlertCircle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                <AlertCircle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                                 <div className="space-y-0.5">
-                                    <h4 className="text-xs font-bold text-amber-300">The #1 Rule for Zero Buffering:</h4>
+                                    <h4 className="text-xs font-bold text-amber-800 dark:text-amber-300">The #1 Rule for Zero Buffering:</h4>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                                         Always change <strong className="text-foreground">Remote Video Quality</strong> in Plex Settings to <strong className="text-foreground">"Maximum / Original"</strong>. This stops the server from transcoding and delivers full studio 4K/1080p.
                                     </p>
@@ -726,9 +726,9 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                         <TabsContent key={guide.id} value={guide.id} className="space-y-3 animate-in fade-in-50 duration-200">
                                             <div className="space-y-2">
                                                 {guide.steps.map((s: any, idx: number) => (
-                                                    <div key={idx} className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-0.5 text-xs">
+                                                    <div key={idx} className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-0.5 text-xs">
                                                         <div className="font-bold text-foreground flex items-center gap-2">
-                                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                             {s.title}
                                                         </div>
                                                         <p className="text-muted-foreground pl-5.5 text-[11px] leading-relaxed">
@@ -767,9 +767,9 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                 {/* STEP 5: SUBSCRIPTION INFO & READY TO STREAM */}
                 {/* ========================================================================= */}
                 {isInviteVerified && step === 5 && (
-                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
+                    <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
                         <CardHeader className="text-center space-y-3 pt-8 pb-4">
-                            <div className="mx-auto bg-emerald-500/15 border border-emerald-500/30 p-4 rounded-3xl w-fit shadow-lg text-emerald-400">
+                            <div className="mx-auto bg-emerald-500/15 border border-emerald-500/30 p-4 rounded-3xl w-fit shadow-lg text-emerald-700 dark:text-emerald-400">
                                 <Sparkles className="h-10 w-10" />
                             </div>
                             <CardTitle className="text-2xl font-black text-foreground">
@@ -782,13 +782,13 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
 
                         <CardContent className="space-y-4">
                             {/* MEMBERSHIP PLANS & RENEWAL BREAKDOWN */}
-                            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4 text-xs">
+                            <div className="p-4 rounded-2xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-4 text-xs">
                                 <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
                                     <div className="flex items-center gap-2 font-bold text-foreground">
-                                        <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                                        <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                         <span>Membership Plans & Renewal Options</span>
                                     </div>
-                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-xs font-bold">
+                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-xs font-bold">
                                         Zero Upfront Payment
                                     </Badge>
                                 </div>
@@ -800,9 +800,9 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                         <div>
                                             <div className="flex items-center justify-between">
                                                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                                    <Calendar className="h-3.5 w-3.5 text-amber-400" /> Monthly Plan
+                                                    <Calendar className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Monthly Plan
                                                 </span>
-                                                <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/30">
+                                                <Badge variant="outline" className="text-[10px] text-amber-800 dark:text-amber-300 border-amber-500/30">
                                                     Flexible
                                                 </Badge>
                                             </div>
@@ -820,13 +820,13 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                         <div>
                                             <div className="flex items-center justify-between">
                                                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                                    <DollarSign className="h-3.5 w-3.5 text-emerald-400" /> Rest of Year (Annual Pass)
+                                                    <DollarSign className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Rest of Year (Annual Pass)
                                                 </span>
-                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                     Best Value
                                                 </Badge>
                                             </div>
-                                            <div className="text-xl font-black text-emerald-400 pt-1">
+                                            <div className="text-xl font-black text-emerald-700 dark:text-emerald-400 pt-1">
                                                 {config?.proratedBilling?.amountDueText || `$${config?.yearlyPrice ?? 180}/yr`}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
@@ -841,17 +841,17 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                                             <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Free Trial</span>
-                                                <p className="font-bold text-amber-300 text-sm tabular-nums">{config.proratedBilling.trialDays} Days</p>
+                                                <p className="font-bold text-amber-800 dark:text-amber-300 text-sm tabular-nums">{config.proratedBilling.trialDays} Days</p>
                                                 <p className="text-[10px] text-muted-foreground">Ends in {config.proratedBilling.trialEndMonthName}</p>
                                             </div>
                                             <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">1st Year Prorated</span>
-                                                <p className="font-bold text-emerald-400 text-sm">{config.proratedBilling.amountDueText}</p>
+                                                <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">{config.proratedBilling.amountDueText}</p>
                                                 <p className="text-[10px] text-muted-foreground">{config.proratedBilling.remainingMonthsText}</p>
                                             </div>
                                             <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1">
                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Renewal</span>
-                                                <p className="font-bold text-blue-300 text-sm">${config.proratedBilling.yearlyRate} / yr</p>
+                                                <p className="font-bold text-blue-800 dark:text-blue-300 text-sm">${config.proratedBilling.yearlyRate} / yr</p>
                                                 <p className="text-[10px] text-muted-foreground">Renews {config.proratedBilling.nextRenewalDate}</p>
                                             </div>
                                         </div>
@@ -872,7 +872,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                 </div>
 
                                 {config?.paymentInstructions && (
-                                    <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
+                                    <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
                                         {config.paymentInstructions}
                                     </div>
                                 )}

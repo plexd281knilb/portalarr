@@ -753,12 +753,12 @@ export function TaggingStudio() {
 
             {/* Static Server & Library Section Navigator */}
             {servers.length > 0 && (
-                <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
                     <div className="p-4 space-y-3.5">
                         {/* Plex Servers Static Tabs */}
-                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
-                                <Tv className="h-4 w-4 text-emerald-400" />
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-border dark:border-slate-800/80 pb-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                <Tv className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                 <span>Plex Server:</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
@@ -773,12 +773,12 @@ export function TaggingStudio() {
                                             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                                 isSelected
                                                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/60 border border-emerald-400/50 ring-1 ring-emerald-400/40 font-black'
-                                                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                                    : 'bg-muted/80 dark:bg-slate-800/80 hover:bg-slate-700/80 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white border border-border dark:border-slate-700/60'
                                             }`}
                                         >
                                             <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white shadow-sm' : 'bg-emerald-400'}`} />
                                             <span>{s.serverName || "Plex Server"}</span>
-                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-emerald-800 text-white bg-emerald-700' : 'border-slate-700 text-slate-400'}`}>
+                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-emerald-500/40 dark:border-emerald-800 text-white bg-emerald-700' : 'border-border dark:border-slate-700 text-slate-400'}`}>
                                                 {secCount} {secCount === 1 ? 'lib' : 'libs'}
                                             </Badge>
                                         </button>
@@ -789,19 +789,19 @@ export function TaggingStudio() {
 
                         {/* Library Sections Static Tabs */}
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
-                                <Film className="h-4 w-4 text-emerald-400" />
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                <Film className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                 <span>Library Sections:</span>
-                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />}
+                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700 dark:text-emerald-400" />}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                                 {serverSectionsLoading ? (
-                                    <div className="flex items-center gap-2 text-xs text-emerald-400 py-1 font-medium">
+                                    <div className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400 py-1 font-medium">
                                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                         <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
                                     </div>
                                 ) : currentSections.length === 0 ? (
-                                    <span className="text-xs text-slate-400 py-1">No library sections found on this server.</span>
+                                    <span className="text-xs text-slate-600 dark:text-slate-400 py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {
                                         const isSelected = String(sec.key) === selectedSectionKey;
@@ -815,7 +815,7 @@ export function TaggingStudio() {
                                                 className={`flex items-center rounded-xl transition-all border shadow-sm ${
                                                     isSelected
                                                         ? 'bg-emerald-600/20 border-emerald-400/60 ring-1 ring-emerald-400/40'
-                                                        : 'bg-slate-800/80 border-slate-700/70 hover:border-slate-600'
+                                                        : 'bg-muted/80 dark:bg-slate-800/80 border-border dark:border-slate-700/70 hover:border-slate-600'
                                                 }`}
                                             >
                                                 {/* Library Tab Selector Button */}
@@ -824,15 +824,15 @@ export function TaggingStudio() {
                                                     onClick={() => setSelectedSectionKey(String(sec.key))}
                                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-l-xl transition-all cursor-pointer ${
                                                         isSelected
-                                                            ? 'text-emerald-200'
-                                                            : 'text-slate-300 hover:text-white'
+                                                            ? 'text-emerald-900 dark:text-emerald-200'
+                                                            : 'text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white'
                                                     }`}
                                                 >
-                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
-                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
-                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-800 dark:text-amber-300 shrink-0" />}
+                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-800 dark:text-cyan-300 shrink-0" />}
+                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-700 dark:text-slate-300 shrink-0" />}
                                                     <span>{sec.title}</span>
-                                                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${isSelected ? 'bg-emerald-500/30 text-emerald-100' : 'bg-slate-900 text-slate-400'}`}>
+                                                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${isSelected ? 'bg-emerald-500/30 text-emerald-900 dark:text-emerald-100' : 'bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}>
                                                         #{sec.key}
                                                     </span>
                                                 </button>
@@ -848,9 +848,9 @@ export function TaggingStudio() {
                                                     className={`px-2 py-1 text-[10px] font-extrabold transition-all border-l flex items-center gap-1 rounded-r-xl cursor-pointer ${
                                                         isSecEnabled 
                                                             ? isSelected
-                                                                ? 'bg-emerald-500/30 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/40'
-                                                                : 'bg-emerald-500/20 text-emerald-300 border-slate-700 hover:bg-emerald-500/30'
-                                                            : 'bg-slate-900/90 text-slate-500 border-slate-700 hover:text-slate-300 hover:bg-slate-800'
+                                                                ? 'bg-emerald-500/30 text-emerald-900 dark:text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/40'
+                                                                : 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-border dark:border-slate-700 hover:bg-emerald-500/30'
+                                                            : 'bg-card/95 dark:bg-slate-900/90 text-slate-500 border-border dark:border-slate-700 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-accent dark:hover:bg-slate-800'
                                                     }`}
                                                 >
                                                     <span className={`w-1.5 h-1.5 rounded-full ${isSecEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
@@ -865,29 +865,29 @@ export function TaggingStudio() {
 
                         {/* Active Library Control Bar */}
                         {currentSections.length > 0 && selectedSectionKey && (
-                            <div className="mt-3 pt-4 border-t border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-slate-950/70 p-4 sm:p-5 rounded-2xl border border-slate-800/90 min-w-0">
+                            <div className="mt-3 pt-4 border-t border-border dark:border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-muted/70 dark:bg-slate-950/70 p-4 sm:p-5 rounded-2xl border dark:border-slate-800/90 min-w-0">
                                 <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
                                     <div className={`p-2.5 rounded-xl border shrink-0 ${
                                         isSectionEnabled(selectedServerId, selectedSectionKey)
-                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-950/30'
-                                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-950/30'
+                                            : 'bg-muted dark:bg-slate-800 border-border dark:border-slate-700 text-slate-600 dark:text-slate-400'
                                     }`}>
                                         {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
                                     </div>
                                     <div className="space-y-1 min-w-0 flex-1">
                                         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-                                            <span className="text-xs sm:text-sm font-black text-white tracking-tight break-words">
+                                            <span className="text-xs sm:text-sm font-black text-foreground dark:text-white tracking-tight break-words">
                                                 {currentServer?.serverName} &rarr; {currentSections.find(s => String(s.key) === selectedSectionKey)?.title || `Library #${selectedSectionKey}`}
                                             </span>
                                             <Badge className={`text-[10px] font-bold px-2 py-0.5 shrink-0 ${
                                                 isSectionEnabled(selectedServerId, selectedSectionKey)
                                                     ? 'bg-emerald-600 text-white'
-                                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                                    : 'bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-border dark:border-slate-700'
                                             }`}>
                                                 {isSectionEnabled(selectedServerId, selectedSectionKey) ? '🟢 TAGGING ACTIVE' : '⚪ EXCLUDED / DISABLED'}
                                             </Badge>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey)
                                                 ? 'This library section will automatically receive IMDb parental guide tags and custom tag rules.'
                                                 : 'This library section is excluded and will be skipped during automated tagging sync.'}
@@ -897,15 +897,15 @@ export function TaggingStudio() {
 
                                 <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto justify-start xl:justify-end min-w-0">
                                     {/* Primary Switch */}
-                                    <div className="flex items-center gap-2.5 bg-slate-900 px-3.5 py-1.5 rounded-xl border border-slate-800 shadow-sm shrink-0">
-                                        <Label htmlFor="sec-master-toggle-tagging" className="text-xs font-bold text-slate-300 cursor-pointer select-none">
+                                    <div className="flex items-center gap-2.5 bg-card/95 dark:bg-slate-900 px-3.5 py-1.5 rounded-xl border border-border dark:border-slate-800 shadow-sm shrink-0">
+                                        <Label htmlFor="sec-master-toggle-tagging" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey) ? (
-                                                <span className="text-emerald-400 font-extrabold flex items-center gap-1.5">
+                                                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center gap-1.5">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                                     Enabled
                                                 </span>
                                             ) : (
-                                                <span className="text-slate-400 font-semibold">Disabled</span>
+                                                <span className="text-slate-600 dark:text-slate-400 font-semibold">Disabled</span>
                                             )}
                                         </Label>
                                         <Switch
@@ -916,8 +916,8 @@ export function TaggingStudio() {
                                     </div>
 
                                     {/* Batch Server Controls */}
-                                    <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-sm shrink-0">
-                                        <span className="text-[10px] font-extrabold text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
+                                    <div className="flex items-center bg-card/95 dark:bg-slate-900/90 p-1 rounded-xl border border-border dark:border-slate-800 shadow-sm shrink-0">
+                                        <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
                                             Server:
                                         </span>
                                         <Button
@@ -925,22 +925,22 @@ export function TaggingStudio() {
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleToggleAllSectionsOnServer(true)}
-                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-300 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
                                             title="Enable tagging for all library sections on this server"
                                         >
-                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-400" />
+                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-700 dark:text-emerald-400" />
                                             Enable All
                                         </Button>
-                                        <div className="w-[1px] h-4 bg-slate-800 my-auto" />
+                                        <div className="w-[1px] h-4 bg-muted dark:bg-slate-800 my-auto" />
                                         <Button
                                             type="button"
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleToggleAllSectionsOnServer(false)}
-                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
                                             title="Disable tagging for all library sections on this server"
                                         >
-                                            <XCircle className="h-3 w-3 mr-1 text-rose-400" />
+                                            <XCircle className="h-3 w-3 mr-1 text-rose-700 dark:text-rose-400" />
                                             Disable All
                                         </Button>
                                     </div>
@@ -967,31 +967,31 @@ export function TaggingStudio() {
             {(() => {
                 const nextRunInfo = calculateNextRunTime(curationSyncSchedule, curationLastRunAt);
                 return (
-                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
-                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                    <Card className={`bg-card/95 dark:bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-border dark:border-slate-800'}`}>
+                        <CardHeader className="p-5 pb-3 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2.5 flex-wrap">
-                                        <Clock className="h-5 w-5 text-emerald-400" />
-                                        <CardTitle className="text-base sm:text-lg font-bold text-white">IMDb Parental Advisory &amp; Rating Tagging Schedule</CardTitle>
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncParentalTags ? 'border-emerald-500/40 text-emerald-300 bg-emerald-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                        <Clock className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
+                                        <CardTitle className="text-base sm:text-lg font-bold text-foreground dark:text-white">IMDb Parental Advisory &amp; Rating Tagging Schedule</CardTitle>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncParentalTags ? 'border-emerald-500/40 text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-950/30' : 'border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-muted/40 dark:bg-slate-800/40'}`}>
                                             {curationSyncParentalTags ? `Active (${formatScheduleLabel(curationSyncSchedule)})` : 'Paused'}
                                         </Badge>
                                         {curationSyncParentalTags && (
-                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30"}`}>
                                                 ⏱️ Next: {nextRunInfo.relativeText}
                                             </Badge>
                                         )}
-                                        <Badge className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                        <Badge className="bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/30 text-[10px] font-semibold px-2 py-0.5">
                                             Target: {parentalOptions.target === "labels" ? "Plex Sharing Labels" : "Plex Genres"}
                                         </Badge>
                                         {isScheduleDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
+                                            <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
                                                 ● Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
-                                    <CardDescription className="text-xs text-slate-400">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                         Automatically fetches IMDb parental guide advisories and synchronizes content rating labels, genres, and custom tags across enabled Plex libraries on a recurring schedule.
                                     </CardDescription>
                                 </div>
@@ -1014,15 +1014,15 @@ export function TaggingStudio() {
                         <CardContent className="p-5 space-y-4">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {/* Pillar 1: IMDb Parental Advisory Synchronization */}
-                                <div className="bg-slate-950/60 border border-emerald-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                <div className="bg-muted/60 dark:bg-slate-950/60 border border-emerald-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2">
-                                                <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-                                                <span className="font-bold text-slate-100 text-sm">🛡️ IMDb Parental Advisory Sync</span>
+                                                <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                                                <span className="font-bold text-foreground dark:text-slate-100 text-sm">🛡️ IMDb Parental Advisory Sync</span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncParentalTags ? 'border-emerald-500/40 text-emerald-300 bg-emerald-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncParentalTags ? 'border-emerald-500/40 text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-950/30' : 'border-border dark:border-slate-700 text-slate-500 bg-muted/70 dark:bg-slate-900/40'}`}>
                                                     {curationSyncParentalTags ? formatScheduleLabel(curationSyncSchedule) : 'Disabled'}
                                                 </Badge>
                                                 <Switch 
@@ -1031,23 +1031,23 @@ export function TaggingStudio() {
                                                 />
                                             </div>
                                         </div>
-                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Scans items in enabled libraries, queries IMDb parental content advisories (Nudity, Violence, Profanity, Alcohol, Frightening), and filters by minimum severity rating.
                                         </p>
                                     </div>
 
                                     <div className="space-y-3 pt-1">
                                         <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Sync Frequency</label>
+                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Sync Frequency</label>
                                             <Select 
                                                 value={curationSyncSchedule || "daily_3am"} 
                                                 onValueChange={val => setCurationSyncSchedule(val)}
                                                 disabled={!curationSyncParentalTags}
                                             >
-                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
+                                                <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8 text-foreground dark:text-slate-200 truncate">
                                                     <SelectValue placeholder="Select Frequency" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs max-w-sm">
+                                                <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs max-w-sm">
                                                     {SCHEDULE_OPTIONS.map(opt => (
                                                         <SelectItem key={opt.value} value={opt.value}>
                                                             {opt.label}
@@ -1058,43 +1058,43 @@ export function TaggingStudio() {
                                         </div>
 
                                         {/* Target Libraries Banner */}
-                                        <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
+                                        <div className="space-y-1.5 pt-1 border-t border-border dark:border-slate-800/80">
                                             <div className="flex items-center justify-between">
-                                                <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-                                                    <Layers className="h-3 w-3 text-emerald-400" />
+                                                <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                    <Layers className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                                                     <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
                                                 </label>
                                                 <button
                                                     type="button"
                                                     onClick={() => setManageLibrariesModalOpen(true)}
-                                                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
+                                                    className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 font-bold underline cursor-pointer"
                                                 >
                                                     Manage All &rarr;
                                                 </button>
                                             </div>
-                                            <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                            <div className="min-h-[32px] p-1.5 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
                                                 {activeEnabledSections.length > 0 ? (
                                                     activeEnabledSections.map(sec => (
                                                         <Badge 
                                                             key={`${sec.serverId}-${sec.sectionKey}`}
-                                                            className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                            className="bg-emerald-500/15 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-500/15 dark:hover:bg-emerald-900/80 transition-colors shadow-sm"
                                                             onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
                                                             title={`Click to disable/exclude "${sec.title}" from tagging`}
                                                         >
                                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
                                                             {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
                                                             <span>{sec.title}</span>
-                                                            {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                            {servers.length > 1 && <span className="text-[9px] text-slate-600 dark:text-slate-400 font-normal">({sec.serverName})</span>}
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-[11px] text-slate-400 px-1">No libraries active (Tagging paused)</span>
+                                                    <span className="text-[11px] text-slate-600 dark:text-slate-400 px-1">No libraries active (Tagging paused)</span>
                                                 )}
                                                 {excludedSections.length > 0 && (
                                                     <Badge
                                                         variant="outline"
                                                         onClick={() => setManageLibrariesModalOpen(true)}
-                                                        className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                                        className="border-border dark:border-slate-700/80 bg-muted/80 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
                                                     >
                                                         +{excludedSections.length} excluded
                                                     </Badge>
@@ -1103,10 +1103,10 @@ export function TaggingStudio() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                                            <Clock3 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border dark:border-slate-800/80">
+                                        <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                            <Clock3 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                                            <span>Last run: <strong className="text-foreground dark:text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
                                         </div>
                                         <Button 
                                             size="sm"
@@ -1121,46 +1121,46 @@ export function TaggingStudio() {
                                 </div>
 
                                 {/* Pillar 2: Plex Target Destination & Sharing Labels */}
-                                <div className="bg-slate-950/60 border border-cyan-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                <div className="bg-muted/60 dark:bg-slate-950/60 border border-cyan-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2">
-                                                <Tag className="h-4 w-4 text-cyan-400 shrink-0" />
-                                                <span className="font-bold text-slate-100 text-sm">🏷️ Plex Target &amp; Sharing Access</span>
+                                                <Tag className="h-4 w-4 text-cyan-700 dark:text-cyan-400 shrink-0" />
+                                                <span className="font-bold text-foreground dark:text-slate-100 text-sm">🏷️ Plex Target &amp; Sharing Access</span>
                                             </div>
-                                            <Badge variant="outline" className="text-[10px] font-semibold px-2 py-0.5 border-cyan-500/40 text-cyan-300 bg-cyan-950/30">
+                                            <Badge variant="outline" className="text-[10px] font-semibold px-2 py-0.5 border-cyan-500/40 text-cyan-800 dark:text-cyan-300 bg-cyan-500/10 dark:bg-cyan-950/30">
                                                 {parentalOptions.format === "prefix_category_severity" ? "Prefix: IMDb" : "Formatted"}
                                             </Badge>
                                         </div>
-                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Applies structured tags directly into Plex sharing labels or genre metadata, enabling parental pin restrictions and granular shared-user account controls.
                                         </p>
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-center">
-                                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                                            <span className="text-[10px] text-slate-400 block">Min Severity</span>
-                                            <span className="text-xs font-bold text-amber-300">{parentalOptions.minSeverity || "Mild"}+</span>
+                                        <div className="p-2 rounded-lg bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800">
+                                            <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Min Severity</span>
+                                            <span className="text-xs font-bold text-amber-800 dark:text-amber-300">{parentalOptions.minSeverity || "Mild"}+</span>
                                         </div>
-                                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                                            <span className="text-[10px] text-slate-400 block">Destination</span>
-                                            <span className="text-xs font-bold text-cyan-300 capitalize">{parentalOptions.target || "Labels"}</span>
+                                        <div className="p-2 rounded-lg bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800">
+                                            <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Destination</span>
+                                            <span className="text-xs font-bold text-cyan-800 dark:text-cyan-300 capitalize">{parentalOptions.target || "Labels"}</span>
                                         </div>
-                                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                                            <span className="text-[10px] text-slate-400 block">Categories</span>
-                                            <span className="text-xs font-bold text-emerald-300">5 Monitored</span>
+                                        <div className="p-2 rounded-lg bg-card/95 dark:bg-slate-900 border border-border dark:border-slate-800">
+                                            <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Categories</span>
+                                            <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">5 Monitored</span>
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
-                                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border dark:border-slate-800/80">
+                                        <div className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
                                             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
                                             <span>Nudity • Violence • Profanity • Alcohol • Frightening</span>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => setSubTab("parental")}
-                                            className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                                            className="text-[11px] font-bold text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 transition-colors cursor-pointer"
                                         >
                                             Configure Rules &rarr;
                                         </button>
@@ -1170,7 +1170,7 @@ export function TaggingStudio() {
                         </CardContent>
 
                         {taggingSyncResult && (
-                            <div className={`p-3 text-xs border-t ${taggingSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
+                            <div className={`p-3 text-xs border-t ${taggingSyncResult.success ? 'bg-emerald-500/10 dark:bg-emerald-950/60 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300' : 'bg-rose-500/10 dark:bg-rose-950/60 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300'} flex items-start gap-2`}>
                                 {taggingSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
                                 <div className="space-y-0.5">
                                     <span className="font-bold">{taggingSyncResult.text}</span>
@@ -1185,14 +1185,14 @@ export function TaggingStudio() {
             })()}
 
             {/* Sub-Tabs & Guard Rails Selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 p-1.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-md backdrop-blur-md">
                 <button
                     type="button"
                     onClick={() => setSubTab("parental")}
                     className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "parental"
                             ? "bg-emerald-600 text-white shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <Shield className="h-4 w-4 shrink-0" />
@@ -1205,7 +1205,7 @@ export function TaggingStudio() {
                     className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "custom_rules"
                             ? "bg-emerald-600 text-white shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <Sliders className="h-4 w-4 shrink-0" />
@@ -1218,7 +1218,7 @@ export function TaggingStudio() {
                     className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "audit"
                             ? "bg-emerald-600 text-white shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <Tag className="h-4 w-4 shrink-0" />
@@ -1228,12 +1228,12 @@ export function TaggingStudio() {
                 <button
                     type="button"
                     onClick={() => setGuardRailsOpen(true)}
-                    className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer bg-slate-800/80 hover:bg-emerald-950/40 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 shadow-sm hover:ring-1 hover:ring-emerald-400/40 active:scale-95"
+                    className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer bg-muted/80 dark:bg-slate-800/80 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 shadow-sm hover:ring-1 hover:ring-emerald-400/40 active:scale-95"
                     title="Configure Kid-Safe, Family, and Content Rating Server Guard Rails"
                 >
-                    <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
+                    <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
                     <span className="truncate">Server Guard Rails</span>
-                    <Badge variant="outline" className="hidden sm:inline-flex text-[9px] px-1 py-0 border-emerald-500/40 text-emerald-300 bg-emerald-950/30">
+                    <Badge variant="outline" className="hidden sm:inline-flex text-[9px] px-1 py-0 border-emerald-500/40 text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-950/30">
                         Plex
                     </Badge>
                 </button>
@@ -1243,24 +1243,24 @@ export function TaggingStudio() {
             {subTab === "parental" && (
                 <div className="space-y-6">
                     {/* Action & Configuration Card */}
-                    <Card className={`bg-slate-900/90 shadow-xl transition-all duration-300 ${isParentalConfigDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
-                        <CardHeader className="pb-4 border-b border-slate-800/80">
+                    <Card className={`bg-card/95 dark:bg-slate-900/90 shadow-xl transition-all duration-300 ${isParentalConfigDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-border dark:border-slate-800'}`}>
+                        <CardHeader className="pb-4 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                        <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                                             <Shield className="h-5 w-5" />
                                         </div>
-                                        <CardTitle className="text-lg font-bold text-white">
+                                        <CardTitle className="text-lg font-bold text-foreground dark:text-white">
                                             IMDb Content Advisory &amp; Parental Tagging
                                         </CardTitle>
                                         {isParentalConfigDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
+                                            <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
                                                 ● Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
-                                    <CardDescription className="text-xs text-slate-400">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                         Scan media items, query IMDb parental ratings via AI/TMDb, and tag items with standardized content advisory labels.
                                     </CardDescription>
                                 </div>
@@ -1285,9 +1285,9 @@ export function TaggingStudio() {
                                         size="sm"
                                         onClick={handleClearParentalTags}
                                         disabled={parentalActionLoading || !selectedSectionKey}
-                                        className="h-9 text-xs border-rose-500/40 text-rose-300 bg-rose-950/20 hover:bg-rose-900/40 font-bold"
+                                        className="h-9 text-xs border-rose-500/40 text-rose-800 dark:text-rose-300 bg-rose-500/10 dark:bg-rose-950/20 hover:bg-rose-500/10 dark:hover:bg-rose-900/40 font-bold"
                                     >
-                                        <Trash2 className="mr-1.5 h-3.5 w-3.5 text-rose-400" />
+                                        <Trash2 className="mr-1.5 h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                         Clear Tags
                                     </Button>
 
@@ -1318,16 +1318,16 @@ export function TaggingStudio() {
                             {/* Controls Grid */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 {/* Minimum Severity */}
-                                <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
-                                    <Label className="text-xs font-bold text-slate-300">Minimum Severity Threshold</Label>
+                                <div className="p-3.5 bg-muted/70 dark:bg-slate-950/70 border border-border dark:border-slate-800 rounded-xl space-y-2">
+                                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Minimum Severity Threshold</Label>
                                     <Select
                                         value={parentalOptions.minSeverity || "Mild"}
                                         onValueChange={(val: any) => setParentalOptions(prev => ({ ...prev, minSeverity: val }))}
                                     >
-                                        <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200">
+                                        <SelectTrigger className="w-full bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs font-semibold text-foreground dark:text-slate-200">
                                             <SelectValue placeholder="Select Severity" />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
+                                        <SelectContent className="bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-200">
                                             <SelectItem value="Mild" className="text-xs">Mild+ (Mild, Moderate, Severe)</SelectItem>
                                             <SelectItem value="Moderate" className="text-xs">Moderate+ (Moderate, Severe)</SelectItem>
                                             <SelectItem value="Severe" className="text-xs">Severe Only</SelectItem>
@@ -1337,16 +1337,16 @@ export function TaggingStudio() {
                                 </div>
 
                                 {/* Target Tag Type */}
-                                <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
-                                    <Label className="text-xs font-bold text-slate-300">Plex Tag Destination</Label>
+                                <div className="p-3.5 bg-muted/70 dark:bg-slate-950/70 border border-border dark:border-slate-800 rounded-xl space-y-2">
+                                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Plex Tag Destination</Label>
                                     <Select
                                         value={parentalOptions.target || "labels"}
                                         onValueChange={(val: any) => setParentalOptions(prev => ({ ...prev, target: val }))}
                                     >
-                                        <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200">
+                                        <SelectTrigger className="w-full bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs font-semibold text-foreground dark:text-slate-200">
                                             <SelectValue placeholder="Select Destination" />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
+                                        <SelectContent className="bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-200">
                                             <SelectItem value="labels" className="text-xs">Plex Labels (For Account Restrictions)</SelectItem>
                                             <SelectItem value="genres" className="text-xs">Plex Genres (Visual Filtering)</SelectItem>
                                             <SelectItem value="both" className="text-xs">Both (Labels + Genres)</SelectItem>
@@ -1356,16 +1356,16 @@ export function TaggingStudio() {
                                 </div>
 
                                 {/* Tag Format */}
-                                <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
-                                    <Label className="text-xs font-bold text-slate-300">Tag Text Format</Label>
+                                <div className="p-3.5 bg-muted/70 dark:bg-slate-950/70 border border-border dark:border-slate-800 rounded-xl space-y-2">
+                                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tag Text Format</Label>
                                     <Select
                                         value={parentalOptions.format || "prefix_category_severity"}
                                         onValueChange={(val: any) => setParentalOptions(prev => ({ ...prev, format: val }))}
                                     >
-                                        <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200">
+                                        <SelectTrigger className="w-full bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs font-semibold text-foreground dark:text-slate-200">
                                             <SelectValue placeholder="Select Format" />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
+                                        <SelectContent className="bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-200">
                                             <SelectItem value="prefix_category_severity" className="text-xs">IMDb: Nudity [Severe]</SelectItem>
                                             <SelectItem value="prefix_severity" className="text-xs">IMDb: Severe</SelectItem>
                                             <SelectItem value="category_severity" className="text-xs">Nudity [Severe]</SelectItem>
@@ -1377,13 +1377,13 @@ export function TaggingStudio() {
                                 </div>
 
                                 {/* Tag Prefix */}
-                                <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
-                                    <Label className="text-xs font-bold text-slate-300">Tag Prefix</Label>
+                                <div className="p-3.5 bg-muted/70 dark:bg-slate-950/70 border border-border dark:border-slate-800 rounded-xl space-y-2">
+                                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tag Prefix</Label>
                                     <Input
                                         value={parentalOptions.prefix || "IMDb"}
                                         onChange={(e) => setParentalOptions(prev => ({ ...prev, prefix: e.target.value }))}
                                         placeholder="e.g. IMDb, PG, Advisory"
-                                        className="h-9 bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200"
+                                        className="h-9 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs font-semibold text-foreground dark:text-slate-200"
                                     />
                                     <p className="text-[11px] text-slate-500">Prefix used for identification and cleanup.</p>
                                 </div>
@@ -1391,7 +1391,7 @@ export function TaggingStudio() {
 
                             {/* Advisory Categories Toggle Grid */}
                             <div className="space-y-2">
-                                <Label className="text-xs font-bold text-slate-300">Monitored Advisory Categories</Label>
+                                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Monitored Advisory Categories</Label>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                                     {(["nudity", "violence", "profanity", "alcohol", "frightening"] as ParentalCategoryKey[]).map((cat) => {
                                         const info = PARENTAL_CATEGORY_INFO[cat];
@@ -1410,8 +1410,8 @@ export function TaggingStudio() {
                                                 }}
                                                 className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
                                                     enabled
-                                                        ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200 shadow-sm shadow-emerald-950/30"
-                                                        : "bg-slate-950/50 border-slate-800/80 text-slate-400 hover:border-slate-700"
+                                                        ? "bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500/40 text-emerald-900 dark:text-emerald-200 shadow-sm shadow-emerald-950/30"
+                                                        : "bg-muted/50 dark:bg-slate-950/50 border-border dark:border-slate-800/80 text-slate-600 dark:text-slate-400 hover:border-border dark:hover:border-slate-700"
                                                 }`}
                                             >
                                                 <div className="flex items-center justify-between">
@@ -1423,7 +1423,7 @@ export function TaggingStudio() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-bold text-slate-200">{info.label}</p>
+                                                    <p className="text-xs font-bold text-foreground dark:text-slate-200">{info.label}</p>
                                                     <p className="text-[10px] text-slate-500 line-clamp-1">{info.description}</p>
                                                 </div>
                                             </div>
@@ -1436,20 +1436,20 @@ export function TaggingStudio() {
                             {parentalResult && (
                                 <div className={`p-4 rounded-xl border flex items-start gap-3 ${
                                     parentalResult.success 
-                                        ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200" 
-                                        : "bg-rose-950/40 border-rose-500/40 text-rose-200"
+                                        ? "bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500/40 text-emerald-900 dark:text-emerald-200" 
+                                        : "bg-rose-500/10 dark:bg-rose-950/40 border-rose-500/40 text-rose-900 dark:text-rose-200"
                                 }`}>
                                     {parentalResult.success ? (
-                                        <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+                                        <CheckCircle2 className="h-5 w-5 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                                     ) : (
-                                        <XCircle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+                                        <XCircle className="h-5 w-5 text-rose-700 dark:text-rose-400 shrink-0 mt-0.5" />
                                     )}
                                     <div className="space-y-1 text-xs">
                                         <p className="font-bold">{parentalResult.message}</p>
                                         {parentalResult.appliedTagsSummary && Object.keys(parentalResult.appliedTagsSummary).length > 0 && (
                                             <div className="flex flex-wrap gap-1.5 pt-1">
                                                 {Object.entries(parentalResult.appliedTagsSummary).map(([tag, count]) => (
-                                                    <Badge key={tag} variant="outline" className="text-[10px] bg-slate-900/80 border-emerald-500/40 text-emerald-300">
+                                                    <Badge key={tag} variant="outline" className="text-[10px] bg-card/95 dark:bg-slate-900/80 border-emerald-500/40 text-emerald-800 dark:text-emerald-300">
                                                         {tag}: {count}
                                                     </Badge>
                                                 ))}
@@ -1462,36 +1462,36 @@ export function TaggingStudio() {
                     </Card>
 
                     {/* Library Items Content Advisory Browser */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl">
-                        <CardHeader className="pb-3 border-b border-slate-800/80">
+                    <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl">
+                        <CardHeader className="pb-3 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                 <div className="space-y-1">
-                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                    <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
                                         <span>Detected Content Advisories</span>
-                                        <Badge variant="outline" className="border-slate-700 text-slate-400 text-xs">
+                                        <Badge variant="outline" className="border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs">
                                             Showing {Math.min(filteredAdvisories.length, displayLimit)} of {advisoryItems.length} Items
                                         </Badge>
                                     </CardTitle>
-                                    <CardDescription className="text-xs text-slate-400">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                         Items cached with IMDb / TMDb parental guide severity ratings.
                                     </CardDescription>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                                     <div className="relative w-full sm:w-[200px]">
-                                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
                                         <Input
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             placeholder="Search items..."
-                                            className="h-8 pl-8 bg-slate-950 border-slate-700 text-xs text-slate-200"
+                                            className="h-8 pl-8 bg-muted dark:bg-slate-950 border-border dark:border-slate-700 text-xs text-foreground dark:text-slate-200"
                                         />
                                     </div>
                                     <Select value={String(displayLimit)} onValueChange={(v) => setDisplayLimit(Number(v))}>
-                                        <SelectTrigger className="h-8 bg-slate-950 border-slate-700 text-xs w-[105px] text-slate-300">
+                                        <SelectTrigger className="h-8 bg-muted dark:bg-slate-950 border-border dark:border-slate-700 text-xs w-[105px] text-slate-700 dark:text-slate-300">
                                             <SelectValue placeholder="Show" />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-slate-950 border-slate-800 text-white text-xs">
+                                        <SelectContent className="bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-white text-xs">
                                             <SelectItem value="10" className="text-xs">10 Items</SelectItem>
                                             <SelectItem value="50" className="text-xs">50 Items</SelectItem>
                                             <SelectItem value="100" className="text-xs">100 Items</SelectItem>
@@ -1505,7 +1505,7 @@ export function TaggingStudio() {
                                         size="sm"
                                         onClick={loadAdvisoryItems}
                                         disabled={advisoryLoading}
-                                        className="h-8 px-2.5 border-slate-700 bg-slate-950 text-slate-300 text-xs"
+                                        className="h-8 px-2.5 border-border dark:border-slate-700 bg-muted dark:bg-slate-950 text-slate-700 dark:text-slate-300 text-xs"
                                     >
                                         <RefreshCw className={`h-3.5 w-3.5 ${advisoryLoading ? "animate-spin" : ""}`} />
                                     </Button>
@@ -1516,12 +1516,12 @@ export function TaggingStudio() {
                         <CardContent className="p-0">
                             {advisoryLoading ? (
                                 <div className="p-12 text-center space-y-2">
-                                    <Loader2 className="h-6 w-6 animate-spin text-emerald-400 mx-auto" />
-                                    <p className="text-xs text-slate-400">Fetching library media content advisories...</p>
+                                    <Loader2 className="h-6 w-6 animate-spin text-emerald-700 dark:text-emerald-400 mx-auto" />
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">Fetching library media content advisories...</p>
                                 </div>
                             ) : filteredAdvisories.length === 0 ? (
-                                <div className="p-12 text-center space-y-2 text-slate-400">
-                                    <Shield className="h-8 w-8 mx-auto text-slate-400" />
+                                <div className="p-12 text-center space-y-2 text-slate-600 dark:text-slate-400">
+                                    <Shield className="h-8 w-8 mx-auto text-slate-600 dark:text-slate-400" />
                                     {searchQuery ? (
                                         <p className="text-xs">No media items matching &quot;{searchQuery}&quot; found in loaded library.</p>
                                     ) : (
@@ -1529,23 +1529,23 @@ export function TaggingStudio() {
                                     )}
                                 </div>
                             ) : (
-                                <div className="divide-y divide-slate-800/60 max-h-[500px] overflow-y-auto">
+                                <div className="divide-y divide-border dark:divide-slate-800/60 max-h-[500px] overflow-y-auto">
                                     {filteredAdvisories.slice(0, displayLimit).map((item) => (
-                                        <div key={item.ratingKey} className="p-3.5 hover:bg-slate-800/40 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                        <div key={item.ratingKey} className="p-3.5 hover:bg-accent dark:hover:bg-slate-800/40 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                             <div className="space-y-1 min-w-0 max-w-full">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="font-bold text-xs text-white truncate max-w-[220px] sm:max-w-[420px]" title={item.title}>{item.title}</span>
+                                                    <span className="font-bold text-xs text-foreground dark:text-white truncate max-w-[220px] sm:max-w-[420px]" title={item.title}>{item.title}</span>
                                                     {item.year && (
-                                                        <span className="text-[10px] text-slate-400">({item.year})</span>
+                                                        <span className="text-[10px] text-slate-600 dark:text-slate-400">({item.year})</span>
                                                     )}
                                                     {item.contentRating && (
-                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-700 text-slate-300 bg-slate-950 shrink-0">
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 bg-muted dark:bg-slate-950 shrink-0">
                                                             {item.contentRating}
                                                         </Badge>
                                                     )}
                                                 </div>
                                                 {item.advisory?.summary && (
-                                                    <p className="text-[11px] text-slate-400 line-clamp-1">
+                                                    <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-1">
                                                         &quot;{item.advisory.summary}&quot;
                                                     </p>
                                                 )}
@@ -1565,10 +1565,10 @@ export function TaggingStudio() {
                                                                 variant="outline"
                                                                 className={`text-[10px] px-1.5 py-0 flex items-center gap-1 ${
                                                                     isSevere
-                                                                        ? "border-rose-500/50 text-rose-300 bg-rose-950/40"
+                                                                        ? "border-rose-500/50 text-rose-800 dark:text-rose-300 bg-rose-500/10 dark:bg-rose-950/40"
                                                                         : isMod
-                                                                            ? "border-amber-500/50 text-amber-300 bg-amber-950/40"
-                                                                            : "border-slate-700 text-slate-300 bg-slate-950"
+                                                                            ? "border-amber-500/50 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/40"
+                                                                            : "border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 bg-muted dark:bg-slate-950"
                                                                 }`}
                                                             >
                                                                 <span>{PARENTAL_CATEGORY_INFO[cat].icon}</span>
@@ -1578,7 +1578,7 @@ export function TaggingStudio() {
                                                         );
                                                     })
                                                 ) : (
-                                                    <span className="text-[11px] text-slate-400">No advisory cached</span>
+                                                    <span className="text-[11px] text-slate-600 dark:text-slate-400">No advisory cached</span>
                                                 )}
                                             </div>
                                         </div>
@@ -1593,18 +1593,18 @@ export function TaggingStudio() {
             {/* TAB 2: Custom Tag Rules */}
             {subTab === "custom_rules" && (
                 <div className="space-y-6">
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl">
-                        <CardHeader className="pb-4 border-b border-slate-800/80">
+                    <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl">
+                        <CardHeader className="pb-4 border-b border-border dark:border-slate-800/80">
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                                         <Sliders className="h-5 w-5" />
                                     </div>
-                                    <CardTitle className="text-lg font-bold text-white">
+                                    <CardTitle className="text-lg font-bold text-foreground dark:text-white">
                                         Rule-Based Custom Media Auto-Tagger
                                     </CardTitle>
                                 </div>
-                                <CardDescription className="text-xs text-slate-400">
+                                <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                     Create rule-based tag filters (by Video Resolution, HDR, Audio Codecs, Studio, Decades, or Ratings) and apply them to Plex Labels, Genres, or Collections.
                                 </CardDescription>
                             </div>
@@ -1613,7 +1613,7 @@ export function TaggingStudio() {
                         <CardContent className="p-6 space-y-6">
                             {/* Preset Quick-Rules */}
                             <div className="space-y-2">
-                                <Label className="text-xs font-bold text-slate-300">Quick-Fill Rule Presets</Label>
+                                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Quick-Fill Rule Presets</Label>
                                 <div className="flex flex-wrap gap-2">
                                     {[
                                         { label: "4K UHD Media", tag: "4K UHD", field: "label" as const, filterType: "resolution" as const, filterValue: "4k" },
@@ -1637,9 +1637,9 @@ export function TaggingStudio() {
                                                     filterValue: preset.filterValue
                                                 });
                                             }}
-                                            className="h-7 text-xs border-slate-700 bg-slate-950 text-slate-300 hover:text-emerald-300 hover:border-emerald-500/40"
+                                            className="h-7 text-xs border-border dark:border-slate-700 bg-muted dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 hover:border-emerald-500/40"
                                         >
-                                            <Sparkles className="mr-1.5 h-3 w-3 text-emerald-400" />
+                                            <Sparkles className="mr-1.5 h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                                             {preset.label}
                                         </Button>
                                     ))}
@@ -1647,30 +1647,30 @@ export function TaggingStudio() {
                             </div>
 
                             {/* Rule Builder Form */}
-                            <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl space-y-4">
+                            <div className="p-4 bg-muted/70 dark:bg-slate-950/70 border border-border dark:border-slate-800 rounded-xl space-y-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     {/* Tag Name */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-bold text-slate-300">Tag Name to Apply</Label>
+                                        <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tag Name to Apply</Label>
                                         <Input
                                             value={customRule.tagName}
                                             onChange={(e) => setCustomRule(prev => ({ ...prev, tagName: e.target.value }))}
                                             placeholder="e.g. 4K HDR, A24, Family Night"
-                                            className="h-9 bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200"
+                                            className="h-9 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs font-semibold text-foreground dark:text-slate-200"
                                         />
                                     </div>
 
                                     {/* Target Field */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-bold text-slate-300">Plex Target Field</Label>
+                                        <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Plex Target Field</Label>
                                         <Select
                                             value={customRule.field}
                                             onValueChange={(val: any) => setCustomRule(prev => ({ ...prev, field: val }))}
                                         >
-                                            <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200">
+                                            <SelectTrigger className="w-full bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs font-semibold text-foreground dark:text-slate-200">
                                                 <SelectValue />
                                             </SelectTrigger>
-                                            <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
+                                            <SelectContent className="bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-200">
                                                 <SelectItem value="label" className="text-xs">Label (Plex Account Restriction)</SelectItem>
                                                 <SelectItem value="genre" className="text-xs">Genre (Plex Client Category)</SelectItem>
                                                 <SelectItem value="collection" className="text-xs">Collection (Plex Collection Tag)</SelectItem>
@@ -1680,15 +1680,15 @@ export function TaggingStudio() {
 
                                     {/* Match Filter Condition */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-bold text-slate-300">Match Condition</Label>
+                                        <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Match Condition</Label>
                                         <Select
                                             value={customRule.filterType}
                                             onValueChange={(val: any) => setCustomRule(prev => ({ ...prev, filterType: val }))}
                                         >
-                                            <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200">
+                                            <SelectTrigger className="w-full bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs font-semibold text-foreground dark:text-slate-200">
                                                 <SelectValue />
                                             </SelectTrigger>
-                                            <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
+                                            <SelectContent className="bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-200">
                                                 <SelectItem value="all" className="text-xs">All Items in Library</SelectItem>
                                                 <SelectItem value="resolution" className="text-xs">Video Resolution (4k, 1080p, 720p)</SelectItem>
                                                 <SelectItem value="hdr" className="text-xs">HDR / Dynamic Range (DV, HDR10+, HDR)</SelectItem>
@@ -1704,7 +1704,7 @@ export function TaggingStudio() {
 
                                     {/* Filter Value */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-bold text-slate-300">Match Value</Label>
+                                        <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Match Value</Label>
                                         <Input
                                             value={customRule.filterValue || ""}
                                             onChange={(e) => setCustomRule(prev => ({ ...prev, filterValue: e.target.value }))}
@@ -1716,7 +1716,7 @@ export function TaggingStudio() {
                                                 customRule.filterType === "studio" ? "e.g. Warner Bros" :
                                                 customRule.filterType === "decade" ? "e.g. 1980" : "Value"
                                             }
-                                            className="h-9 bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200"
+                                            className="h-9 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs font-semibold text-foreground dark:text-slate-200"
                                         />
                                     </div>
                                 </div>
@@ -1728,9 +1728,9 @@ export function TaggingStudio() {
                                         size="sm"
                                         onClick={() => handleClearCustomTag(customRule.tagName, customRule.field)}
                                         disabled={customActionLoading || !customRule.tagName.trim() || !selectedSectionKey}
-                                        className="h-9 text-xs border-rose-500/40 text-rose-300 bg-rose-950/20 hover:bg-rose-900/40 font-bold"
+                                        className="h-9 text-xs border-rose-500/40 text-rose-800 dark:text-rose-300 bg-rose-500/10 dark:bg-rose-950/20 hover:bg-rose-500/10 dark:hover:bg-rose-900/40 font-bold"
                                     >
-                                        <Trash2 className="mr-1.5 h-3.5 w-3.5 text-rose-400" />
+                                        <Trash2 className="mr-1.5 h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                         Remove Tag
                                     </Button>
 
@@ -1760,13 +1760,13 @@ export function TaggingStudio() {
                             {customResult && (
                                 <div className={`p-4 rounded-xl border flex items-center gap-3 ${
                                     customResult.success 
-                                        ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200" 
-                                        : "bg-rose-950/40 border-rose-500/40 text-rose-200"
+                                        ? "bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500/40 text-emerald-900 dark:text-emerald-200" 
+                                        : "bg-rose-500/10 dark:bg-rose-950/40 border-rose-500/40 text-rose-900 dark:text-rose-200"
                                 }`}>
                                     {customResult.success ? (
-                                        <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                                        <CheckCircle2 className="h-5 w-5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                     ) : (
-                                        <XCircle className="h-5 w-5 text-rose-400 shrink-0" />
+                                        <XCircle className="h-5 w-5 text-rose-700 dark:text-rose-400 shrink-0" />
                                     )}
                                     <p className="text-xs font-bold">{customResult.message}</p>
                                 </div>
@@ -1779,19 +1779,19 @@ export function TaggingStudio() {
             {/* TAB 3: Tag Audit & Cleanup */}
             {subTab === "audit" && (
                 <div className="space-y-6">
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl">
-                        <CardHeader className="pb-4 border-b border-slate-800/80">
+                    <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl">
+                        <CardHeader className="pb-4 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
-                                        <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                        <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                                             <Tag className="h-5 w-5" />
                                         </div>
-                                        <CardTitle className="text-lg font-bold text-white">
+                                        <CardTitle className="text-lg font-bold text-foreground dark:text-white">
                                             Library Tag Audit &amp; Cleanup
                                         </CardTitle>
                                     </div>
-                                    <CardDescription className="text-xs text-slate-400">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                         Inspect all active Labels, Genres, and Collections applied on this Plex library. 1-click prune unwanted tags.
                                     </CardDescription>
                                 </div>
@@ -1802,7 +1802,7 @@ export function TaggingStudio() {
                                     size="sm"
                                     onClick={loadAuditData}
                                     disabled={auditLoading || !selectedSectionKey}
-                                    className="h-8 border-slate-700 bg-slate-950 text-slate-200 text-xs font-bold"
+                                    className="h-8 border-border dark:border-slate-700 bg-muted dark:bg-slate-950 text-foreground dark:text-slate-200 text-xs font-bold"
                                 >
                                     <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${auditLoading ? "animate-spin" : ""}`} />
                                     Refresh Audit
@@ -1813,34 +1813,34 @@ export function TaggingStudio() {
                         <CardContent className="p-6">
                             {auditLoading ? (
                                 <div className="p-12 text-center space-y-2">
-                                    <Loader2 className="h-6 w-6 animate-spin text-emerald-400 mx-auto" />
-                                    <p className="text-xs text-slate-400">Scanning library metadata tags...</p>
+                                    <Loader2 className="h-6 w-6 animate-spin text-emerald-700 dark:text-emerald-400 mx-auto" />
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">Scanning library metadata tags...</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     {/* Labels Column */}
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                                            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
                                                 Plex Labels ({auditData.labels.length})
                                             </h3>
                                         </div>
-                                        <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2 max-h-[400px] overflow-y-auto">
+                                        <div className="p-3 bg-muted/70 dark:bg-slate-950/70 border border-border dark:border-slate-800 rounded-xl space-y-2 max-h-[400px] overflow-y-auto">
                                             {auditData.labels.length === 0 ? (
-                                                <p className="text-xs text-slate-400 p-4 text-center">No active labels found</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-400 p-4 text-center">No active labels found</p>
                                             ) : (
                                                 auditData.labels.map(l => (
-                                                    <div key={l.tag} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 text-xs">
+                                                    <div key={l.tag} className="flex items-center justify-between p-2 rounded-lg bg-muted/70 dark:bg-slate-900/60 hover:bg-accent dark:hover:bg-slate-900 border border-border dark:border-slate-800/80 text-xs">
                                                         <div className="flex items-center gap-1.5">
-                                                            <span className="font-semibold text-slate-200">{l.tag}</span>
-                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-700 text-slate-400">
+                                                            <span className="font-semibold text-foreground dark:text-slate-200">{l.tag}</span>
+                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-border dark:border-slate-700 text-slate-600 dark:text-slate-400">
                                                                 {l.count}
                                                             </Badge>
                                                         </div>
                                                         <button
                                                             type="button"
                                                             onClick={() => handleClearCustomTag(l.tag, "label")}
-                                                            className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
+                                                            className="text-slate-500 hover:text-rose-700 dark:hover:text-rose-400 p-1 transition-colors"
                                                             title="Remove label from library"
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
@@ -1854,26 +1854,26 @@ export function TaggingStudio() {
                                     {/* Genres Column */}
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                                            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                                                 Plex Genres ({auditData.genres.length})
                                             </h3>
                                         </div>
-                                        <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2 max-h-[400px] overflow-y-auto">
+                                        <div className="p-3 bg-muted/70 dark:bg-slate-950/70 border border-border dark:border-slate-800 rounded-xl space-y-2 max-h-[400px] overflow-y-auto">
                                             {auditData.genres.length === 0 ? (
-                                                <p className="text-xs text-slate-400 p-4 text-center">No active genres found</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-400 p-4 text-center">No active genres found</p>
                                             ) : (
                                                 auditData.genres.map(g => (
-                                                    <div key={g.tag} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 text-xs">
+                                                    <div key={g.tag} className="flex items-center justify-between p-2 rounded-lg bg-muted/70 dark:bg-slate-900/60 hover:bg-accent dark:hover:bg-slate-900 border border-border dark:border-slate-800/80 text-xs">
                                                         <div className="flex items-center gap-1.5">
-                                                            <span className="font-semibold text-slate-200">{g.tag}</span>
-                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-700 text-slate-400">
+                                                            <span className="font-semibold text-foreground dark:text-slate-200">{g.tag}</span>
+                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-border dark:border-slate-700 text-slate-600 dark:text-slate-400">
                                                                 {g.count}
                                                             </Badge>
                                                         </div>
                                                         <button
                                                             type="button"
                                                             onClick={() => handleClearCustomTag(g.tag, "genre")}
-                                                            className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
+                                                            className="text-slate-500 hover:text-rose-700 dark:hover:text-rose-400 p-1 transition-colors"
                                                             title="Remove genre from library"
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
@@ -1887,26 +1887,26 @@ export function TaggingStudio() {
                                     {/* Collections Column */}
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-xs font-bold uppercase tracking-wider text-sky-400">
+                                            <h3 className="text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">
                                                 Collections ({auditData.collections.length})
                                             </h3>
                                         </div>
-                                        <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2 max-h-[400px] overflow-y-auto">
+                                        <div className="p-3 bg-muted/70 dark:bg-slate-950/70 border border-border dark:border-slate-800 rounded-xl space-y-2 max-h-[400px] overflow-y-auto">
                                             {auditData.collections.length === 0 ? (
-                                                <p className="text-xs text-slate-400 p-4 text-center">No collections found</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-400 p-4 text-center">No collections found</p>
                                             ) : (
                                                 auditData.collections.map(c => (
-                                                    <div key={c.tag} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 text-xs">
+                                                    <div key={c.tag} className="flex items-center justify-between p-2 rounded-lg bg-muted/70 dark:bg-slate-900/60 hover:bg-accent dark:hover:bg-slate-900 border border-border dark:border-slate-800/80 text-xs">
                                                         <div className="flex items-center gap-1.5">
-                                                            <span className="font-semibold text-slate-200">{c.tag}</span>
-                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-700 text-slate-400">
+                                                            <span className="font-semibold text-foreground dark:text-slate-200">{c.tag}</span>
+                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-border dark:border-slate-700 text-slate-600 dark:text-slate-400">
                                                                 {c.count}
                                                             </Badge>
                                                         </div>
                                                         <button
                                                             type="button"
                                                             onClick={() => handleClearCustomTag(c.tag, "collection")}
-                                                            className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
+                                                            className="text-slate-500 hover:text-rose-700 dark:hover:text-rose-400 p-1 transition-colors"
                                                             title="Remove collection tag"
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
@@ -1939,13 +1939,13 @@ export function TaggingStudio() {
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
-                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Layers className="h-5 w-5 text-emerald-400" />
+                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <Layers className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                             <span>Configure Target Tagging Libraries</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Select which Plex library sections should receive automated content advisory labels, parental guide tags, and custom tag rules. Excluded sections are completely protected and will be skipped.
                         </DialogDescription>
                     </DialogHeader>
@@ -1954,11 +1954,11 @@ export function TaggingStudio() {
                         {servers.map(srv => {
                             const srvSections = srv.sections || [];
                             return (
-                                <div key={srv.serverId} className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
-                                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <div key={srv.serverId} className="p-3.5 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800 space-y-3">
+                                    <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-2">
                                         <div className="flex items-center gap-2">
-                                            <HardDrive className="h-4 w-4 text-cyan-400" />
-                                            <span className="text-xs font-bold text-white">{srv.serverName}</span>
+                                            <HardDrive className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
+                                            <span className="text-xs font-bold text-foreground dark:text-white">{srv.serverName}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <Button
@@ -1966,17 +1966,17 @@ export function TaggingStudio() {
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, true)}
-                                                className="h-6 text-[10px] px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"
+                                                className="h-6 text-[10px] px-2 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/40"
                                             >
                                                 Enable All
                                             </Button>
-                                            <span className="text-slate-400">•</span>
+                                            <span className="text-slate-600 dark:text-slate-400">•</span>
                                             <Button
                                                 type="button"
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, false)}
-                                                className="h-6 text-[10px] px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                                                className="h-6 text-[10px] px-2 text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10 dark:hover:bg-rose-950/40"
                                             >
                                                 Disable All
                                             </Button>
@@ -1992,19 +1992,19 @@ export function TaggingStudio() {
                                                         key={String(sec.key)}
                                                         className={`p-2.5 rounded-lg border flex items-center justify-between transition-all ${
                                                             enabled
-                                                                ? "bg-emerald-950/20 border-emerald-600/40 text-emerald-200"
-                                                                : "bg-slate-900/60 border-slate-800 text-slate-400"
+                                                                ? "bg-emerald-500/10 dark:bg-emerald-950/20 border-emerald-600/40 text-emerald-900 dark:text-emerald-200"
+                                                                : "bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-800 text-slate-600 dark:text-slate-400"
                                                         }`}
                                                     >
                                                         <div className="flex items-center gap-2.5 min-w-0">
                                                             {sec.type === "movie" ? (
-                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`} />
                                                             ) : (
-                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`} />
                                                             )}
                                                             <div className="min-w-0">
-                                                                <span className="text-xs font-bold text-white block truncate">{sec.title}</span>
-                                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                                <span className="text-xs font-bold text-foreground dark:text-white block truncate">{sec.title}</span>
+                                                                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">
                                                                     Section #{sec.key} • {sec.type === "movie" ? "Movies" : "TV Shows"}
                                                                 </span>
                                                             </div>
@@ -2012,7 +2012,7 @@ export function TaggingStudio() {
 
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             <Badge className={`text-[10px] font-bold ${
-                                                                enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
+                                                                enabled ? "bg-emerald-600 text-white" : "bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-border dark:border-slate-700"
                                                             }`}>
                                                                 {enabled ? "Active" : "Excluded"}
                                                             </Badge>
@@ -2026,14 +2026,14 @@ export function TaggingStudio() {
                                             })}
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-slate-400 py-1">No library sections loaded for this server.</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 py-1">No library sections loaded for this server.</p>
                                     )}
                                 </div>
                             );
                         })}
                     </div>
 
-                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
+                    <DialogFooter className="pt-2 border-t border-border dark:border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             size="sm"

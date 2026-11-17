@@ -217,15 +217,15 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
     };
 
     return (
-        <Card id="linked-emails" className="border-cyan-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+        <Card id="linked-emails" className="border-cyan-500/30 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
             <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="space-y-1">
                         <div className="flex items-center gap-2">
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Mail className="h-5 w-5 text-cyan-400" /> Linked Inboxes & Family Email Routing
+                                <Mail className="h-5 w-5 text-cyan-700 dark:text-cyan-400" /> Linked Inboxes & Family Email Routing
                             </CardTitle>
-                            <Badge variant="outline" className="bg-cyan-500/10 text-cyan-300 border-cyan-500/30 text-[11px] font-semibold">
+                            <Badge variant="outline" className="bg-cyan-500/10 text-cyan-800 dark:text-cyan-300 border-cyan-500/30 text-[11px] font-semibold">
                                 {linkedEmails.length} Linked {linkedEmails.length === 1 ? "Inbox" : "Inboxes"}
                             </Badge>
                         </div>
@@ -245,26 +245,26 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
             </CardHeader>
             <CardContent className="space-y-4">
                 {/* Burner Plex Account Helper Tip */}
-                <div className="p-3 sm:p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/20 flex items-start gap-3 text-xs leading-relaxed text-cyan-200/90">
-                    <Sparkles className="h-4 w-4 text-cyan-400 shrink-0 mt-0.5" />
+                <div className="p-3 sm:p-3.5 rounded-xl bg-cyan-500/10 dark:bg-cyan-950/20 border border-cyan-500/20 flex items-start gap-3 text-xs leading-relaxed text-cyan-900/90 dark:text-cyan-200/90">
+                    <Sparkles className="h-4 w-4 text-cyan-700 dark:text-cyan-400 shrink-0 mt-0.5" />
                     <div className="space-y-0.5">
-                        <p className="font-semibold text-cyan-300">
+                        <p className="font-semibold text-cyan-800 dark:text-cyan-300">
                             Signed up with a burner Plex login?
                         </p>
-                        <p className="text-[11px] text-cyan-200/70">
+                        <p className="text-[11px] text-cyan-900/70 dark:text-cyan-200/70">
                             Add your personal daily email below and enable <strong>Billing & Renewals</strong> and <strong>Server Announcements</strong> so you never miss renewal notices or server news.
                         </p>
                     </div>
                 </div>
 
                 {successMsg && (
-                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                    <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                         <CheckCircle2 className="h-4 w-4 shrink-0" />
                         <span>{successMsg}</span>
                     </div>
                 )}
                 {errorMsg && (
-                    <div className="text-xs text-rose-400 bg-rose-950/40 border border-rose-800/40 p-3 rounded-lg flex items-center justify-between gap-2 animate-in fade-in">
+                    <div className="text-xs text-rose-700 dark:text-rose-400 bg-rose-500/10 dark:bg-rose-950/40 border border-rose-500/40 dark:border-rose-800/40 p-3 rounded-lg flex items-center justify-between gap-2 animate-in fade-in">
                         <div className="flex items-center gap-2">
                             <XCircle className="h-4 w-4 shrink-0" />
                             <span>{errorMsg}</span>
@@ -277,11 +277,11 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
 
                 {loading ? (
                     <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                        <Loader2 className="h-5 w-5 animate-spin text-cyan-400" />
+                        <Loader2 className="h-5 w-5 animate-spin text-cyan-700 dark:text-cyan-400" />
                         <span className="text-xs">Loading linked inboxes...</span>
                     </div>
                 ) : linkedEmails.length === 0 ? (
-                    <div className="p-6 text-center rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-2">
+                    <div className="p-6 text-center rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-2">
                         <Users className="h-8 w-8 text-muted-foreground/70 mx-auto" />
                         <p className="text-xs font-medium text-foreground">No linked inboxes configured yet</p>
                         <p className="text-[11px] text-muted-foreground max-w-md mx-auto">
@@ -293,12 +293,12 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                         {linkedEmails.map((item) => (
                             <div 
                                 key={item.id}
-                                className="p-3.5 sm:p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-cyan-500/30 transition-all space-y-3"
+                                className="p-3.5 sm:p-4 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] hover:border-cyan-500/30 transition-all space-y-3"
                             >
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <div className="h-8 w-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0">
-                                            <Mail className="h-4 w-4 text-cyan-400" />
+                                            <Mail className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                                         </div>
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
@@ -306,7 +306,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                                     {item.email}
                                                 </span>
                                                 {item.label && (
-                                                    <Badge variant="outline" className="text-[10px] bg-cyan-500/10 text-cyan-300 border-cyan-500/25 h-5 px-1.5 font-medium">
+                                                    <Badge variant="outline" className="text-[10px] bg-cyan-500/10 text-cyan-800 dark:text-cyan-300 border-cyan-500/25 h-5 px-1.5 font-medium">
                                                         {item.label}
                                                     </Badge>
                                                 )}
@@ -322,7 +322,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => openEditModal(item)}
-                                            className="h-7 px-2 text-xs text-muted-foreground hover:text-cyan-300 hover:bg-cyan-500/10 gap-1"
+                                            className="h-7 px-2 text-xs text-muted-foreground hover:text-cyan-800 dark:hover:text-cyan-300 hover:bg-cyan-500/10 gap-1"
                                         >
                                             <Edit2 className="h-3 w-3" />
                                             <span>Edit</span>
@@ -333,10 +333,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             size="sm"
                                             disabled={deletingId === item.id}
                                             onClick={() => handleDelete(item.id, item.email)}
-                                            className="h-7 px-2 text-xs text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 gap-1"
+                                            className="h-7 px-2 text-xs text-muted-foreground hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-500/10 gap-1"
                                         >
                                             {deletingId === item.id ? (
-                                                <Loader2 className="h-3 w-3 animate-spin text-rose-400" />
+                                                <Loader2 className="h-3 w-3 animate-spin text-rose-700 dark:text-rose-400" />
                                             ) : (
                                                 <Trash2 className="h-3 w-3" />
                                             )}
@@ -346,7 +346,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 </div>
 
                                 {/* Category Routing Chips */}
-                                <div className="pt-1 border-t border-white/[0.04]">
+                                <div className="pt-1 border-t border-border/70 dark:border-white/[0.04]">
                                     <p className="text-[10px] font-semibold text-muted-foreground/80 mb-2 uppercase tracking-wider">
                                         Active Routing:
                                     </p>
@@ -356,8 +356,8 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             onClick={() => handleQuickToggle(item, "receiveSubscriptionReminders", item.receiveSubscriptionReminders)}
                                             className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
                                                 item.receiveSubscriptionReminders
-                                                    ? "bg-amber-500/15 border-amber-500/40 text-amber-300 font-medium"
-                                                    : "bg-white/[0.02] border-white/[0.06] text-muted-foreground opacity-50 line-through"
+                                                    ? "bg-amber-500/15 border-amber-500/40 text-amber-800 dark:text-amber-300 font-medium"
+                                                    : "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06] text-muted-foreground opacity-50 line-through"
                                             }`}
                                         >
                                             <CreditCard className="h-3 w-3 shrink-0" />
@@ -369,8 +369,8 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             onClick={() => handleQuickToggle(item, "receiveAnnouncements", item.receiveAnnouncements)}
                                             className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
                                                 item.receiveAnnouncements
-                                                    ? "bg-teal-500/15 border-teal-500/40 text-teal-300 font-medium"
-                                                    : "bg-white/[0.02] border-white/[0.06] text-muted-foreground opacity-50 line-through"
+                                                    ? "bg-teal-500/15 border-teal-500/40 text-teal-800 dark:text-teal-300 font-medium"
+                                                    : "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06] text-muted-foreground opacity-50 line-through"
                                             }`}
                                         >
                                             <Megaphone className="h-3 w-3 shrink-0" />
@@ -382,8 +382,8 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             onClick={() => handleQuickToggle(item, "receiveMediaReady", item.receiveMediaReady)}
                                             className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
                                                 item.receiveMediaReady
-                                                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 font-medium"
-                                                    : "bg-white/[0.02] border-white/[0.06] text-muted-foreground opacity-50 line-through"
+                                                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-800 dark:text-emerald-300 font-medium"
+                                                    : "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06] text-muted-foreground opacity-50 line-through"
                                             }`}
                                         >
                                             <Film className="h-3 w-3 shrink-0" />
@@ -395,8 +395,8 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             onClick={() => handleQuickToggle(item, "receiveRequestApproved", item.receiveRequestApproved)}
                                             className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
                                                 item.receiveRequestApproved
-                                                    ? "bg-sky-500/15 border-sky-500/40 text-sky-300 font-medium"
-                                                    : "bg-white/[0.02] border-white/[0.06] text-muted-foreground opacity-50 line-through"
+                                                    ? "bg-sky-500/15 border-sky-500/40 text-sky-800 dark:text-sky-300 font-medium"
+                                                    : "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06] text-muted-foreground opacity-50 line-through"
                                             }`}
                                         >
                                             <CheckSquare className="h-3 w-3 shrink-0" />
@@ -408,8 +408,8 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             onClick={() => handleQuickToggle(item, "receiveNewContent", item.receiveNewContent)}
                                             className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
                                                 item.receiveNewContent
-                                                    ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-300 font-medium"
-                                                    : "bg-white/[0.02] border-white/[0.06] text-muted-foreground opacity-50 line-through"
+                                                    ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-800 dark:text-cyan-300 font-medium"
+                                                    : "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06] text-muted-foreground opacity-50 line-through"
                                             }`}
                                         >
                                             <BookOpen className="h-3 w-3 shrink-0" />
@@ -421,8 +421,8 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             onClick={() => handleQuickToggle(item, "receiveSupportTickets", item.receiveSupportTickets)}
                                             className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
                                                 item.receiveSupportTickets
-                                                    ? "bg-rose-500/15 border-rose-500/40 text-rose-300 font-medium"
-                                                    : "bg-white/[0.02] border-white/[0.06] text-muted-foreground opacity-50 line-through"
+                                                    ? "bg-rose-500/15 border-rose-500/40 text-rose-800 dark:text-rose-300 font-medium"
+                                                    : "bg-muted/50 dark:bg-white/[0.02] border-border/70 dark:border-white/[0.06] text-muted-foreground opacity-50 line-through"
                                             }`}
                                         >
                                             <MessageSquare className="h-3 w-3 shrink-0" />
@@ -438,10 +438,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
 
             {/* ADD / EDIT LINKED INBOX DIALOG MODAL */}
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="max-w-lg bg-[#14141c] border-white/[0.1] text-foreground">
+                <DialogContent className="max-w-lg bg-popover dark:bg-[#14141c] border-border/70 dark:border-white/[0.1] text-foreground">
                     <DialogHeader>
                         <DialogTitle className="text-base font-bold flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-cyan-400" />
+                            <Mail className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                             {editingItem ? "Edit Linked Inbox" : "Add Linked Family / Secondary Inbox"}
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
@@ -451,7 +451,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
 
                     <form onSubmit={handleSave} className="space-y-4 py-2">
                         {modalError && (
-                            <div className="text-xs text-rose-400 bg-rose-950/40 border border-rose-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                            <div className="text-xs text-rose-700 dark:text-rose-400 bg-rose-500/10 dark:bg-rose-950/40 border border-rose-500/40 dark:border-rose-800/40 p-2.5 rounded-lg flex items-center gap-2">
                                 <AlertCircle className="h-4 w-4 shrink-0" />
                                 <span>{modalError}</span>
                             </div>
@@ -459,7 +459,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
 
                         <div className="space-y-1.5">
                             <Label htmlFor="linked-email-input" className="text-xs font-semibold">
-                                Email Address <span className="text-rose-400">*</span>
+                                Email Address <span className="text-rose-700 dark:text-rose-400">*</span>
                             </Label>
                             <Input
                                 id="linked-email-input"
@@ -468,7 +468,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 value={modalEmail}
                                 onChange={(e) => setModalEmail(e.target.value)}
                                 required
-                                className="h-9 text-xs bg-white/[0.03] border-white/[0.1]"
+                                className="h-9 text-xs bg-muted/50 dark:bg-white/[0.03] border-border/70 dark:border-white/[0.1]"
                             />
                         </div>
 
@@ -478,10 +478,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                     Relationship / Label
                                 </Label>
                                 <Select value={modalLabelType} onValueChange={setModalLabelType}>
-                                    <SelectTrigger id="linked-label-select" className="h-9 text-xs bg-white/[0.03] border-white/[0.1]">
+                                    <SelectTrigger id="linked-label-select" className="h-9 text-xs bg-muted/50 dark:bg-white/[0.03] border-border/70 dark:border-white/[0.1]">
                                         <SelectValue placeholder="Select a label..." />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-[#1a1a24] border-white/[0.1] text-foreground">
+                                    <SelectContent className="bg-popover dark:bg-[#1a1a24] border-border/70 dark:border-white/[0.1] text-foreground">
                                         {PRESET_LABELS.map(p => (
                                             <SelectItem key={p.value} value={p.value} className="text-xs cursor-pointer">
                                                 {p.label}
@@ -501,16 +501,16 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                         placeholder="e.g. Living Room iPad"
                                         value={modalCustomLabel}
                                         onChange={(e) => setModalCustomLabel(e.target.value)}
-                                        className="h-9 text-xs bg-white/[0.03] border-white/[0.1]"
+                                        className="h-9 text-xs bg-muted/50 dark:bg-white/[0.03] border-border/70 dark:border-white/[0.1]"
                                     />
                                 </div>
                             )}
                         </div>
 
                         {/* Granular Notification Category Toggles */}
-                        <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+                        <div className="space-y-2 pt-2 border-t border-border/70 dark:border-white/[0.06]">
                             <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                <CheckSquare className="h-3.5 w-3.5 text-cyan-400" />
+                                <CheckSquare className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
                                 Notification Delivery Preferences
                             </Label>
                             <p className="text-[11px] text-muted-foreground">
@@ -519,10 +519,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
 
                             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                                 {/* 1. Billing & Renewals */}
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <div className="h-7 w-7 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                                            <CreditCard className="h-3.5 w-3.5 text-amber-400" />
+                                            <CreditCard className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-xs font-medium text-foreground">Billing & Subscription Renewals</p>
@@ -533,10 +533,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 </div>
 
                                 {/* 2. Announcements */}
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <div className="h-7 w-7 rounded bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shrink-0">
-                                            <Megaphone className="h-3.5 w-3.5 text-teal-400" />
+                                            <Megaphone className="h-3.5 w-3.5 text-teal-700 dark:text-teal-400" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-xs font-medium text-foreground">Server Announcements & News</p>
@@ -547,10 +547,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 </div>
 
                                 {/* 3. Media Ready */}
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <div className="h-7 w-7 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                                            <Film className="h-3.5 w-3.5 text-emerald-400" />
+                                            <Film className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-xs font-medium text-foreground">Media Ready to Stream</p>
@@ -561,10 +561,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 </div>
 
                                 {/* 4. Requests Approved */}
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <div className="h-7 w-7 rounded bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
-                                            <CheckSquare className="h-3.5 w-3.5 text-sky-400" />
+                                            <CheckSquare className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-xs font-medium text-foreground">Media Request Approvals</p>
@@ -575,10 +575,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 </div>
 
                                 {/* 5. Weekly Digest */}
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <div className="h-7 w-7 rounded bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0">
-                                            <BookOpen className="h-3.5 w-3.5 text-cyan-400" />
+                                            <BookOpen className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-xs font-medium text-foreground">New Content Weekly Digest</p>
@@ -589,10 +589,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 </div>
 
                                 {/* 6. Support Tickets */}
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <div className="h-7 w-7 rounded bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
-                                            <MessageSquare className="h-3.5 w-3.5 text-rose-400" />
+                                            <MessageSquare className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-xs font-medium text-foreground">Support Ticket Responses</p>
@@ -610,7 +610,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 variant="outline"
                                 onClick={() => setIsModalOpen(false)}
                                 disabled={saving}
-                                className="h-8 text-xs border-white/[0.1]"
+                                className="h-8 text-xs border-border/70 dark:border-white/[0.1]"
                             >
                                 Cancel
                             </Button>

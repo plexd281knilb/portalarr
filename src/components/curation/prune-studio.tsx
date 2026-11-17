@@ -1857,7 +1857,7 @@ export function PruneStudio() {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin text-rose-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-rose-700 dark:text-rose-400" />
                 <p className="text-sm font-medium">Loading Maintainerr Storage &amp; Prune Studio...</p>
             </div>
         );
@@ -1892,12 +1892,12 @@ export function PruneStudio() {
 
             {/* Static Server & Library Section Navigator */}
             {servers.length > 0 && (
-                <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
                     <div className="p-4 space-y-3.5">
                         {/* Plex Servers Static Tabs */}
-                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
-                                <HardDrive className="h-4 w-4 text-rose-400" />
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-border dark:border-slate-800/80 pb-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                <HardDrive className="h-4 w-4 text-rose-700 dark:text-rose-400" />
                                 <span>Plex Server:</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
@@ -1912,12 +1912,12 @@ export function PruneStudio() {
                                             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                                 isSelected
                                                     ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/60 border border-rose-400/50 ring-1 ring-rose-400/40 font-black'
-                                                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                                    : 'bg-muted/80 dark:bg-slate-800/80 hover:bg-slate-700/80 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white border border-border dark:border-slate-700/60'
                                             }`}
                                         >
                                             <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white shadow-sm' : 'bg-emerald-400'}`} />
                                             <span>{s.serverName || "Plex Server"}</span>
-                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-rose-300 text-rose-100 bg-rose-700/60' : 'border-slate-700 text-slate-400'}`}>
+                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-rose-300 text-rose-100 bg-rose-700/60' : 'border-border dark:border-slate-700 text-slate-400'}`}>
                                                 {secCount} {secCount === 1 ? 'lib' : 'libs'}
                                             </Badge>
                                         </button>
@@ -1928,19 +1928,19 @@ export function PruneStudio() {
 
                         {/* Library Sections Static Tabs */}
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
-                                <Film className="h-4 w-4 text-sky-400" />
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                <Film className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                                 <span>Library Sections:</span>
-                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />}
+                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700 dark:text-sky-400" />}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                                 {serverSectionsLoading ? (
-                                    <div className="flex items-center gap-2 text-xs text-sky-400 py-1 font-medium">
+                                    <div className="flex items-center gap-2 text-xs text-sky-700 dark:text-sky-400 py-1 font-medium">
                                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                         <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
                                     </div>
                                 ) : currentSections.length === 0 ? (
-                                    <span className="text-xs text-slate-400 py-1">No library sections found on this server.</span>
+                                    <span className="text-xs text-slate-600 dark:text-slate-400 py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {
                                         const isSelected = String(sec.key) === selectedSectionKey;
@@ -1954,7 +1954,7 @@ export function PruneStudio() {
                                                 className={`flex items-center rounded-xl transition-all border shadow-sm ${
                                                     isSelected
                                                         ? 'bg-sky-600/20 border-sky-400/60 ring-1 ring-sky-400/40'
-                                                        : 'bg-slate-800/80 border-slate-700/70 hover:border-slate-600'
+                                                        : 'bg-muted/80 dark:bg-slate-800/80 border-border dark:border-slate-700/70 hover:border-slate-600'
                                                 }`}
                                             >
                                                 {/* Library Tab Selector Button */}
@@ -1963,15 +1963,15 @@ export function PruneStudio() {
                                                     onClick={() => handleSelectSection(String(sec.key))}
                                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-l-xl transition-all cursor-pointer ${
                                                         isSelected
-                                                            ? 'text-sky-200'
-                                                            : 'text-slate-300 hover:text-white'
+                                                            ? 'text-sky-900 dark:text-sky-200'
+                                                            : 'text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white'
                                                     }`}
                                                 >
-                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
-                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
-                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-800 dark:text-amber-300 shrink-0" />}
+                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-800 dark:text-cyan-300 shrink-0" />}
+                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-700 dark:text-slate-300 shrink-0" />}
                                                     <span>{sec.title}</span>
-                                                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${isSelected ? 'bg-sky-500/30 text-sky-100' : 'bg-slate-900 text-slate-400'}`}>
+                                                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${isSelected ? 'bg-sky-500/30 text-sky-900 dark:text-sky-100' : 'bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}>
                                                         #{sec.key}
                                                     </span>
                                                 </button>
@@ -1987,9 +1987,9 @@ export function PruneStudio() {
                                                     className={`px-2 py-1 text-[10px] font-extrabold transition-all border-l flex items-center gap-1 rounded-r-xl cursor-pointer ${
                                                         isSecEnabled 
                                                             ? isSelected
-                                                                ? 'bg-emerald-500/30 text-emerald-200 border-sky-400/40 hover:bg-emerald-500/40'
-                                                                : 'bg-emerald-500/20 text-emerald-300 border-slate-700 hover:bg-emerald-500/30'
-                                                            : 'bg-slate-900/90 text-slate-500 border-slate-700 hover:text-slate-300 hover:bg-slate-800'
+                                                                ? 'bg-emerald-500/30 text-emerald-900 dark:text-emerald-200 border-sky-400/40 hover:bg-emerald-500/40'
+                                                                : 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-border dark:border-slate-700 hover:bg-emerald-500/30'
+                                                            : 'bg-card/95 dark:bg-slate-900/90 text-slate-500 border-border dark:border-slate-700 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-accent dark:hover:bg-slate-800'
                                                     }`}
                                                 >
                                                     <span className={`w-1.5 h-1.5 rounded-full ${isSecEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
@@ -2004,29 +2004,29 @@ export function PruneStudio() {
 
                         {/* Active Library Control Bar */}
                         {currentSections.length > 0 && selectedSectionKey && (
-                            <div className="mt-3 pt-4 border-t border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-slate-950/70 p-4 sm:p-5 rounded-2xl border border-slate-800/90 min-w-0">
+                            <div className="mt-3 pt-4 border-t border-border dark:border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-muted/70 dark:bg-slate-950/70 p-4 sm:p-5 rounded-2xl border dark:border-slate-800/90 min-w-0">
                                 <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
                                     <div className={`p-2.5 rounded-xl border shrink-0 ${
                                         isSectionEnabled(selectedServerId, selectedSectionKey)
-                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-950/30'
-                                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-950/30'
+                                            : 'bg-muted dark:bg-slate-800 border-border dark:border-slate-700 text-slate-600 dark:text-slate-400'
                                     }`}>
                                         {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
                                     </div>
                                     <div className="space-y-1 min-w-0 flex-1">
                                         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-                                            <span className="text-xs sm:text-sm font-black text-white tracking-tight break-words">
+                                            <span className="text-xs sm:text-sm font-black text-foreground dark:text-white tracking-tight break-words">
                                                 {currentServer?.serverName} &rarr; {currentSections.find(s => String(s.key) === selectedSectionKey)?.title || `Library #${selectedSectionKey}`}
                                             </span>
                                             <Badge className={`text-[10px] font-bold px-2 py-0.5 shrink-0 ${
                                                 isSectionEnabled(selectedServerId, selectedSectionKey)
                                                     ? 'bg-emerald-600 text-white'
-                                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                                    : 'bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-border dark:border-slate-700'
                                             }`}>
                                                 {isSectionEnabled(selectedServerId, selectedSectionKey) ? '🟢 PRUNING ACTIVE' : '⚪ EXCLUDED / DISABLED'}
                                             </Badge>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey)
                                                 ? 'This library section will be evaluated for aging and unwatched media pruning.'
                                                 : 'This library section is excluded and will be protected from all pruning evaluations.'}
@@ -2036,15 +2036,15 @@ export function PruneStudio() {
 
                                 <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto justify-start xl:justify-end min-w-0">
                                     {/* Primary Switch */}
-                                    <div className="flex items-center gap-2.5 bg-slate-900 px-3.5 py-1.5 rounded-xl border border-slate-800 shadow-sm shrink-0">
-                                        <Label htmlFor="sec-master-toggle-prune" className="text-xs font-bold text-slate-300 cursor-pointer select-none">
+                                    <div className="flex items-center gap-2.5 bg-card/95 dark:bg-slate-900 px-3.5 py-1.5 rounded-xl border border-border dark:border-slate-800 shadow-sm shrink-0">
+                                        <Label htmlFor="sec-master-toggle-prune" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey) ? (
-                                                <span className="text-emerald-400 font-extrabold flex items-center gap-1.5">
+                                                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center gap-1.5">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                                     Enabled
                                                 </span>
                                             ) : (
-                                                <span className="text-slate-400 font-semibold">Disabled</span>
+                                                <span className="text-slate-600 dark:text-slate-400 font-semibold">Disabled</span>
                                             )}
                                         </Label>
                                         <Switch
@@ -2055,8 +2055,8 @@ export function PruneStudio() {
                                     </div>
 
                                     {/* Batch Server Controls */}
-                                    <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-sm shrink-0">
-                                        <span className="text-[10px] font-extrabold text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
+                                    <div className="flex items-center bg-card/95 dark:bg-slate-900/90 p-1 rounded-xl border border-border dark:border-slate-800 shadow-sm shrink-0">
+                                        <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
                                             Server:
                                         </span>
                                         <Button
@@ -2064,22 +2064,22 @@ export function PruneStudio() {
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleToggleAllSectionsOnServer(true)}
-                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-300 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
                                             title="Enable pruning evaluation for all library sections on this server"
                                         >
-                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-400" />
+                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-700 dark:text-emerald-400" />
                                             Enable All
                                         </Button>
-                                        <div className="w-[1px] h-4 bg-slate-800 my-auto" />
+                                        <div className="w-[1px] h-4 bg-muted dark:bg-slate-800 my-auto" />
                                         <Button
                                             type="button"
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleToggleAllSectionsOnServer(false)}
-                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
                                             title="Disable pruning evaluation for all library sections on this server"
                                         >
-                                            <XCircle className="h-3 w-3 mr-1 text-rose-400" />
+                                            <XCircle className="h-3 w-3 mr-1 text-rose-700 dark:text-rose-400" />
                                             Disable All
                                         </Button>
                                     </div>
@@ -2106,41 +2106,41 @@ export function PruneStudio() {
             {(() => {
                 const nextRunInfo = calculateNextRunTime(curationSyncSchedule, curationLastRunAt);
                 return (
-                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                    <Card className={`bg-card/95 dark:bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
                         isScheduleDirty 
                             ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
-                            : "border-slate-800"
+                            : "border-border dark:border-slate-800"
                     }`}>
-                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                        <CardHeader className="p-5 pb-3 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2.5 flex-wrap">
-                                        <Clock className="h-5 w-5 text-rose-400" />
-                                        <CardTitle className="text-base sm:text-lg font-bold text-white">Media Pruning &amp; Retention Automation Schedule</CardTitle>
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                        <Clock className="h-5 w-5 text-rose-700 dark:text-rose-400" />
+                                        <CardTitle className="text-base sm:text-lg font-bold text-foreground dark:text-white">Media Pruning &amp; Retention Automation Schedule</CardTitle>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-800 dark:text-rose-300 bg-rose-500/10 dark:bg-rose-950/30' : 'border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-muted/40 dark:bg-slate-800/40'}`}>
                                             {curationSyncPruning ? `Active (${formatScheduleLabel(curationSyncSchedule)})` : 'Paused'}
                                         </Badge>
                                         {curationSyncPruning && (
-                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30"}`}>
                                                 ⏱️ Next: {nextRunInfo.relativeText}
                                             </Badge>
                                         )}
                                         {pruneDryRun ? (
-                                            <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                            <Badge className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5">
                                                 🛡️ Dry-Run Safe (Simulate Only)
                                             </Badge>
                                         ) : (
-                                            <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                            <Badge className="bg-rose-500/20 text-rose-800 dark:text-rose-300 border border-rose-500/30 text-[10px] font-semibold px-2 py-0.5">
                                                 ⚠️ Live Deletion Enabled
                                             </Badge>
                                         )}
                                         {isScheduleDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                            <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-[10px] font-bold animate-pulse">
                                                 ● Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
-                                    <CardDescription className="text-xs text-slate-400">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                         Automated recurring evaluation of storage headroom, media watch history, and retention policies across enabled Plex libraries to stage Leaving Soon notices and reclaim disk capacity.
                                     </CardDescription>
                                 </div>
@@ -2163,18 +2163,18 @@ export function PruneStudio() {
                         <CardContent className="p-5 space-y-4">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {/* Stage 1: Retention & Leaving Soon Staging */}
-                                <div className="bg-slate-950/60 border border-rose-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                <div className="bg-muted/60 dark:bg-slate-950/60 border border-rose-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2">
-                                                <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
-                                                <span className="font-bold text-slate-100 text-sm">⚠️ Stage 1: Leaving Soon Staging</span>
+                                                <AlertTriangle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />
+                                                <span className="font-bold text-foreground dark:text-slate-100 text-sm">⚠️ Stage 1: Leaving Soon Staging</span>
                                             </div>
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${pruneTriggerMode === "always" ? "border-emerald-500/40 text-emerald-300 bg-emerald-950/30" : "border-amber-500/40 text-amber-300 bg-amber-950/30"}`}>
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${pruneTriggerMode === "always" ? "border-emerald-500/40 text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-950/30" : "border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30"}`}>
                                                     {pruneTriggerMode === "always" ? "📋 Rule-Based" : `📊 Disk ≥${pruneWarningThresholdPercent}%`}
                                                 </Badge>
-                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-800 dark:text-rose-300 bg-rose-500/10 dark:bg-rose-950/30' : 'border-border dark:border-slate-700 text-slate-500 bg-muted/70 dark:bg-slate-900/40'}`}>
                                                     {curationSyncPruning ? formatScheduleLabel(curationSyncSchedule) : 'Disabled'}
                                                 </Badge>
                                                 <Switch 
@@ -2183,23 +2183,23 @@ export function PruneStudio() {
                                                 />
                                             </div>
                                         </div>
-                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Scans storage usage, identifies unwatched media meeting prune criteria, adds items to the '⚠️ Leaving Soon' collection, and overlays countdown banners.
                                         </p>
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                                         <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Evaluation Schedule</label>
+                                            <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Evaluation Schedule</label>
                                             <Select 
                                                 value={curationSyncSchedule} 
                                                 onValueChange={val => setCurationSyncSchedule(val)}
                                                 disabled={!curationSyncPruning}
                                             >
-                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
+                                                <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 text-xs h-8 text-foreground dark:text-slate-200 truncate">
                                                     <SelectValue placeholder="Select Frequency" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs max-w-sm">
+                                                <SelectContent className="bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white text-xs max-w-sm">
                                                     {SCHEDULE_OPTIONS.map(opt => (
                                                         <SelectItem key={opt.value} value={opt.value}>
                                                             {opt.label}
@@ -2211,41 +2211,41 @@ export function PruneStudio() {
 
                                         <div className="space-y-1">
                                             <div className="flex items-center justify-between">
-                                                <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-                                                    <Layers className="h-3 w-3 text-rose-400" />
+                                                <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                    <Layers className="h-3 w-3 text-rose-700 dark:text-rose-400" />
                                                     <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
                                                 </label>
                                                 <button
                                                     type="button"
                                                     onClick={() => setManageLibrariesModalOpen(true)}
-                                                    className="text-[10px] text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer"
+                                                    className="text-[10px] text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 font-bold underline cursor-pointer"
                                                 >
                                                     Manage All &rarr;
                                                 </button>
                                             </div>
-                                            <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                            <div className="min-h-[32px] p-1.5 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
                                                 {activeEnabledSections.length > 0 ? (
                                                     activeEnabledSections.map(sec => (
                                                         <Badge 
                                                             key={`${sec.serverId}-${sec.sectionKey}`}
-                                                            className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                            className="bg-emerald-500/15 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-500/15 dark:hover:bg-emerald-900/80 transition-colors shadow-sm"
                                                             onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
                                                             title={`Click to disable/exclude "${sec.title}" from pruning`}
                                                         >
                                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
                                                             {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
                                                             <span>{sec.title}</span>
-                                                            {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                            {servers.length > 1 && <span className="text-[9px] text-slate-600 dark:text-slate-400 font-normal">({sec.serverName})</span>}
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-[11px] text-slate-400 px-1">No libraries active (Pruning paused)</span>
+                                                    <span className="text-[11px] text-slate-600 dark:text-slate-400 px-1">No libraries active (Pruning paused)</span>
                                                 )}
                                                 {excludedSections.length > 0 && (
                                                     <Badge
                                                         variant="outline"
                                                         onClick={() => setManageLibrariesModalOpen(true)}
-                                                        className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                                        className="border-border dark:border-slate-700/80 bg-muted/80 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
                                                     >
                                                         +{excludedSections.length} excluded
                                                     </Badge>
@@ -2254,10 +2254,10 @@ export function PruneStudio() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                                            <Clock3 className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border dark:border-slate-800/80">
+                                        <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                            <Clock3 className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400 shrink-0" />
+                                            <span>Last run: <strong className="text-foreground dark:text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <Button 
@@ -2275,9 +2275,9 @@ export function PruneStudio() {
                                                     variant="outline"
                                                     onClick={() => handleRunPruneSync("selected")}
                                                     disabled={runningPruneSync}
-                                                    className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5 cursor-pointer shrink-0"
+                                                    className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs h-8 px-2.5 gap-1.5 cursor-pointer shrink-0"
                                                 >
-                                                    <Play className="h-3 w-3 text-rose-400" />
+                                                    <Play className="h-3 w-3 text-rose-700 dark:text-rose-400" />
                                                     <span>Evaluate Selected Library (#{selectedSectionKey})</span>
                                                 </Button>
                                             )}
@@ -2286,49 +2286,49 @@ export function PruneStudio() {
                                 </div>
 
                         {/* Stage 2: Storage Reclamation & Safety Safeguards */}
-                        <div className="bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                        <div className="bg-muted/60 dark:bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2">
-                                        <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">🛡️ Stage 2: Reclamation &amp; Safety</span>
+                                        <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                                        <span className="font-bold text-foreground dark:text-slate-100 text-sm">🛡️ Stage 2: Reclamation &amp; Safety</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[11px] font-bold text-slate-300">Dry-Run Safe:</span>
+                                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Dry-Run Safe:</span>
                                         <Switch 
                                             checked={pruneDryRun}
                                             onCheckedChange={checked => setPruneDryRun(checked)}
                                         />
                                     </div>
                                 </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
+                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                                     Enforces the 14-day advance notice window before purging. When Dry-Run is active, deletion actions are simulated with zero disk impact.
                                 </p>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Headroom Threshold</label>
-                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-amber-300 font-semibold truncate">
+                                    <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Headroom Threshold</label>
+                                    <div className="h-8 px-2.5 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-700/80 rounded-lg flex items-center text-xs text-amber-800 dark:text-amber-300 font-semibold truncate">
                                         Warning: {pruneWarningThresholdPercent}% • Danger: {pruneDangerThresholdPercent}%
                                     </div>
                                 </div>
 
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Advance Notice Window</label>
-                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-emerald-300 font-semibold truncate">
+                                    <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Advance Notice Window</label>
+                                    <div className="h-8 px-2.5 bg-card/95 dark:bg-slate-900/90 border border-border dark:border-slate-700/80 rounded-lg flex items-center text-xs text-emerald-800 dark:text-emerald-300 font-semibold truncate">
                                         {pruneDaysNoticeSetting} Days Grace Period
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border dark:border-slate-800/80">
                                 <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                                    <Sparkles className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                     <span>{pruneDryRun ? 'Simulation Safeguard Active' : '⚠️ Live Deletion Mode Active'}</span>
                                 </div>
-                                <div className="text-[11px] font-semibold text-slate-400">
-                                    Arr Integration: <span className={pruneDeleteFromArrSetting ? 'text-rose-400' : 'text-slate-400'}>{pruneDeleteFromArrSetting ? 'Active' : 'Disabled'}</span>
+                                <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                                    Arr Integration: <span className={pruneDeleteFromArrSetting ? 'text-rose-700 dark:text-rose-400' : 'text-slate-600 dark:text-slate-400'}>{pruneDeleteFromArrSetting ? 'Active' : 'Disabled'}</span>
                                 </div>
                             </div>
                         </div>
@@ -2336,7 +2336,7 @@ export function PruneStudio() {
                 </CardContent>
 
                 {pruneSyncResult && (
-                    <div className={`p-3.5 text-xs border-t ${pruneSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2.5`}>
+                    <div className={`p-3.5 text-xs border-t ${pruneSyncResult.success ? 'bg-emerald-500/10 dark:bg-emerald-950/60 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300' : 'bg-rose-500/10 dark:bg-rose-950/60 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300'} flex items-start gap-2.5`}>
                         {pruneSyncResult.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" /> : <XCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />}
                         <div className="space-y-0.5">
                             <span className="font-bold">{pruneSyncResult.text}</span>
@@ -2351,19 +2351,19 @@ export function PruneStudio() {
     })()}
 
             {/* Sub-Navigation Tabs */}
-            <div className="grid grid-cols-2 md:flex md:items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
+            <div className="grid grid-cols-2 md:flex md:items-center gap-2 p-1.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-md backdrop-blur-md">
                 <button
                     type="button"
                     onClick={() => setSubTab("leaving_soon")}
                     className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "leaving_soon"
                             ? "bg-rose-600 text-white shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     <span className="truncate">Leaving Soon</span>
-                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "leaving_soon" ? "border-rose-300 text-rose-100 bg-rose-700/60" : "border-slate-700 text-slate-400"}`}>
+                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "leaving_soon" ? "border-rose-300 text-rose-100 bg-rose-700/60" : "border-border dark:border-slate-700 text-slate-400"}`}>
                         {leavingSoonItems.length}
                     </Badge>
                 </button>
@@ -2374,7 +2374,7 @@ export function PruneStudio() {
                     className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "simulation"
                             ? "bg-rose-600 text-white shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <Play className="h-4 w-4 shrink-0" />
@@ -2387,7 +2387,7 @@ export function PruneStudio() {
                     className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "execution"
                             ? "bg-rose-600 text-white shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <Trash2 className="h-4 w-4 shrink-0" />
@@ -2400,7 +2400,7 @@ export function PruneStudio() {
                     className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "storage"
                             ? "bg-rose-600 text-white shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                            : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
                     }`}
                 >
                     <HardDrive className="h-4 w-4 shrink-0" />
@@ -2412,13 +2412,13 @@ export function PruneStudio() {
             {subTab === "leaving_soon" && (
                 <div className="space-y-6">
                     {/* Header Bar */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-xl">
                         <div className="space-y-0.5">
-                            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                                <AlertTriangle className="h-4 w-4 text-rose-400" />
+                            <h2 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4 text-rose-700 dark:text-rose-400" />
                                 <span>Pinned "Leaving Soon" Plex Collection Hub</span>
                             </h2>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-slate-600 dark:text-slate-400">
                                 Give household members a grace period warning before media files are pruned. Automatically unflags items if someone watches them!
                             </p>
                         </div>
@@ -2430,9 +2430,9 @@ export function PruneStudio() {
                                 disabled={recheckingWatchActivity}
                                 onClick={handleRecheckWatchActivity}
                                 title="Recheck all Leaving Soon items in Plex to see if anyone has watched them, and restore their original artwork"
-                                className="border-emerald-500/40 hover:bg-emerald-950/40 text-emerald-300 hover:text-emerald-200 text-xs h-8 px-3 gap-1.5 font-bold"
+                                className="border-emerald-500/40 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-200 text-xs h-8 px-3 gap-1.5 font-bold"
                             >
-                                {recheckingWatchActivity ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" /> : <Eye className="h-3.5 w-3.5 text-emerald-400" />}
+                                {recheckingWatchActivity ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700 dark:text-emerald-400" /> : <Eye className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />}
                                 <span>Recheck Watch Activity</span>
                             </Button>
                             <Button
@@ -2440,9 +2440,9 @@ export function PruneStudio() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => setManualFlagModalOpen(true)}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5"
+                                className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200 text-xs h-8 px-3 gap-1.5"
                             >
-                                <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                 <span>Manual Flag Item</span>
                             </Button>
                             <Button
@@ -2451,7 +2451,7 @@ export function PruneStudio() {
                                 variant="outline"
                                 disabled={clearingFlags}
                                 onClick={handleClearAllFlags}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5"
+                                className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200 text-xs h-8 px-3 gap-1.5"
                             >
                                 {clearingFlags ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                                 <span>Clear All Flags</span>
@@ -2471,25 +2471,25 @@ export function PruneStudio() {
 
                     {/* Glances Live Storage Array & Capacity Display */}
                     {glancesDisks.length > 0 && (
-                        <div className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl space-y-3 backdrop-blur-md">
+                        <div className="p-4 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-xl space-y-3 backdrop-blur-md">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                 <div className="flex items-center gap-2">
-                                    <HardDrive className="h-4 w-4 text-cyan-400" />
-                                    <span className="text-xs font-bold text-white">Glances Storage Array &amp; Live Capacity:</span>
-                                    {glancesLoading && <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />}
+                                    <HardDrive className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
+                                    <span className="text-xs font-bold text-foreground dark:text-white">Glances Storage Array &amp; Live Capacity:</span>
+                                    {glancesLoading && <Loader2 className="h-3 w-3 animate-spin text-cyan-700 dark:text-cyan-400" />}
                                 </div>
                                 <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
                                     <Select
                                         value={selectedGlancesDiskId || (glancesDisks[0]?.id || "")}
                                         onValueChange={setSelectedGlancesDiskId}
                                     >
-                                        <SelectTrigger className="bg-slate-950 border-slate-700 text-xs h-8 w-full sm:w-auto sm:min-w-[260px] text-slate-200">
+                                        <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-700 text-xs h-8 w-full sm:w-auto sm:min-w-[260px] text-foreground dark:text-slate-200">
                                             <SelectValue placeholder="Select Glances Storage Array..." />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {glancesDisks.map(d => (
                                                 <SelectItem key={d.id} value={d.id}>
-                                                    <span className="font-bold text-white">{d.instanceName}:</span> <span className="font-mono text-cyan-300">{d.mntPoint}</span> ({d.freeGb >= 1000 ? `${(d.freeGb / 1024).toFixed(1)} TB` : `${d.freeGb} GB`} free, {d.percent}% used)
+                                                    <span className="font-bold text-foreground dark:text-white">{d.instanceName}:</span> <span className="font-mono text-cyan-800 dark:text-cyan-300">{d.mntPoint}</span> ({d.freeGb >= 1000 ? `${(d.freeGb / 1024).toFixed(1)} TB` : `${d.freeGb} GB`} free, {d.percent}% used)
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -2518,7 +2518,7 @@ export function PruneStudio() {
                                         onClick={() => loadGlancesDisks(selectedGlancesDiskId)}
                                         disabled={glancesLoading}
                                         title="Refresh Glances Storage Telemetry"
-                                        className="h-8 w-8 p-0 border-slate-700 text-slate-300 hover:text-white"
+                                        className="h-8 w-8 p-0 border-border dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                     >
                                         <RefreshCw className={`h-3.5 w-3.5 ${glancesLoading ? 'animate-spin' : ''}`} />
                                     </Button>
@@ -2529,26 +2529,26 @@ export function PruneStudio() {
                                 const selectedDisk = glancesDisks.find(d => d.id === selectedGlancesDiskId) || glancesDisks[0];
                                 if (!selectedDisk) return null;
                                 return (
-                                    <div className="space-y-2 pt-1 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                                    <div className="space-y-2 pt-1 bg-muted/60 dark:bg-slate-950/60 p-3 rounded-xl border border-border dark:border-slate-800/80">
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-slate-400 font-mono text-[11px]">
-                                                    Mount: <strong className="text-white">{selectedDisk.mntPoint}</strong> ({selectedDisk.deviceName || selectedDisk.fsType})
+                                                <span className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
+                                                    Mount: <strong className="text-foreground dark:text-white">{selectedDisk.mntPoint}</strong> ({selectedDisk.deviceName || selectedDisk.fsType})
                                                 </span>
-                                                <Badge variant="outline" className="text-[10px] border-slate-700 text-slate-300">
+                                                <Badge variant="outline" className="text-[10px] border-border dark:border-slate-700 text-slate-700 dark:text-slate-300">
                                                     {selectedDisk.instanceName}
                                                 </Badge>
                                             </div>
                                             <div className="font-mono font-bold text-xs flex items-center gap-2">
-                                                <span className={selectedDisk.percent >= 90 ? 'text-rose-400' : selectedDisk.percent >= 75 ? 'text-amber-400' : 'text-emerald-400'}>
+                                                <span className={selectedDisk.percent >= 90 ? 'text-rose-700 dark:text-rose-400' : selectedDisk.percent >= 75 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}>
                                                     {selectedDisk.percent}% Capacity Used
                                                 </span>
-                                                <span className="text-slate-400 font-normal text-[11px]">
+                                                <span className="text-slate-600 dark:text-slate-400 font-normal text-[11px]">
                                                     • {selectedDisk.freeGb >= 1000 ? `${(selectedDisk.freeGb / 1024).toFixed(2)} TB` : `${selectedDisk.freeGb} GB`} Free of {selectedDisk.totalGb >= 1000 ? `${(selectedDisk.totalGb / 1024).toFixed(2)} TB` : `${selectedDisk.totalGb} GB`}
                                                 </span>
                                             </div>
                                         </div>
-                                        <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                        <div className="w-full h-3 bg-muted dark:bg-slate-950 rounded-full overflow-hidden border border-border dark:border-slate-800">
                                             <div 
                                                 className={`h-full transition-all rounded-full ${
                                                     selectedDisk.percent >= 90 ? 'bg-gradient-to-r from-amber-500 to-rose-600' :
@@ -2567,23 +2567,23 @@ export function PruneStudio() {
                     {/* Recheck Watch Results Banner */}
                     {recheckWatchResult && (
                         <div className={`p-4 rounded-xl border text-xs space-y-1.5 animate-in fade-in-50 ${
-                            recheckWatchResult.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                            recheckWatchResult.success ? "bg-emerald-500/15 dark:bg-emerald-950/80 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/15 dark:bg-rose-950/80 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                         }`}>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 font-bold">
-                                    {recheckWatchResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                                    {recheckWatchResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
                                     <span>{recheckWatchResult.message}</span>
                                 </div>
-                                <button type="button" onClick={() => setRecheckWatchResult(null)} className="text-slate-400 hover:text-white">
+                                <button type="button" onClick={() => setRecheckWatchResult(null)} className="text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white">
                                     <X className="h-3.5 w-3.5" />
                                 </button>
                             </div>
                             {recheckWatchResult.unflaggedItems && recheckWatchResult.unflaggedItems.length > 0 && (
-                                <div className="pt-1 pl-6 space-y-1 text-[11px] text-emerald-200/90 font-mono">
+                                <div className="pt-1 pl-6 space-y-1 text-[11px] text-emerald-900/90 dark:text-emerald-200/90 font-mono">
                                     {recheckWatchResult.unflaggedItems.map(item => (
                                         <div key={item.ratingKey} className="flex items-center gap-2">
                                             <span>✨ {item.title}:</span>
-                                            <span className="text-emerald-400">{item.reason}</span>
+                                            <span className="text-emerald-700 dark:text-emerald-400">{item.reason}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -2593,16 +2593,16 @@ export function PruneStudio() {
 
                     {leavingSoonHubMsg && (
                         <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in-50 ${
-                            leavingSoonHubMsg.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                            leavingSoonHubMsg.success ? "bg-emerald-500/15 dark:bg-emerald-950/80 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/15 dark:bg-rose-950/80 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                         }`}>
-                            {leavingSoonHubMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                            {leavingSoonHubMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
                             <span>{leavingSoonHubMsg.text}</span>
                         </div>
                     )}
 
                     {clearFlagsMsg && (
-                        <div className="p-3 rounded-xl bg-sky-950/80 border border-sky-800 text-xs text-sky-300 flex items-center gap-2 animate-in fade-in-50">
-                            <RotateCcw className="h-4 w-4 text-sky-400 shrink-0" />
+                        <div className="p-3 rounded-xl bg-sky-500/15 dark:bg-sky-950/80 border border-sky-500/40 dark:border-sky-800 text-xs text-sky-800 dark:text-sky-300 flex items-center gap-2 animate-in fade-in-50">
+                            <RotateCcw className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                             <span>{clearFlagsMsg}</span>
                         </div>
                     )}
@@ -2622,20 +2622,20 @@ export function PruneStudio() {
                         const selectedSizeGb = selectedLeavingSoonItemsList.reduce((acc, it) => acc + (typeof it.fileSizeGb === "number" ? it.fileSizeGb : 0), 0);
 
                         return (
-                            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                                <CardHeader className="p-4 border-b border-slate-800/80 space-y-3">
+                            <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                                <CardHeader className="p-4 border-b border-border dark:border-slate-800/80 space-y-3">
                                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                                         <div className="space-y-1">
-                                            <CardTitle className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
-                                                <Clock className="h-4 w-4 text-rose-400 shrink-0" />
+                                            <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2 flex-wrap">
+                                                <Clock className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />
                                                 <span>Active Staged Media Items ({displayedLeavingSoonItems.length}{leavingSoonServerFilter !== "all" ? ` of ${leavingSoonItems.length}` : ""})</span>
                                                 {totalStagedGb > 0 && (
-                                                    <Badge className="bg-emerald-950/80 text-emerald-300 border-emerald-500/40 text-[10px] font-mono font-semibold">
+                                                    <Badge className="bg-emerald-500/15 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-[10px] font-mono font-semibold">
                                                         💾 {totalStagedGb >= 1000 ? `${(totalStagedGb / 1024).toFixed(2)} TB` : `${totalStagedGb.toFixed(1)} GB`} Recoverable
                                                     </Badge>
                                                 )}
                                             </CardTitle>
-                                            <p className="text-xs text-slate-400">Scheduled for pruning after grace period</p>
+                                            <p className="text-xs text-slate-600 dark:text-slate-400">Scheduled for pruning after grace period</p>
                                         </div>
 
                                         {displayedLeavingSoonItems.length > 0 && (
@@ -2645,16 +2645,16 @@ export function PruneStudio() {
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={() => handleSelectAllLeavingSoon(displayedLeavingSoonItems)}
-                                                    className="h-7 text-xs border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                                                    className="h-7 text-xs border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white cursor-pointer"
                                                 >
                                                     {allDisplayedSelected ? (
                                                         <>
-                                                            <CheckSquare className="h-3.5 w-3.5 text-rose-400 mr-1.5" />
+                                                            <CheckSquare className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400 mr-1.5" />
                                                             <span>Deselect All</span>
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <Square className="h-3.5 w-3.5 text-slate-400 mr-1.5" />
+                                                            <Square className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400 mr-1.5" />
                                                             <span>Select All ({displayedLeavingSoonItems.length})</span>
                                                         </>
                                                     )}
@@ -2665,10 +2665,10 @@ export function PruneStudio() {
                                                     variant="outline"
                                                     disabled={bulkActionLoading}
                                                     onClick={() => handleCancelAllDisplayed(displayedLeavingSoonItems)}
-                                                    className="h-7 text-xs border-rose-500/30 hover:bg-rose-950/40 text-rose-300 hover:text-rose-100 cursor-pointer"
+                                                    className="h-7 text-xs border-rose-500/30 hover:bg-rose-500/10 dark:hover:bg-rose-950/40 text-rose-800 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-100 cursor-pointer"
                                                     title="Cancel removal and restore original posters for all displayed items"
                                                 >
-                                                    <RotateCcw className="h-3.5 w-3.5 mr-1 text-rose-400" />
+                                                    <RotateCcw className="h-3.5 w-3.5 mr-1 text-rose-700 dark:text-rose-400" />
                                                     <span>Cancel All Removal ({displayedLeavingSoonItems.length})</span>
                                                 </Button>
                                             </div>
@@ -2677,9 +2677,9 @@ export function PruneStudio() {
 
                                     {/* Server Filter Pills */}
                                     {leavingSoonItems.length > 0 && servers.length > 1 && (
-                                        <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-800/60">
-                                            <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
-                                                <HardDrive className="h-3 w-3 text-rose-400" />
+                                        <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-border dark:border-slate-800/60">
+                                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mr-1 flex items-center gap-1">
+                                                <HardDrive className="h-3 w-3 text-rose-700 dark:text-rose-400" />
                                                 Filter Server:
                                             </span>
                                             <button
@@ -2688,7 +2688,7 @@ export function PruneStudio() {
                                                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                                                     leavingSoonServerFilter === "all"
                                                         ? "bg-rose-600 text-white shadow-sm ring-1 ring-rose-400/50"
-                                                        : "bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700"
+                                                        : "bg-muted/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white hover:bg-slate-700"
                                                 }`}
                                             >
                                                 All Servers ({leavingSoonItems.length})
@@ -2704,11 +2704,11 @@ export function PruneStudio() {
                                                         className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                                                             isSelected
                                                                 ? "bg-rose-600 text-white shadow-sm ring-1 ring-rose-400/50"
-                                                                : "bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700"
+                                                                : "bg-muted/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white hover:bg-slate-700"
                                                         }`}
                                                     >
                                                         <span>{s.serverName || "Plex Server"}</span>
-                                                        <Badge variant="outline" className={`text-[9px] px-1 py-0 font-mono ${isSelected ? "border-rose-300 text-white bg-rose-700/60" : "border-slate-700 text-slate-400"}`}>
+                                                        <Badge variant="outline" className={`text-[9px] px-1 py-0 font-mono ${isSelected ? "border-rose-300 text-white bg-rose-700/60" : "border-border dark:border-slate-700 text-slate-400"}`}>
                                                             {count}
                                                         </Badge>
                                                     </button>
@@ -2720,20 +2720,20 @@ export function PruneStudio() {
                                 <CardContent className="p-4 space-y-2.5">
                                     {/* Bulk Selection Sticky Toolbar */}
                                     {selectedCount > 0 && (
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-rose-950/30 border border-rose-500/40 rounded-xl shadow-lg">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-rose-500/10 dark:bg-rose-950/30 border border-rose-500/40 rounded-xl shadow-lg">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <Badge className="bg-rose-600 text-white font-bold text-xs px-2.5 py-0.5">
                                                     {selectedCount} Selected
                                                 </Badge>
                                                 {selectedSizeGb > 0 && (
-                                                    <span className="text-xs font-semibold text-emerald-400 font-mono">
+                                                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 font-mono">
                                                         💾 {selectedSizeGb >= 1000 ? `${(selectedSizeGb / 1024).toFixed(2)} TB` : `${selectedSizeGb.toFixed(1)} GB`} Recoverable
                                                     </span>
                                                 )}
                                                 <button
                                                     type="button"
                                                     onClick={handleClearLeavingSoonSelection}
-                                                    className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer ml-1"
+                                                    className="text-[11px] text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white underline cursor-pointer ml-1"
                                                 >
                                                     Clear selection
                                                 </button>
@@ -2745,9 +2745,9 @@ export function PruneStudio() {
                                                     variant="outline"
                                                     disabled={bulkActionLoading}
                                                     onClick={handleBulkCancelRemoval}
-                                                    className="h-7 text-xs font-semibold border-slate-700 hover:bg-slate-800 text-slate-200 hover:text-white gap-1.5 cursor-pointer"
+                                                    className="h-7 text-xs font-semibold border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200 hover:text-foreground dark:hover:text-white gap-1.5 cursor-pointer"
                                                 >
-                                                    {bulkActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 text-rose-400" />}
+                                                    {bulkActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />}
                                                     <span>Cancel Removal ({selectedCount})</span>
                                                 </Button>
                                                 <Button
@@ -2768,12 +2768,12 @@ export function PruneStudio() {
                                         <div className="text-center py-12 text-slate-500 space-y-3">
                                             <Shield className="h-10 w-10 mx-auto text-emerald-500/50" />
                                             <div className="space-y-1">
-                                                <p className="text-xs font-semibold text-slate-300">
+                                                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                                                     {leavingSoonServerFilter !== "all"
                                                         ? `No media currently marked for removal on ${servers.find(s => s.serverId === leavingSoonServerFilter)?.serverName || "this server"}.`
                                                         : "All Plex libraries healthy — No media currently marked for removal."}
                                                 </p>
-                                                <p className="text-[11px] text-slate-400 max-w-lg mx-auto">
+                                                <p className="text-[11px] text-slate-600 dark:text-slate-400 max-w-lg mx-auto">
                                                     {pruneTriggerMode === "always"
                                                         ? "Evaluation policy is set to Rule-Based Retention. Click 'Evaluate All Libraries Now' to scan active libraries against aging rules, or test custom criteria in the Prune Sandbox."
                                                         : `Evaluation policy is set to Capacity-Triggered. Media will stage automatically when array hits ${pruneWarningThresholdPercent}% capacity.`}
@@ -2795,9 +2795,9 @@ export function PruneStudio() {
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={() => setSubTab("simulation")}
-                                                    className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                                    className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-foreground dark:text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
                                                 >
-                                                    <Play className="h-3.5 w-3.5 text-rose-400" />
+                                                    <Play className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                                     <span>Open Prune Sandbox</span>
                                                 </Button>
                                             </div>
@@ -2818,43 +2818,43 @@ export function PruneStudio() {
                                                     key={item.id || item.ratingKey}
                                                     className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl border transition-all ${
                                                         isSelected
-                                                            ? "bg-rose-950/20 border-rose-500/50 shadow-sm"
-                                                            : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
+                                                            ? "bg-rose-500/10 dark:bg-rose-950/20 border-rose-500/50 shadow-sm"
+                                                            : "bg-muted/80 dark:bg-slate-950/80 border-border dark:border-slate-800 hover:border-border dark:hover:border-slate-700"
                                                     }`}
                                                 >
                                                     <div className="flex items-start sm:items-center gap-3 min-w-0">
                                                         <button
                                                             type="button"
                                                             onClick={() => toggleSelectLeavingSoonItem(itemCompoundKey)}
-                                                            className="mt-0.5 sm:mt-0 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                                                            className="mt-0.5 sm:mt-0 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white transition-colors cursor-pointer shrink-0"
                                                             title={isSelected ? "Deselect item" : "Select item"}
                                                         >
                                                             {isSelected ? (
                                                                 <CheckSquare className="h-4 w-4 text-rose-500" />
                                                             ) : (
-                                                                <Square className="h-4 w-4 text-slate-400 hover:text-slate-200" />
+                                                                <Square className="h-4 w-4 text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200" />
                                                             )}
                                                         </button>
                                                         <div className="space-y-1 min-w-0">
                                                             <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className="font-bold text-white text-xs truncate max-w-[280px] sm:max-w-md">{item.title}</span>
-                                                                <Badge className="bg-rose-950 text-rose-300 border-rose-500/40 text-[9px] font-mono shrink-0">
+                                                                <span className="font-bold text-foreground dark:text-white text-xs truncate max-w-[280px] sm:max-w-md">{item.title}</span>
+                                                                <Badge className="bg-rose-500/15 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border-rose-500/40 text-[9px] font-mono shrink-0">
                                                                     {daysRemaining} DAYS LEFT
                                                                 </Badge>
                                                                 {sizeStr && (
-                                                                    <Badge className="bg-emerald-950/70 text-emerald-300 border-emerald-500/30 text-[9px] font-mono font-bold shrink-0">
+                                                                    <Badge className="bg-emerald-500/15 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[9px] font-mono font-bold shrink-0">
                                                                         💾 {sizeStr}
                                                                     </Badge>
                                                                 )}
                                                                 {itemServerName && (
-                                                                    <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 font-mono shrink-0">
+                                                                    <Badge variant="outline" className="text-[9px] border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 font-mono shrink-0">
                                                                         {itemServerName}
                                                                     </Badge>
                                                                 )}
                                                             </div>
-                                                            <p className="text-[11px] text-slate-400">
+                                                            <p className="text-[11px] text-slate-600 dark:text-slate-400">
                                                                 {sizeStr && (
-                                                                    <span className="text-emerald-400 font-semibold mr-1.5">
+                                                                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold mr-1.5">
                                                                         Saves {sizeStr} •
                                                                     </span>
                                                                 )}
@@ -2872,7 +2872,7 @@ export function PruneStudio() {
                                                             await unmarkItemLeavingSoonAction(item.ratingKey, item.serverId || selectedServerId);
                                                             loadLeavingSoonItems();
                                                         }}
-                                                        className="text-[11px] h-7 px-2.5 border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white shrink-0 self-end sm:self-auto cursor-pointer"
+                                                        className="text-[11px] h-7 px-2.5 border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white shrink-0 self-end sm:self-auto cursor-pointer"
                                                     >
                                                         Cancel Removal
                                                     </Button>
@@ -2886,26 +2886,26 @@ export function PruneStudio() {
                     })()}
 
                     {/* Leaving Soon Banner & Poster Live Simulator */}
-                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                    <Card className={`bg-card/95 dark:bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
                         isBannersDirty 
                             ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
-                            : "border-slate-800"
+                            : "border-border dark:border-slate-800"
                     }`}>
-                        <CardHeader className="p-4 border-b border-slate-800/80">
+                        <CardHeader className="p-4 border-b border-border dark:border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                 <div className="space-y-0.5">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                            <Sparkles className="h-4 w-4 text-rose-400" />
+                                        <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                            <Sparkles className="h-4 w-4 text-rose-700 dark:text-rose-400" />
                                             <span>Leaving Soon Banner &amp; Poster Live Simulator</span>
                                         </CardTitle>
                                         {isBannersDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                            <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
                                                 ● Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
-                                    <CardDescription className="text-xs text-slate-400">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                         Customize overlay ribbons and banners applied to items in the Leaving Soon collection, test dynamic template variables, or test on real media from your Plex libraries.
                                     </CardDescription>
                                 </div>
@@ -2914,30 +2914,30 @@ export function PruneStudio() {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => setPosterPickerModalOpen(true)}
-                                    className="h-7 text-[11px] gap-1.5 border-rose-500/40 hover:bg-rose-950/40 text-rose-200 hover:text-rose-100 shrink-0"
+                                    className="h-7 text-[11px] gap-1.5 border-rose-500/40 hover:bg-rose-500/10 dark:hover:bg-rose-950/40 text-rose-900 dark:text-rose-200 hover:text-rose-900 dark:hover:text-rose-100 shrink-0"
                                 >
-                                    <ImageIcon className="h-3.5 w-3.5 text-rose-400" /> Pull Poster from Plex
+                                    <ImageIcon className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" /> Pull Poster from Plex
                                 </Button>
                             </div>
 
                             {/* Real Item Telemetry Banner if selected */}
                             {simSelectedRealItem && (
-                                <div className="mt-3 p-2.5 bg-rose-950/30 border border-rose-800/50 rounded-xl text-xs flex items-center justify-between gap-2">
+                                <div className="mt-3 p-2.5 bg-rose-500/10 dark:bg-rose-950/30 border border-rose-500/50 dark:border-rose-800/50 rounded-xl text-xs flex items-center justify-between gap-2">
                                     <div className="space-y-0.5 min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                            <span className="font-bold text-white truncate">{simSelectedRealItem.title}</span>
+                                            <span className="font-bold text-foreground dark:text-white truncate">{simSelectedRealItem.title}</span>
                                             {simSelectedRealItem.year && (
-                                                <span className="text-[10px] text-rose-300 font-mono">({simSelectedRealItem.year})</span>
+                                                <span className="text-[10px] text-rose-800 dark:text-rose-300 font-mono">({simSelectedRealItem.year})</span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-rose-200/80">
+                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-rose-900/80 dark:text-rose-200/80">
                                             {(simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution) && (
-                                                <span className="px-1.5 py-0.2 bg-rose-900/40 rounded text-rose-300 font-mono">
+                                                <span className="px-1.5 py-0.2 bg-rose-500/10 dark:bg-rose-900/40 rounded text-rose-800 dark:text-rose-300 font-mono">
                                                     {simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution}
                                                 </span>
                                             )}
                                             {(simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec) && (
-                                                <span className="px-1.5 py-0.2 bg-slate-800 rounded text-slate-300 uppercase">
+                                                <span className="px-1.5 py-0.2 bg-muted dark:bg-slate-800 rounded text-slate-700 dark:text-slate-300 uppercase">
                                                     {simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec}
                                                 </span>
                                             )}
@@ -2959,7 +2959,7 @@ export function PruneStudio() {
                                                 simBannerPosition
                                             );
                                         }}
-                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white shrink-0"
+                                        className="h-6 px-2 text-[10px] text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-white shrink-0"
                                     >
                                         Reset Sample
                                     </Button>
@@ -2971,7 +2971,7 @@ export function PruneStudio() {
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                                 {/* Left: Composite Poster Preview */}
                                 <div className="lg:col-span-5 flex flex-col items-center space-y-2">
-                                    <div className="relative aspect-[2/3] w-full max-w-[220px] rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-700/80 shadow-2xl">
+                                    <div className="relative aspect-[2/3] w-full max-w-[220px] rounded-2xl overflow-hidden bg-muted dark:bg-slate-950 border-2 border-border dark:border-slate-700/80 shadow-2xl">
                                         {simPreviewDataUrl ? (
                                             <img src={simPreviewDataUrl} alt="Leaving Soon Preview" className="w-full h-full object-cover" />
                                         ) : (
@@ -2996,24 +2996,24 @@ export function PruneStudio() {
                                             </div>
                                         )}
                                         {simPreviewLoading && simPreviewDataUrl && (
-                                            <div className="absolute top-2 right-2 p-1.5 rounded-full bg-slate-950/80 border border-slate-800 backdrop-blur-md shadow-md">
-                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-400" />
+                                            <div className="absolute top-2 right-2 p-1.5 rounded-full bg-muted/80 dark:bg-slate-950/80 border border-border dark:border-slate-800 backdrop-blur-md shadow-md">
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-700 dark:text-rose-400" />
                                             </div>
                                         )}
                                     </div>
-                                    <span className="text-[10px] text-slate-400 font-mono">Live Composite Preview</span>
+                                    <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">Live Composite Preview</span>
                                 </div>
 
                                 {/* Right: Banner Controls & Variable Chips */}
                                 <div className="lg:col-span-7 space-y-3.5 text-xs">
                                     {/* Template Presets Selector */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-[11px] text-slate-300 font-semibold">Banner Style Preset:</Label>
+                                        <Label className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">Banner Style Preset:</Label>
                                         <Select
                                             value={simBannerType}
                                             onValueChange={handleSelectPruneBannerPreset}
                                         >
-                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
+                                            <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-8">
                                                 <SelectValue placeholder="Select Preset" />
                                             </SelectTrigger>
                                             <SelectContent className="max-h-64">
@@ -3024,7 +3024,7 @@ export function PruneStudio() {
                                                             <div className="flex items-center justify-between gap-2 w-full">
                                                                 <span>{p.label}</span>
                                                                 {isCustomized && (
-                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 border-rose-500/40 text-rose-400 bg-rose-950/40 font-normal">
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 border-rose-500/40 text-rose-700 dark:text-rose-400 bg-rose-500/10 dark:bg-rose-950/40 font-normal">
                                                                         Custom
                                                                     </Badge>
                                                                 )}
@@ -3039,13 +3039,13 @@ export function PruneStudio() {
                                     {/* Banner Text Template with Variable Insertion Chips */}
                                     <div className="space-y-1.5">
                                         <div className="flex items-center justify-between">
-                                            <Label className="text-[11px] text-slate-300 font-semibold">Banner Text Template:</Label>
-                                            <span className="text-[10px] text-rose-400 font-mono">Click chips to insert:</span>
+                                            <Label className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">Banner Text Template:</Label>
+                                            <span className="text-[10px] text-rose-700 dark:text-rose-400 font-mono">Click chips to insert:</span>
                                         </div>
                                         <Input
                                             value={simBannerText}
                                             onChange={(e) => handlePruneBannerTextChange(e.target.value)}
-                                            className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
+                                            className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800 font-mono text-foreground dark:text-white"
                                             placeholder="e.g. LEAVING ON {date}"
                                         />
 
@@ -3063,7 +3063,7 @@ export function PruneStudio() {
                                                     key={chip.token}
                                                     type="button"
                                                     onClick={() => handleInsertToken(chip.token)}
-                                                    className="px-2 py-0.5 rounded-md bg-rose-500/20 hover:bg-rose-500 hover:text-white text-rose-300 border border-rose-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
+                                                    className="px-2 py-0.5 rounded-md bg-rose-500/20 hover:bg-rose-500 hover:text-foreground dark:hover:text-white text-rose-800 dark:text-rose-300 border border-rose-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
                                                 >
                                                     {chip.label}
                                                 </button>
@@ -3074,12 +3074,12 @@ export function PruneStudio() {
                                     {/* Color Theme & Position Controls */}
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
-                                            <Label className="text-[10px] text-slate-400">Color Theme:</Label>
+                                            <Label className="text-[10px] text-slate-600 dark:text-slate-400">Color Theme:</Label>
                                             <Select
                                                 value={simBannerTheme}
                                                 onValueChange={handlePruneBannerThemeChange}
                                             >
-                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
+                                                <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-7">
                                                     <SelectValue placeholder="Select Theme" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -3096,12 +3096,12 @@ export function PruneStudio() {
                                         </div>
 
                                         <div className="space-y-1">
-                                            <Label className="text-[10px] text-slate-400">Position:</Label>
+                                            <Label className="text-[10px] text-slate-600 dark:text-slate-400">Position:</Label>
                                             <Select
                                                 value={simBannerPosition}
                                                 onValueChange={(val: any) => handlePruneBannerPositionChange(val)}
                                             >
-                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
+                                                <SelectTrigger className="bg-muted dark:bg-slate-950 border-border dark:border-slate-800 text-xs h-7">
                                                     <SelectValue placeholder="Select Position" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -3117,10 +3117,10 @@ export function PruneStudio() {
                                     </div>
 
                                     {/* Font Size Slider & Presets */}
-                                    <div className="space-y-1.5 p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                                    <div className="space-y-1.5 p-2.5 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800/80">
                                         <div className="flex items-center justify-between">
-                                            <Label className="text-[10px] text-slate-300 font-semibold">Banner Font Size:</Label>
-                                            <span className="text-[10px] font-mono font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                                            <Label className="text-[10px] text-slate-700 dark:text-slate-300 font-semibold">Banner Font Size:</Label>
+                                            <span className="text-[10px] font-mono font-bold text-rose-700 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
                                                 {simBannerFontSize}px
                                             </span>
                                         </div>
@@ -3133,7 +3133,7 @@ export function PruneStudio() {
                                                 step="2"
                                                 value={simBannerFontSize}
                                                 onChange={(e) => handlePruneBannerFontSizeChange(parseInt(e.target.value, 10))}
-                                                className="w-full accent-rose-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
+                                                className="w-full accent-rose-500 cursor-pointer h-1.5 bg-muted dark:bg-slate-800 rounded-lg appearance-none"
                                             />
                                             <span className="text-[9px] text-slate-500 font-mono">72px</span>
                                         </div>
@@ -3151,7 +3151,7 @@ export function PruneStudio() {
                                                     className={`flex-1 py-0.5 text-[9px] font-mono rounded border transition-all ${
                                                         simBannerFontSize === preset.size
                                                             ? "bg-rose-600 text-white border-rose-500 font-bold"
-                                                            : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800"
+                                                            : "bg-card/95 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 hover:text-foreground dark:hover:text-white hover:bg-accent dark:hover:bg-slate-800"
                                                     }`}
                                                 >
                                                     {preset.label}
@@ -3161,8 +3161,8 @@ export function PruneStudio() {
                                     </div>
 
                                     {/* Live Variable Test Values */}
-                                    <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-2">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    <div className="p-2.5 bg-muted/80 dark:bg-slate-950/90 rounded-xl border border-border dark:border-slate-800/80 space-y-2">
+                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
                                             Live Test Variables:
                                         </span>
                                         <div className="grid grid-cols-2 gap-2 text-[10px]">
@@ -3186,7 +3186,7 @@ export function PruneStudio() {
                                                             simTemplateStatus
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -3211,7 +3211,7 @@ export function PruneStudio() {
                                                             simTemplateStatus
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 font-mono"
                                                 />
                                             </div>
                                             <div className="col-span-2">
@@ -3234,17 +3234,17 @@ export function PruneStudio() {
                                                             simTemplateStatus
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
+                                                    className="h-6 text-[10px] bg-card/95 dark:bg-slate-900 border-border dark:border-slate-800 font-mono"
                                                 />
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Save Banner Style Button & Reset */}
-                                    <div className="pt-2 flex items-center justify-between border-t border-slate-800 gap-2 flex-wrap">
+                                    <div className="pt-2 flex items-center justify-between border-t border-border dark:border-slate-800 gap-2 flex-wrap">
                                         <div className="flex items-center gap-2">
                                             {bannerConfigSavedMsg && (
-                                                <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                                                <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                                                     <CheckCircle2 className="h-3.5 w-3.5" />
                                                     <span>{bannerConfigSavedMsg}</span>
                                                 </span>
@@ -3257,9 +3257,9 @@ export function PruneStudio() {
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={handleResetCurrentPruneBannerTemplate}
-                                                    className="h-8 text-xs border-slate-700 hover:bg-slate-800 text-slate-300 gap-1.5 cursor-pointer"
+                                                    className="h-8 text-xs border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 gap-1.5 cursor-pointer"
                                                 >
-                                                    <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
+                                                    <RotateCcw className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
                                                     <span>Reset to Preset Default</span>
                                                 </Button>
                                             )}
@@ -3290,14 +3290,14 @@ export function PruneStudio() {
             {subTab === "simulation" && (
                 <div className="space-y-6">
                     {/* Sandbox & Discovery Criteria Controls */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4 backdrop-blur-md">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                    <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl p-6 space-y-4 backdrop-blur-md">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border dark:border-slate-800 pb-4">
                             <div className="space-y-0.5">
-                                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                    <Sliders className="h-5 w-5 text-rose-400" />
+                                <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                    <Sliders className="h-5 w-5 text-rose-700 dark:text-rose-400" />
                                     <span>Oldest Files Discovery &amp; Maintainerr Rule Sandbox</span>
                                 </CardTitle>
-                                <CardDescription className="text-xs text-slate-400">
+                                <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                     Scan libraries to discover the oldest, least watched, or largest media items. Verify full telemetry (last watched, modified date, codec, disk path) before staging.
                                 </CardDescription>
                             </div>
@@ -3310,9 +3310,9 @@ export function PruneStudio() {
                                         setNewCustomPresetName("");
                                         setSaveCustomPresetModalOpen(true);
                                     }}
-                                    className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-9 px-3 gap-1.5 cursor-pointer"
+                                    className="border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs h-9 px-3 gap-1.5 cursor-pointer"
                                 >
-                                    <Plus className="h-4 w-4 text-rose-400" />
+                                    <Plus className="h-4 w-4 text-rose-700 dark:text-rose-400" />
                                     <span>Save Custom Preset</span>
                                 </Button>
                                 <Button
@@ -3329,13 +3329,13 @@ export function PruneStudio() {
                         </div>
 
                         {/* Quick Rule Presets Selector */}
-                        <div className="space-y-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                        <div className="space-y-2 p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-rose-400" />
+                                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                     <span>Maintainerr Rule Presets &amp; Retention Policies:</span>
                                 </Label>
-                                <span className="text-[11px] text-slate-400">1-Click load rule configurations</span>
+                                <span className="text-[11px] text-slate-600 dark:text-slate-400">1-Click load rule configurations</span>
                             </div>
                             <div className="flex flex-wrap gap-2 pt-1">
                                 {MAINTAINERR_RULE_PRESETS.map((preset) => (
@@ -3347,7 +3347,7 @@ export function PruneStudio() {
                                         className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 transition-all cursor-pointer ${
                                             selectedRulePresetId === preset.id
                                                 ? "bg-rose-600 text-white border-rose-500 font-bold shadow-md shadow-rose-950/50"
-                                                : "bg-slate-900/80 text-slate-300 border-slate-700/80 hover:bg-slate-800 hover:text-white"
+                                                : "bg-card/95 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-border dark:border-slate-700/80 hover:bg-accent dark:hover:bg-slate-800 hover:text-foreground dark:hover:text-white"
                                         }`}
                                     >
                                         <span>{preset.icon}</span>
@@ -3362,12 +3362,12 @@ export function PruneStudio() {
                                         className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 transition-all cursor-pointer group ${
                                             selectedRulePresetId === preset.id
                                                 ? "bg-rose-600 text-white border-rose-500 font-bold shadow-md shadow-rose-950/50"
-                                                : "bg-slate-900/80 text-slate-300 border-slate-700/80 hover:bg-slate-800 hover:text-white"
+                                                : "bg-card/95 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-border dark:border-slate-700/80 hover:bg-accent dark:hover:bg-slate-800 hover:text-foreground dark:hover:text-white"
                                         }`}
                                     >
                                         <span>{preset.icon || "⚙️"}</span>
                                         <span>{preset.name}</span>
-                                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-rose-400/40 text-rose-300 bg-rose-950/40 font-normal">
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-rose-400/40 text-rose-300 bg-rose-500/10 dark:bg-rose-950/40 font-normal">
                                             Custom
                                         </Badge>
                                         <button
@@ -3385,16 +3385,16 @@ export function PruneStudio() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 text-xs">
                             {/* Sort / Discovery Mode */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
-                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
-                                    <Clock className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                            <div className="space-y-1.5 p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Clock className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400 shrink-0" />
                                     <span className="truncate">Sort Strategy:</span>
                                 </Label>
                                 <Select
                                     value={simSortBy}
                                     onValueChange={(val: any) => setSimSortBy(val)}
                                 >
-                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 h-8 text-xs text-slate-200 truncate [&>span]:truncate [&>span]:block">
+                                    <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs text-foreground dark:text-slate-200 truncate [&>span]:truncate [&>span]:block">
                                         <SelectValue placeholder="Select Sort Strategy" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -3406,22 +3406,22 @@ export function PruneStudio() {
                                         <SelectItem value="least_plays">📉 Least Plays / Unwatched</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                                <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 leading-snug">
                                     💡 <em>Plex "Date Added" often reflects original release file timestamps. Use <strong>"Oldest Modified on Disk"</strong> to sort by the date files were touched on this server.</em>
                                 </p>
                             </div>
 
                             {/* Show Oldest Limit */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
-                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
-                                    <Filter className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                            <div className="space-y-1.5 p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Filter className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                                     <span className="truncate">Candidate Limit:</span>
                                 </Label>
                                 <Select
                                     value={String(simOldestLimit)}
                                     onValueChange={(val) => setSimOldestLimit(parseInt(val, 10))}
                                 >
-                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 h-8 text-xs font-mono text-slate-200 truncate [&>span]:truncate [&>span]:block">
+                                    <SelectTrigger className="w-full min-w-0 bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs font-mono text-foreground dark:text-slate-200 truncate [&>span]:truncate [&>span]:block">
                                         <SelectValue placeholder="Limit" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -3436,9 +3436,9 @@ export function PruneStudio() {
                             </div>
 
                             {/* Lane 2: Never Watched Min Age */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
-                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
-                                    <Calendar className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                            <div className="space-y-1.5 p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Calendar className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400 shrink-0" />
                                     <span className="truncate">Lane 2: Unwatched:</span>
                                 </Label>
                                 <div className="flex items-center gap-2">
@@ -3452,16 +3452,16 @@ export function PruneStudio() {
                                             setSimUnwatchedMinAgeDays(v);
                                             setSimMinAgeDays(v);
                                         }}
-                                        className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-full min-w-0"
+                                        className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs font-mono w-full min-w-0"
                                     />
-                                    <span className="text-slate-400 text-xs shrink-0">days</span>
+                                    <span className="text-slate-600 dark:text-slate-400 text-xs shrink-0">days</span>
                                 </div>
                             </div>
 
                             {/* Lane 1: Oldest Watched Min Age */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
-                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
-                                    <Eye className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                            <div className="space-y-1.5 p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Eye className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                                     <span className="truncate">Lane 1: Watched:</span>
                                 </Label>
                                 <div className="flex items-center gap-2">
@@ -3471,48 +3471,48 @@ export function PruneStudio() {
                                         max="3650"
                                         value={simWatchedMinAgeDays}
                                         onChange={(e) => setSimWatchedMinAgeDays(parseInt(e.target.value, 10) || 0)}
-                                        className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-full min-w-0"
+                                        className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs font-mono w-full min-w-0"
                                     />
-                                    <span className="text-slate-400 text-xs shrink-0">days</span>
+                                    <span className="text-slate-600 dark:text-slate-400 text-xs shrink-0">days</span>
                                 </div>
                             </div>
 
                             {/* Season-Level TV Pruning Toggle */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between min-w-0">
+                            <div className="space-y-1.5 p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800 flex flex-col justify-between min-w-0">
                                 <div className="flex items-center justify-between gap-1">
-                                    <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
-                                        <Tv className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                    <Label className="text-xs text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                        <Tv className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                                         <span className="truncate">TV Seasons:</span>
                                     </Label>
                                     <Switch checked={simEvaluateSeasons} onCheckedChange={setSimEvaluateSeasons} className="shrink-0" />
                                 </div>
-                                <p className="text-[10px] text-slate-400 truncate">
+                                <p className="text-[10px] text-slate-600 dark:text-slate-400 truncate">
                                     {simEvaluateSeasons ? "Evaluate individual seasons" : "Evaluate whole series"}
                                 </p>
                             </div>
 
                             {/* Unwatched Only Toggle */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between min-w-0">
+                            <div className="space-y-1.5 p-3 bg-muted/60 dark:bg-slate-950/60 rounded-xl border border-border dark:border-slate-800 flex flex-col justify-between min-w-0">
                                 <div className="flex items-center justify-between gap-1">
-                                    <Label className="text-xs text-slate-300 font-semibold min-w-0 truncate">Unwatched Only:</Label>
+                                    <Label className="text-xs text-slate-700 dark:text-slate-300 font-semibold min-w-0 truncate">Unwatched Only:</Label>
                                     <Switch checked={simUnwatchedOnly} onCheckedChange={setSimUnwatchedOnly} className="shrink-0" />
                                 </div>
-                                <p className="text-[10px] text-slate-400 truncate">
+                                <p className="text-[10px] text-slate-600 dark:text-slate-400 truncate">
                                     {simUnwatchedOnly ? "Skip Lane 1 watched media" : "Cascade Lane 2 → Lane 1"}
                                 </p>
                             </div>
                         </div>
 
                         {/* Save Rule as Global Default Action Bar */}
-                        <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="pt-3 border-t border-border dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                                 {ruleDefaultSavedMsg ? (
-                                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 animate-in fade-in-50">
+                                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 animate-in fade-in-50">
                                         <CheckCircle2 className="h-4 w-4" />
                                         <span>{ruleDefaultSavedMsg}</span>
                                     </span>
                                 ) : (
-                                    <p className="text-[11px] text-slate-400">
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
                                         Save these criteria and active banner style as the default pruning rule across automated sync runs.
                                     </p>
                                 )}
@@ -3522,9 +3522,9 @@ export function PruneStudio() {
                                 size="sm"
                                 disabled={savingRuleDefault}
                                 onClick={handleSaveCurrentSandboxAsDefaultRule}
-                                className="h-8 text-xs bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold gap-1.5 shadow cursor-pointer"
+                                className="h-8 text-xs bg-muted dark:bg-slate-800 hover:bg-slate-700 text-foreground dark:text-white border border-border dark:border-slate-700 font-bold gap-1.5 shadow cursor-pointer"
                             >
-                                {savingRuleDefault ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5 text-rose-400" />}
+                                {savingRuleDefault ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />}
                                 <span>Save Rule as Global Default</span>
                             </Button>
                         </div>
@@ -3532,20 +3532,20 @@ export function PruneStudio() {
 
                     {/* Simulation Results Card */}
                     {pruneSimResults && (
-                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                            <CardHeader className="p-4 border-b border-slate-800/80 bg-slate-950/40">
+                        <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                            <CardHeader className="p-4 border-b border-border dark:border-slate-800/80 bg-muted/40 dark:bg-slate-950/40">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                     <div className="space-y-0.5">
-                                        <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                            <Archive className="h-4 w-4 text-emerald-400" />
+                                        <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                            <Archive className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                             <span>Oldest Candidates Identified: {pruneSimResults.candidates.length} Files</span>
                                         </CardTitle>
-                                        <p className="text-xs text-slate-400">
+                                        <p className="text-xs text-slate-600 dark:text-slate-400">
                                             Evaluated {pruneSimResults.evaluatedCount} media items across enabled library sections
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Badge className="bg-emerald-950 text-emerald-300 border-emerald-500/40 text-xs font-mono font-bold px-3 py-1">
+                                        <Badge className="bg-emerald-500/15 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-xs font-mono font-bold px-3 py-1">
                                             Recoverable Space: {pruneSimResults.totalRecoverableGb} GB
                                         </Badge>
                                     </div>
@@ -3553,10 +3553,10 @@ export function PruneStudio() {
 
                                 {/* Batch Flagging, Grace Period & Filter Bar */}
                                 {pruneSimResults.candidates.length > 0 && (
-                                    <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                                    <div className="mt-3 pt-3 border-t border-border dark:border-slate-800/80 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-card/95 dark:bg-slate-900/80 p-3 rounded-xl border dark:border-slate-800">
                                         {/* Left: Quick Batch Selectors */}
                                         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                                            <span className="text-[11px] font-bold text-slate-400 mr-1">Flag Candidates:</span>
+                                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mr-1">Flag Candidates:</span>
                                             {[5, 10, 25, 50].map(n => (
                                                 <button
                                                     key={n}
@@ -3565,7 +3565,7 @@ export function PruneStudio() {
                                                     className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                                                         selectedCandidateKeys.length === n
                                                             ? "bg-rose-600 text-white border-rose-500"
-                                                            : "bg-slate-800/80 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700"
+                                                            : "bg-muted/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white border-border dark:border-slate-700 hover:bg-slate-700"
                                                     }`}
                                                 >
                                                     Top {n}
@@ -3577,7 +3577,7 @@ export function PruneStudio() {
                                                 className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                                                     selectedCandidateKeys.length === pruneSimResults.candidates.length
                                                         ? "bg-rose-600 text-white border-rose-500"
-                                                        : "bg-slate-800/80 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700"
+                                                        : "bg-muted/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white border-border dark:border-slate-700 hover:bg-slate-700"
                                                 }`}
                                             >
                                                 Select All ({pruneSimResults.candidates.length})
@@ -3586,7 +3586,7 @@ export function PruneStudio() {
                                                 <button
                                                     type="button"
                                                     onClick={() => setSelectedCandidateKeys([])}
-                                                    className="px-2 py-1 text-xs text-slate-400 hover:text-rose-300 hover:underline ml-1"
+                                                    className="px-2 py-1 text-xs text-slate-600 dark:text-slate-400 hover:text-rose-800 dark:hover:text-rose-300 hover:underline ml-1"
                                                 >
                                                     Clear ({selectedCandidateKeys.length})
                                                 </button>
@@ -3596,14 +3596,14 @@ export function PruneStudio() {
                                         {/* Right: Grace Period & Stage Button */}
                                         <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-end">
                                             {/* Grace Period Dropdown */}
-                                            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800">
-                                                <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                                                <span className="text-[11px] font-bold text-slate-300">Grace Period:</span>
+                                            <div className="flex items-center gap-1.5 bg-muted dark:bg-slate-950 px-2.5 py-1 rounded-xl border border-border dark:border-slate-800">
+                                                <Clock className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                                                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Grace Period:</span>
                                                 <Select
                                                     value={String(simGracePeriodDays)}
                                                     onValueChange={(val) => setSimGracePeriodDays(parseInt(val, 10))}
                                                 >
-                                                    <SelectTrigger className="bg-transparent border-0 h-6 text-xs font-mono font-bold text-amber-300 p-0 focus:ring-0 w-[80px]">
+                                                    <SelectTrigger className="bg-transparent border-0 h-6 text-xs font-mono font-bold text-amber-800 dark:text-amber-300 p-0 focus:ring-0 w-[80px]">
                                                         <SelectValue placeholder="Grace Period" />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3624,7 +3624,7 @@ export function PruneStudio() {
                                                     placeholder="Filter candidates..."
                                                     value={simFilterSearch}
                                                     onChange={(e) => setSimFilterSearch(e.target.value)}
-                                                    className="h-8 text-xs pl-7 bg-slate-950 border-slate-800 w-[150px] sm:w-[180px]"
+                                                    className="h-8 text-xs pl-7 bg-muted dark:bg-slate-950 border-border dark:border-slate-800 w-[150px] sm:w-[180px]"
                                                 />
                                             </div>
 
@@ -3648,7 +3648,7 @@ export function PruneStudio() {
                                 {pruneSimResults.candidates.length === 0 ? (
                                     <div className="text-center py-12 text-slate-500 space-y-2">
                                         <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500/50" />
-                                        <p className="text-xs font-semibold text-slate-300">No media items met the prune criteria.</p>
+                                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">No media items met the prune criteria.</p>
                                         <p className="text-[11px] text-slate-500">Try lowering the minimum age or changing the sort strategy.</p>
                                     </div>
                                 ) : (
@@ -3688,8 +3688,8 @@ export function PruneStudio() {
                                                         }}
                                                         className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
                                                             isSelected
-                                                                ? "bg-rose-950/30 border-rose-500/60 shadow-lg shadow-rose-950/20"
-                                                                : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
+                                                                ? "bg-rose-500/10 dark:bg-rose-950/30 border-rose-500/60 shadow-lg shadow-rose-950/20"
+                                                                : "bg-muted/80 dark:bg-slate-950/80 border-border dark:border-slate-800 hover:border-border dark:hover:border-slate-700"
                                                         }`}
                                                     >
                                                         {/* Top Row: Checkbox, Title, Badges, Size */}
@@ -3699,58 +3699,58 @@ export function PruneStudio() {
                                                                     type="checkbox"
                                                                     checked={isSelected}
                                                                     onChange={() => {}}
-                                                                    className="h-4 w-4 rounded border-slate-700 accent-rose-500 shrink-0 cursor-pointer"
+                                                                    className="h-4 w-4 rounded border-border dark:border-slate-700 accent-rose-500 shrink-0 cursor-pointer"
                                                                 />
                                                                 <div className="min-w-0">
                                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                                        <span className="font-bold text-white text-xs sm:text-sm truncate">
+                                                                        <span className="font-bold text-foreground dark:text-white text-xs sm:text-sm truncate">
                                                                             {c.parentTitle || c.title}
                                                                         </span>
                                                                         {c.lane === "unwatched" ? (
-                                                                            <Badge className="bg-cyan-950 text-cyan-300 border-cyan-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                            <Badge className="bg-cyan-500/15 dark:bg-cyan-950 text-cyan-800 dark:text-cyan-300 border-cyan-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
                                                                                 📦 Lane 2: Never Watched
                                                                             </Badge>
                                                                         ) : c.lane === "watched" ? (
-                                                                            <Badge className="bg-amber-950 text-amber-300 border-amber-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                            <Badge className="bg-amber-500/15 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
                                                                                 Lane 1: Oldest Watched
                                                                             </Badge>
                                                                         ) : null}
                                                                         {c.seasonNumber !== undefined && (
-                                                                            <Badge className="bg-sky-950 text-sky-300 border-sky-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                            <Badge className="bg-sky-500/15 dark:bg-sky-950 text-sky-800 dark:text-sky-300 border-sky-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
                                                                                 Season {c.seasonNumber}
                                                                             </Badge>
                                                                         )}
                                                                         {c.episodeCount !== undefined && (
-                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-sky-700/50 text-sky-300 bg-sky-950/20">
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-sky-700/50 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/20">
                                                                                 {c.episodeCount} eps
                                                                             </Badge>
                                                                         )}
                                                                         {c.year && (
-                                                                            <span className="text-xs text-slate-400 font-mono">
+                                                                            <span className="text-xs text-slate-600 dark:text-slate-400 font-mono">
                                                                                 ({c.year})
                                                                             </span>
                                                                         )}
                                                                         {c.serverSources && c.serverSources.length > 1 ? (
-                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-sky-500/50 text-sky-300 bg-sky-950/40 font-bold" title={c.serverSources.map((s: any) => `${s.serverName}: ${s.viewCount} plays`).join(' • ')}>
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-sky-500/50 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/40 font-bold" title={c.serverSources.map((s: any) => `${s.serverName}: ${s.viewCount} plays`).join(' • ')}>
                                                                                 {c.serverSources.length} servers linked
                                                                             </Badge>
                                                                         ) : c.serverName ? (
-                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-slate-700 text-slate-400">
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-border dark:border-slate-700 text-slate-600 dark:text-slate-400">
                                                                                 {c.serverName}
                                                                             </Badge>
                                                                         ) : null}
                                                                         {c.resolution && (
-                                                                            <Badge className="bg-sky-950 text-sky-300 border-sky-600/40 text-[10px] font-mono py-0 px-1.5">
+                                                                            <Badge className="bg-sky-500/15 dark:bg-sky-950 text-sky-800 dark:text-sky-300 border-sky-600/40 text-[10px] font-mono py-0 px-1.5">
                                                                                 {c.resolution}
                                                                             </Badge>
                                                                         )}
                                                                         {c.hdr && (
-                                                                            <Badge className="bg-amber-950 text-amber-300 border-amber-600/40 text-[10px] font-mono py-0 px-1.5">
+                                                                            <Badge className="bg-amber-500/15 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-600/40 text-[10px] font-mono py-0 px-1.5">
                                                                                 {c.hdr}
                                                                             </Badge>
                                                                         )}
                                                                         {c.audio && (
-                                                                            <Badge className="bg-slate-900 text-slate-300 border-slate-700 text-[10px] font-mono py-0 px-1.5 uppercase">
+                                                                            <Badge className="bg-card/95 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-border dark:border-slate-700 text-[10px] font-mono py-0 px-1.5 uppercase">
                                                                                 {c.audio}
                                                                             </Badge>
                                                                         )}
@@ -3759,7 +3759,7 @@ export function PruneStudio() {
                                                             </div>
 
                                                             <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                                                                <Badge variant="outline" className="text-xs font-mono font-bold border-emerald-500/40 text-emerald-300 bg-emerald-950/40 px-2 py-0.5">
+                                                                <Badge variant="outline" className="text-xs font-mono font-bold border-emerald-500/40 text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-950/40 px-2 py-0.5">
                                                                     {c.fileSizeGb ? `${c.fileSizeGb} GB` : "Size N/A"}
                                                                 </Badge>
                                                             </div>
@@ -3768,12 +3768,12 @@ export function PruneStudio() {
                                                         {/* Verification Telemetry Grid: Added, Last Watched, Play Count & Status */}
                                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-slate-900 text-[11px] font-mono">
                                                             {/* Added to Library */}
-                                                            <div className="flex items-center gap-1.5 text-slate-300">
-                                                                <Calendar className="h-3 w-3 text-sky-400 shrink-0" />
+                                                            <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                                                                <Calendar className="h-3 w-3 text-sky-700 dark:text-sky-400 shrink-0" />
                                                                 <span>
-                                                                    Added: <strong className="text-white">{addedDateStr}</strong> ({c.daysOld ?? c.ageDays}d ago)
+                                                                    Added: <strong className="text-foreground dark:text-white">{addedDateStr}</strong> ({c.daysOld ?? c.ageDays}d ago)
                                                                     {updatedDateStr && updatedDateStr !== addedDateStr && (
-                                                                        <span className="text-[10px] text-slate-400 ml-1 font-normal" title="Date item or file was last touched/refreshed on this server">
+                                                                        <span className="text-[10px] text-slate-600 dark:text-slate-400 ml-1 font-normal" title="Date item or file was last touched/refreshed on this server">
                                                                             • Mod: {updatedDateStr}
                                                                         </span>
                                                                     )}
@@ -3781,37 +3781,37 @@ export function PruneStudio() {
                                                             </div>
 
                                                             {/* Last Watched Date */}
-                                                            <div className="flex items-center gap-1.5 text-slate-300">
-                                                                <Eye className="h-3 w-3 text-amber-400 shrink-0" />
+                                                            <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                                                                <Eye className="h-3 w-3 text-amber-700 dark:text-amber-400 shrink-0" />
                                                                 {c.viewCount > 0 && lastWatchedDateStr ? (
                                                                     <span>
-                                                                        Watched: <strong className="text-white">{lastWatchedDateStr}</strong> ({daysSinceViewed}d ago)
-                                                                        {c.watchedOnServerName ? <span className="text-sky-300 text-[10px] ml-1">[{c.watchedOnServerName}]</span> : null}
+                                                                        Watched: <strong className="text-foreground dark:text-white">{lastWatchedDateStr}</strong> ({daysSinceViewed}d ago)
+                                                                        {c.watchedOnServerName ? <span className="text-sky-800 dark:text-sky-300 text-[10px] ml-1">[{c.watchedOnServerName}]</span> : null}
                                                                     </span>
                                                                 ) : (
-                                                                    <Badge className="bg-cyan-950/80 text-cyan-300 border-cyan-600/40 text-[10px] py-0 px-1.5">
+                                                                    <Badge className="bg-cyan-500/15 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-300 border-cyan-600/40 text-[10px] py-0 px-1.5">
                                                                         Never Watched (0 plays)
                                                                     </Badge>
                                                                 )}
                                                             </div>
 
                                                             {/* Total Plays & Lane Classification */}
-                                                            <div className="flex items-center gap-1.5 text-slate-300">
-                                                                <Clock className="h-3 w-3 text-rose-400 shrink-0" />
-                                                                <span>Plays: <strong className="text-white">{c.viewCount || 0}</strong> • <strong className={c.lane === "unwatched" ? "text-cyan-300" : "text-amber-300"}>{c.lane === "unwatched" ? "Lane 2 Dead Weight" : "Lane 1 Cold Storage"}</strong></span>
+                                                            <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                                                                <Clock className="h-3 w-3 text-rose-700 dark:text-rose-400 shrink-0" />
+                                                                <span>Plays: <strong className="text-foreground dark:text-white">{c.viewCount || 0}</strong> • <strong className={c.lane === "unwatched" ? "text-cyan-800 dark:text-cyan-300" : "text-amber-800 dark:text-amber-300"}>{c.lane === "unwatched" ? "Lane 2 Dead Weight" : "Lane 1 Cold Storage"}</strong></span>
                                                             </div>
                                                         </div>
 
                                                         {/* Disk Path & Prune Reason */}
-                                                        <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-slate-400 border-t border-slate-900/80">
+                                                        <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-slate-600 dark:text-slate-400 border-t border-slate-900/80">
                                                             {c.filePath ? (
-                                                                <span className="font-mono truncate text-slate-400">
-                                                                    📁 <span className="text-slate-300">{c.filePath}</span>
+                                                                <span className="font-mono truncate text-slate-600 dark:text-slate-400">
+                                                                    📁 <span className="text-slate-700 dark:text-slate-300">{c.filePath}</span>
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-slate-400">Disk path not provided</span>
+                                                                <span className="text-slate-600 dark:text-slate-400">Disk path not provided</span>
                                                             )}
-                                                            <span className="font-bold text-rose-400 shrink-0">
+                                                            <span className="font-bold text-rose-700 dark:text-rose-400 shrink-0">
                                                                 ⚠️ {c.reason || "Oldest candidate match"}
                                                             </span>
                                                         </div>
@@ -3828,14 +3828,14 @@ export function PruneStudio() {
 
             {/* TAB 3: SAFE DELETION EXECUTION ENGINE */}
             {subTab === "execution" && (
-                <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-6">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl p-6 space-y-6">
+                    <div className="flex items-center justify-between border-b border-border dark:border-slate-800 pb-3">
                         <div className="space-y-0.5">
-                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <ShieldAlert className="h-5 w-5 text-rose-400" />
+                            <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <ShieldAlert className="h-5 w-5 text-rose-700 dark:text-rose-400" />
                                 <span>Maintainerr Safe Deletion Execution Engine</span>
                             </CardTitle>
-                            <CardDescription className="text-xs text-slate-400">
+                            <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                                 Multi-layered safety guards preventing accidental data loss during media prunes.
                             </CardDescription>
                         </div>
@@ -3843,10 +3843,10 @@ export function PruneStudio() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                         {/* Master Deletion Switch */}
-                        <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                        <div className="p-4 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 space-y-2">
                             <div className="flex items-center justify-between">
-                                <span className="font-bold text-white text-xs flex items-center gap-2">
-                                    <Power className="h-4 w-4 text-rose-400" /> Master Deletion Switch
+                                <span className="font-bold text-foreground dark:text-white text-xs flex items-center gap-2">
+                                    <Power className="h-4 w-4 text-rose-700 dark:text-rose-400" /> Master Deletion Switch
                                 </span>
                                 <Switch
                                     checked={settings.enableAutoPruneDeletion ?? false}
@@ -3856,16 +3856,16 @@ export function PruneStudio() {
                                     }}
                                 />
                             </div>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400">
                                 When disabled, all prunes are strictly dry-run simulations or stage items into the Leaving Soon hub.
                             </p>
                         </div>
 
                         {/* Dry Run Mode */}
-                        <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                        <div className="p-4 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 space-y-2">
                             <div className="flex items-center justify-between">
-                                <span className="font-bold text-white text-xs flex items-center gap-2">
-                                    <Shield className="h-4 w-4 text-emerald-400" /> Dry Run Safety Mode
+                                <span className="font-bold text-foreground dark:text-white text-xs flex items-center gap-2">
+                                    <Shield className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /> Dry Run Safety Mode
                                 </span>
                                 <Switch
                                     checked={settings.pruneDryRun ?? true}
@@ -3875,16 +3875,16 @@ export function PruneStudio() {
                                     }}
                                 />
                             </div>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400">
                                 Dry run mode simulates file cleanup without physically touching media on disk.
                             </p>
                         </div>
 
                         {/* Servarr Synchronized Deletion & Queue Cleanup */}
-                        <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                        <div className="p-4 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 space-y-2">
                             <div className="flex items-center justify-between">
-                                <span className="font-bold text-white text-xs flex items-center gap-2">
-                                    <Trash2 className="h-4 w-4 text-amber-400" /> Servarr Arr Cleanup
+                                <span className="font-bold text-foreground dark:text-white text-xs flex items-center gap-2">
+                                    <Trash2 className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Servarr Arr Cleanup
                                 </span>
                                 <Switch
                                     checked={settings.pruneDeleteFromArr ?? false}
@@ -3895,7 +3895,7 @@ export function PruneStudio() {
                                     }}
                                 />
                             </div>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400">
                                 When enabled, live media deletions unmonitor and remove files from Radarr and Sonarr.
                             </p>
                         </div>
@@ -3903,10 +3903,10 @@ export function PruneStudio() {
 
                     {pruneExecMessage && (
                         <div className={`p-4 rounded-xl border text-xs space-y-2 ${
-                            pruneExecMessage.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                            pruneExecMessage.success ? "bg-emerald-500/15 dark:bg-emerald-950/80 border-emerald-500/40 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/15 dark:bg-rose-950/80 border-rose-500/40 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                         }`}>
                             <div className="flex items-center gap-2 font-bold">
-                                {pruneExecMessage.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <XCircle className="h-4 w-4 text-rose-400" />}
+                                {pruneExecMessage.success ? <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /> : <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400" />}
                                 <span>{pruneExecMessage.text}</span>
                             </div>
                         </div>
@@ -3919,14 +3919,14 @@ export function PruneStudio() {
                 <div className="space-y-6">
                     {/* Glances Real-Time Disk Arrays Card */}
                     {glancesDisks.length > 0 && (
-                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4 backdrop-blur-md">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                        <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl p-6 space-y-4 backdrop-blur-md">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border dark:border-slate-800 pb-3">
                                 <div className="space-y-0.5">
-                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                        <HardDrive className="h-5 w-5 text-cyan-400" />
+                                    <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                        <HardDrive className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
                                         <span>Glances Storage Arrays &amp; Real-Time Capacity</span>
                                     </CardTitle>
-                                    <p className="text-xs text-slate-400">
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">
                                         Live disk arrays, used space, and free capacity telemetry polled directly from your connected Glances instances.
                                     </p>
                                 </div>
@@ -3936,7 +3936,7 @@ export function PruneStudio() {
                                     variant="outline"
                                     disabled={glancesLoading}
                                     onClick={() => loadGlancesDisks(selectedGlancesDiskId)}
-                                    className="border-slate-700 text-xs h-8 gap-1.5 text-slate-300 hover:text-white"
+                                    className="border-border dark:border-slate-700 text-xs h-8 gap-1.5 text-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white"
                                 >
                                     <RefreshCw className={`h-3.5 w-3.5 ${glancesLoading ? 'animate-spin' : ''}`} />
                                     <span>Refresh Glances</span>
@@ -3950,33 +3950,33 @@ export function PruneStudio() {
                                         onClick={() => setSelectedGlancesDiskId(disk.id)}
                                         className={`p-4 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
                                             selectedGlancesDiskId === disk.id
-                                                ? "bg-cyan-950/30 border-cyan-500/50 shadow-md ring-1 ring-cyan-500/30"
-                                                : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
+                                                ? "bg-cyan-500/10 dark:bg-cyan-950/30 border-cyan-500/50 shadow-md ring-1 ring-cyan-500/30"
+                                                : "bg-muted/80 dark:bg-slate-950/80 border-border dark:border-slate-800 hover:border-border dark:hover:border-slate-700"
                                         }`}
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <HardDrive className="h-4 w-4 text-cyan-400" />
-                                                <span className="font-bold text-white text-xs">{disk.instanceName}</span>
+                                                <HardDrive className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
+                                                <span className="font-bold text-foreground dark:text-white text-xs">{disk.instanceName}</span>
                                             </div>
-                                            <Badge variant="outline" className="text-[10px] font-mono border-slate-700 text-slate-400">
+                                            <Badge variant="outline" className="text-[10px] font-mono border-border dark:border-slate-700 text-slate-600 dark:text-slate-400">
                                                 {disk.fsType}
                                             </Badge>
                                         </div>
 
                                         <div className="space-y-1">
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="font-mono text-cyan-300 font-bold text-[11px] truncate max-w-[180px]">
+                                                <span className="font-mono text-cyan-800 dark:text-cyan-300 font-bold text-[11px] truncate max-w-[180px]">
                                                     {disk.mntPoint}
                                                 </span>
                                                 <span className={`font-mono font-bold text-[11px] ${
-                                                    disk.percent >= 90 ? 'text-rose-400' : disk.percent >= 75 ? 'text-amber-400' : 'text-emerald-400'
+                                                    disk.percent >= 90 ? 'text-rose-700 dark:text-rose-400' : disk.percent >= 75 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'
                                                 }`}>
                                                     {disk.percent}% Used
                                                 </span>
                                             </div>
 
-                                            <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                            <div className="w-full h-2.5 bg-muted dark:bg-slate-950 rounded-full overflow-hidden border border-border dark:border-slate-800">
                                                 <div 
                                                     className={`h-full transition-all rounded-full ${
                                                         disk.percent >= 90 ? 'bg-gradient-to-r from-amber-500 to-rose-600' :
@@ -3987,8 +3987,8 @@ export function PruneStudio() {
                                                 />
                                             </div>
 
-                                            <div className="flex justify-between text-[10px] text-slate-400 pt-0.5 font-mono">
-                                                <span>Free: <strong className="text-white">{disk.freeGb >= 1000 ? `${(disk.freeGb / 1024).toFixed(1)} TB` : `${disk.freeGb} GB`}</strong></span>
+                                            <div className="flex justify-between text-[10px] text-slate-600 dark:text-slate-400 pt-0.5 font-mono">
+                                                <span>Free: <strong className="text-foreground dark:text-white">{disk.freeGb >= 1000 ? `${(disk.freeGb / 1024).toFixed(1)} TB` : `${disk.freeGb} GB`}</strong></span>
                                                 <span>Total: {disk.totalGb >= 1000 ? `${(disk.totalGb / 1024).toFixed(1)} TB` : `${disk.totalGb} GB`}</span>
                                             </div>
                                         </div>
@@ -4000,35 +4000,35 @@ export function PruneStudio() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Storage Thresholds & Pruning Policy */}
-                        <Card className={`bg-slate-900/90 shadow-xl p-6 space-y-4 transition-all duration-300 ${
+                        <Card className={`bg-card/95 dark:bg-slate-900/90 shadow-xl p-6 space-y-4 transition-all duration-300 ${
                             isThresholdsDirty 
                                 ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
-                                : "border-slate-800"
+                                : "border-border dark:border-slate-800"
                         }`}>
                             <div className="flex items-center justify-between">
-                                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                    <Sliders className="h-5 w-5 text-rose-400" />
+                                <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                    <Sliders className="h-5 w-5 text-rose-700 dark:text-rose-400" />
                                     <span>Storage &amp; Auto-Pruning Thresholds</span>
                                 </CardTitle>
                                 {isThresholdsDirty && (
-                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                    <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
                                         ● Unsaved Changes
                                     </Badge>
                                 )}
                             </div>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-slate-600 dark:text-slate-400">
                                 Configure two-tier capacity thresholds (Warning vs Danger), target reclamation headroom, and automated pruning retention policies.
                             </p>
 
                             <div className="space-y-3.5 text-xs">
                                 {/* Evaluation Trigger Policy */}
-                                <div className="space-y-2 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                <div className="space-y-2 p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
-                                            <Zap className="h-3.5 w-3.5 text-rose-400" />
+                                        <Label className="text-xs text-foreground dark:text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Zap className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                             <span>Evaluation Trigger Policy:</span>
                                         </Label>
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${pruneTriggerMode === "always" ? "border-emerald-500/40 text-emerald-300 bg-emerald-950/30" : "border-amber-500/40 text-amber-300 bg-amber-950/30"}`}>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${pruneTriggerMode === "always" ? "border-emerald-500/40 text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-950/30" : "border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30"}`}>
                                             {pruneTriggerMode === "always" ? "Rule-Based Retention" : "Capacity-Triggered"}
                                         </Badge>
                                     </div>
@@ -4038,15 +4038,15 @@ export function PruneStudio() {
                                             onClick={() => setPruneTriggerMode("always")}
                                             className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
                                                 pruneTriggerMode === "always"
-                                                    ? "bg-rose-950/40 border-rose-500/80 text-white shadow-sm ring-1 ring-rose-500/30"
-                                                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                                                    ? "bg-rose-500/10 dark:bg-rose-950/40 border-rose-500/80 text-foreground dark:text-white shadow-sm ring-1 ring-rose-500/30"
+                                                    : "bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-accent dark:hover:bg-slate-800/60 hover:text-foreground dark:hover:text-slate-200"
                                             }`}
                                         >
-                                            <div className="flex items-center gap-1.5 font-bold text-xs text-slate-100">
+                                            <div className="flex items-center gap-1.5 font-bold text-xs text-foreground dark:text-slate-100">
                                                 <span>📋 Rule-Based Retention</span>
-                                                <span className="text-[10px] text-emerald-400 font-medium">(Standard)</span>
+                                                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">(Standard)</span>
                                             </div>
-                                            <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                                            <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                                                 Evaluates media against aging &amp; watch criteria on every run, staging candidates into Leaving Soon regardless of disk space.
                                             </p>
                                         </button>
@@ -4056,21 +4056,21 @@ export function PruneStudio() {
                                             onClick={() => setPruneTriggerMode("capacity")}
                                             className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
                                                 pruneTriggerMode === "capacity"
-                                                    ? "bg-rose-950/40 border-rose-500/80 text-white shadow-sm ring-1 ring-rose-500/30"
-                                                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                                                    ? "bg-rose-500/10 dark:bg-rose-950/40 border-rose-500/80 text-foreground dark:text-white shadow-sm ring-1 ring-rose-500/30"
+                                                    : "bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-accent dark:hover:bg-slate-800/60 hover:text-foreground dark:hover:text-slate-200"
                                             }`}
                                         >
-                                            <div className="flex items-center gap-1.5 font-bold text-xs text-slate-100">
+                                            <div className="flex items-center gap-1.5 font-bold text-xs text-foreground dark:text-slate-100">
                                                 <span>📊 Capacity-Triggered Only</span>
                                             </div>
-                                            <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                                            <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                                                 Only evaluates and stages media when the selected Glances storage array reaches the Warning threshold (≥ {pruneWarningThresholdPercent}% used).
                                             </p>
                                         </button>
                                     </div>
                                     {glancesDisks.length === 0 && (
-                                        <div className="p-2 bg-amber-950/30 border border-amber-800/40 rounded-lg text-[10px] text-amber-300 flex items-start gap-1.5">
-                                            <Info className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                                        <div className="p-2 bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/40 dark:border-amber-800/40 rounded-lg text-[10px] text-amber-800 dark:text-amber-300 flex items-start gap-1.5">
+                                            <Info className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                                             <span>
                                                 Glances disk telemetry is reporting 0 disks. Rule-Based Retention functions autonomously. Capacity-Triggered mode will automatically fall back to rule evaluation when storage stats are unavailable.
                                             </span>
@@ -4079,13 +4079,13 @@ export function PruneStudio() {
                                 </div>
 
                                 {/* Warning / Staging Threshold (% Used) */}
-                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                <div className="space-y-1.5 p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
-                                            <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
+                                        <Label className="text-xs text-foreground dark:text-slate-200 font-bold flex items-center gap-1.5">
+                                            <HardDrive className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
                                             <span>Warning / Staging Threshold (% Used):</span>
                                         </Label>
-                                        <span className="font-mono text-xs font-bold text-amber-400">
+                                        <span className="font-mono text-xs font-bold text-amber-700 dark:text-amber-400">
                                             {pruneWarningThresholdPercent}% Used ({100 - pruneWarningThresholdPercent}% Free)
                                         </span>
                                     </div>
@@ -4096,22 +4096,22 @@ export function PruneStudio() {
                                             max="99"
                                             value={pruneWarningThresholdPercent}
                                             onChange={(e) => setPruneWarningThresholdPercent(parseInt(e.target.value, 10) || 85)}
-                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                            className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs font-mono w-20"
                                         />
-                                        <p className="text-[11px] text-slate-400">
-                                            Auto-stages candidate items to Leaving Soon when array reaches <strong className="text-white">{pruneWarningThresholdPercent}% used</strong>.
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                            Auto-stages candidate items to Leaving Soon when array reaches <strong className="text-foreground dark:text-white">{pruneWarningThresholdPercent}% used</strong>.
                                         </p>
                                     </div>
                                 </div>
 
                                 {/* Danger / Active Reclamation Threshold (% Used) */}
-                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                <div className="space-y-1.5 p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
-                                            <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
+                                        <Label className="text-xs text-foreground dark:text-slate-200 font-bold flex items-center gap-1.5">
+                                            <AlertTriangle className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                             <span>Danger / Active Reclamation (% Used):</span>
                                         </Label>
-                                        <span className="font-mono text-xs font-black text-rose-400">
+                                        <span className="font-mono text-xs font-black text-rose-700 dark:text-rose-400">
                                             {pruneDangerThresholdPercent}% Used
                                         </span>
                                     </div>
@@ -4122,22 +4122,22 @@ export function PruneStudio() {
                                             max="100"
                                             value={pruneDangerThresholdPercent}
                                             onChange={(e) => setPruneDangerThresholdPercent(parseInt(e.target.value, 10) || 95)}
-                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                            className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs font-mono w-20"
                                         />
-                                        <p className="text-[11px] text-slate-400">
-                                            Triggers live deletion of expired Leaving Soon items when disk hits <strong className="text-white">{pruneDangerThresholdPercent}% used</strong>.
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                            Triggers live deletion of expired Leaving Soon items when disk hits <strong className="text-foreground dark:text-white">{pruneDangerThresholdPercent}% used</strong>.
                                         </p>
                                     </div>
                                 </div>
 
                                 {/* Target Headroom Capacity (GB) */}
-                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                <div className="space-y-1.5 p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
-                                            <Archive className="h-3.5 w-3.5 text-emerald-400" />
+                                        <Label className="text-xs text-foreground dark:text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Archive className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                             <span>Target Reclamation Headroom:</span>
                                         </Label>
-                                        <span className="font-mono text-xs font-bold text-emerald-300">
+                                        <span className="font-mono text-xs font-bold text-emerald-800 dark:text-emerald-300">
                                             {pruneTargetHeadroomGb} GB
                                         </span>
                                     </div>
@@ -4148,21 +4148,21 @@ export function PruneStudio() {
                                             max="10000"
                                             value={pruneTargetHeadroomGb}
                                             onChange={(e) => setPruneTargetHeadroomGb(parseInt(e.target.value, 10) || 100)}
-                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-24"
+                                            className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs font-mono w-24"
                                         />
-                                        <p className="text-[11px] text-slate-400">
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
                                             Target storage volume to reclaim and maintain as free buffer headroom.
                                         </p>
                                     </div>
                                 </div>
 
                                 {/* Season-Level TV Pruning Policy */}
-                                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div className="p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 flex items-center justify-between">
                                     <div className="space-y-0.5">
-                                        <span className="text-xs font-bold text-slate-200 block flex items-center gap-1.5">
-                                            <Tv className="h-3.5 w-3.5 text-sky-400" /> Season-Level TV Pruning
+                                        <span className="text-xs font-bold text-foreground dark:text-slate-200 block flex items-center gap-1.5">
+                                            <Tv className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Season-Level TV Pruning
                                         </span>
-                                        <p className="text-[10px] text-slate-400">
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                             {pruneEvaluateSeasonsSetting ? "Evaluates and stages individual inactive TV seasons instead of wiping whole series." : "Evaluates TV series at the whole show level."}
                                         </p>
                                     </div>
@@ -4173,12 +4173,12 @@ export function PruneStudio() {
                                 </div>
 
                                 {/* Servarr Synchronized Deletion */}
-                                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div className="p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 flex items-center justify-between">
                                     <div className="space-y-0.5">
-                                        <span className="text-xs font-bold text-slate-200 block flex items-center gap-1.5">
-                                            <Trash2 className="h-3.5 w-3.5 text-amber-400" /> Servarr Arr Cleanup
+                                        <span className="text-xs font-bold text-foreground dark:text-slate-200 block flex items-center gap-1.5">
+                                            <Trash2 className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Servarr Arr Cleanup
                                         </span>
-                                        <p className="text-[10px] text-slate-400">
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                             {pruneDeleteFromArrSetting ? "Unmonitors and removes files from Radarr and Sonarr during live prune deletions." : "Deletes files strictly from Plex disk storage without modifying Arr instances."}
                                         </p>
                                     </div>
@@ -4189,39 +4189,39 @@ export function PruneStudio() {
                                 </div>
 
                                 {/* Dual-Lane Ingestion Pipeline & Priority Cascade Callout */}
-                                <div className="p-3 bg-gradient-to-br from-cyan-950/30 via-slate-950 to-amber-950/20 rounded-xl border border-cyan-800/40 space-y-2">
+                                <div className="p-3 bg-gradient-to-br from-cyan-500/10 dark:from-cyan-950/30 via-card dark:via-slate-950 to-amber-500/10 dark:to-amber-950/20 rounded-xl border border-cyan-500/40 dark:border-cyan-800/40 space-y-2">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <Layers className="h-4 w-4 text-cyan-400" />
-                                            <span className="text-xs font-bold text-slate-100">Dual-Lane Ingestion Pipeline</span>
+                                            <Layers className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
+                                            <span className="text-xs font-bold text-foreground dark:text-slate-100">Dual-Lane Ingestion Pipeline</span>
                                         </div>
-                                        <Badge variant="outline" className="text-[10px] bg-cyan-950/60 text-cyan-300 border-cyan-700/50 font-mono">
+                                        <Badge variant="outline" className="text-[10px] bg-cyan-500/10 dark:bg-cyan-950/60 text-cyan-800 dark:text-cyan-300 border-cyan-700/50 font-mono">
                                             Option A Cascade
                                         </Badge>
                                     </div>
-                                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                                        Target reclamation headroom (<strong className="text-emerald-300">{pruneTargetHeadroomGb} GB</strong>) is filled from <strong className="text-cyan-300">Lane 2 (Never Watched)</strong> first. If additional headroom is needed, items are drawn from <strong className="text-amber-300">Lane 1 (Oldest Watched)</strong>.
+                                    <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed">
+                                        Target reclamation headroom (<strong className="text-emerald-800 dark:text-emerald-300">{pruneTargetHeadroomGb} GB</strong>) is filled from <strong className="text-cyan-800 dark:text-cyan-300">Lane 2 (Never Watched)</strong> first. If additional headroom is needed, items are drawn from <strong className="text-amber-800 dark:text-amber-300">Lane 1 (Oldest Watched)</strong>.
                                     </p>
                                     <div className="grid grid-cols-2 gap-2 pt-1">
-                                        <div className="p-2 rounded-lg bg-cyan-950/40 border border-cyan-800/40">
-                                            <span className="text-[10px] font-bold text-cyan-300 block uppercase tracking-wider">Priority 1 • Lane 2</span>
-                                            <span className="text-[11px] text-slate-300">Never Watched Dead Weight</span>
+                                        <div className="p-2 rounded-lg bg-cyan-500/10 dark:bg-cyan-950/40 border border-cyan-500/40 dark:border-cyan-800/40">
+                                            <span className="text-[10px] font-bold text-cyan-800 dark:text-cyan-300 block uppercase tracking-wider">Priority 1 • Lane 2</span>
+                                            <span className="text-[11px] text-slate-700 dark:text-slate-300">Never Watched Dead Weight</span>
                                         </div>
-                                        <div className="p-2 rounded-lg bg-amber-950/30 border border-amber-800/40">
-                                            <span className="text-[10px] font-bold text-amber-300 block uppercase tracking-wider">Priority 2 • Lane 1</span>
-                                            <span className="text-[11px] text-slate-300">Oldest Watched Cold Storage</span>
+                                        <div className="p-2 rounded-lg bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/40 dark:border-amber-800/40">
+                                            <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 block uppercase tracking-wider">Priority 2 • Lane 1</span>
+                                            <span className="text-[11px] text-slate-700 dark:text-slate-300">Oldest Watched Cold Storage</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Lane 2: Never Watched Media Age Threshold */}
-                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                <div className="space-y-1.5 p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
-                                            <FolderOpen className="h-3.5 w-3.5 text-cyan-400" />
+                                        <Label className="text-xs text-foreground dark:text-slate-200 font-bold flex items-center gap-1.5">
+                                            <FolderOpen className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
                                             <span>Lane 2: Never Watched Minimum Age:</span>
                                         </Label>
-                                        <span className="font-mono text-xs font-bold text-cyan-300">
+                                        <span className="font-mono text-xs font-bold text-cyan-800 dark:text-cyan-300">
                                             {pruneUnwatchedMinAgeDaysSetting} Days
                                         </span>
                                     </div>
@@ -4232,22 +4232,22 @@ export function PruneStudio() {
                                             max="3650"
                                             value={pruneUnwatchedMinAgeDaysSetting}
                                             onChange={(e) => setPruneUnwatchedMinAgeDaysSetting(parseInt(e.target.value, 10) || 90)}
-                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                            className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs font-mono w-20"
                                         />
-                                        <p className="text-[11px] text-slate-400">
-                                            Media with <strong className="text-cyan-300">0 plays</strong> must be at least <strong className="text-white">{pruneUnwatchedMinAgeDaysSetting} days old</strong> to qualify.
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                            Media with <strong className="text-cyan-800 dark:text-cyan-300">0 plays</strong> must be at least <strong className="text-foreground dark:text-white">{pruneUnwatchedMinAgeDaysSetting} days old</strong> to qualify.
                                         </p>
                                     </div>
                                 </div>
 
                                 {/* Lane 1: Oldest Watched Media Stale Threshold */}
-                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                <div className="space-y-1.5 p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
-                                            <Eye className="h-3.5 w-3.5 text-amber-400" />
+                                        <Label className="text-xs text-foreground dark:text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Eye className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                             <span>Lane 1: Oldest Watched Inactivity Threshold:</span>
                                         </Label>
-                                        <span className="font-mono text-xs font-bold text-amber-300">
+                                        <span className="font-mono text-xs font-bold text-amber-800 dark:text-amber-300">
                                             {pruneWatchedMinAgeDaysSetting} Days
                                         </span>
                                     </div>
@@ -4258,22 +4258,22 @@ export function PruneStudio() {
                                             max="3650"
                                             value={pruneWatchedMinAgeDaysSetting}
                                             onChange={(e) => setPruneWatchedMinAgeDaysSetting(parseInt(e.target.value, 10) || 180)}
-                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                            className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs font-mono w-20"
                                         />
-                                        <p className="text-[11px] text-slate-400">
-                                            Watched media must not have been played for at least <strong className="text-white">{pruneWatchedMinAgeDaysSetting} days</strong> to qualify.
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                            Watched media must not have been played for at least <strong className="text-foreground dark:text-white">{pruneWatchedMinAgeDaysSetting} days</strong> to qualify.
                                         </p>
                                     </div>
                                 </div>
 
                                 {/* Advance Notice Grace Period */}
-                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                <div className="space-y-1.5 p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
-                                            <Clock className="h-3.5 w-3.5 text-rose-400" />
+                                        <Label className="text-xs text-foreground dark:text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Clock className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                             <span>Advance Notice Grace Period:</span>
                                         </Label>
-                                        <span className="font-mono text-xs font-bold text-rose-300">
+                                        <span className="font-mono text-xs font-bold text-rose-800 dark:text-rose-300">
                                             {pruneDaysNoticeSetting} Days
                                         </span>
                                     </div>
@@ -4284,19 +4284,19 @@ export function PruneStudio() {
                                             max="90"
                                             value={pruneDaysNoticeSetting}
                                             onChange={(e) => setPruneDaysNoticeSetting(parseInt(e.target.value, 10) || 14)}
-                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                            className="bg-card/95 dark:bg-slate-900 border-border dark:border-slate-700 h-8 text-xs font-mono w-20"
                                         />
-                                        <p className="text-[11px] text-slate-400">
-                                            Staged in Leaving Soon for <strong className="text-white">{pruneDaysNoticeSetting} days</strong> before deletion.
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                            Staged in Leaving Soon for <strong className="text-foreground dark:text-white">{pruneDaysNoticeSetting} days</strong> before deletion.
                                         </p>
                                     </div>
                                 </div>
 
                                 {/* Unwatched Only Policy */}
-                                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div className="p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 flex items-center justify-between">
                                     <div className="space-y-0.5">
-                                        <span className="text-xs font-bold text-slate-200 block">Unwatched Only Policy</span>
-                                        <p className="text-[10px] text-slate-400">
+                                        <span className="text-xs font-bold text-foreground dark:text-slate-200 block">Unwatched Only Policy</span>
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                             {pruneUnwatchedOnlySetting ? "Strict Mode: Only media with 0 total plays (Lane 2) will ever be staged." : "Dual-Lane Mode: Lane 2 is prioritized first, then Lane 1 is staged if headroom remains."}
                                         </p>
                                     </div>
@@ -4321,18 +4321,18 @@ export function PruneStudio() {
                                         {savingThresholds ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                                         <span>{isThresholdsDirty ? "Save Thresholds *" : "Save Thresholds"}</span>
                                     </Button>
-                                    {thresholdsSavedMsg && <span className="text-xs text-emerald-400 font-bold">✓ Saved!</span>}
+                                    {thresholdsSavedMsg && <span className="text-xs text-emerald-700 dark:text-emerald-400 font-bold">✓ Saved!</span>}
                                 </div>
                             </div>
                         </Card>
 
                         {/* Storage Mounts Configuration */}
-                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
-                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <HardDrive className="h-5 w-5 text-cyan-400" />
+                        <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl p-6 space-y-4">
+                            <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <HardDrive className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
                                 <span>Storage Mounts Configuration</span>
                             </CardTitle>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-slate-600 dark:text-slate-400">
                                 Configure physical disk mount paths for storage capacity monitoring and free space warning calculations.
                             </p>
 
@@ -4343,7 +4343,7 @@ export function PruneStudio() {
 
                                     return (
                                         <div key={srv.serverId} className="space-y-1.5">
-                                            <Label className="text-xs text-slate-300 font-semibold">{srv.serverName} Mount Path:</Label>
+                                            <Label className="text-xs text-slate-700 dark:text-slate-300 font-semibold">{srv.serverName} Mount Path:</Label>
                                             <div className="flex gap-2">
                                                 <Input
                                                     placeholder="/mnt/user/data/media"
@@ -4352,7 +4352,7 @@ export function PruneStudio() {
                                                         const updated = { ...serverStorageConfig, [srv.serverId]: e.target.value };
                                                         setServerStorageConfig(updated);
                                                     }}
-                                                    className="text-xs bg-slate-950 border-slate-800 font-mono"
+                                                    className="text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800 font-mono"
                                                 />
                                                 <Button
                                                     type="button"
@@ -4363,13 +4363,13 @@ export function PruneStudio() {
                                                         const res = await validateDirectoryPathAction(currentPath);
                                                         setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: false, success: res.success, msg: res.message || res.error } }));
                                                     }}
-                                                    className="border-slate-700 text-xs shrink-0"
+                                                    className="border-border dark:border-slate-700 text-xs shrink-0"
                                                 >
                                                     Validate
                                                 </Button>
                                             </div>
                                             {checkStatus && !checkStatus.checking && (
-                                                <p className={`text-[10px] ${checkStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
+                                                <p className={`text-[10px] ${checkStatus.success ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
                                                     {checkStatus.msg}
                                                 </p>
                                             )}
@@ -4393,35 +4393,35 @@ export function PruneStudio() {
                                     <Save className="h-3.5 w-3.5" />
                                     <span>Save Storage Config</span>
                                 </Button>
-                                {storageConfigSavedMsg && <span className="text-xs text-emerald-400 font-bold ml-2">✓ Saved!</span>}
+                                {storageConfigSavedMsg && <span className="text-xs text-emerald-700 dark:text-emerald-400 font-bold ml-2">✓ Saved!</span>}
                             </div>
                         </Card>
 
                         {/* Artwork Backup Vault Stats */}
-                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
-                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Archive className="h-5 w-5 text-sky-400" />
+                        <Card className="bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-800 shadow-xl p-6 space-y-4">
+                            <CardTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                                <Archive className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                                 <span>Artwork Backup Vault Health</span>
                             </CardTitle>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-slate-600 dark:text-slate-400">
                                 DomsHomeLab automatically archives pristine original poster artworks before applying overlays, allowing 0-loss rollback anytime.
                             </p>
 
                             <div className="space-y-3 font-mono text-xs">
-                                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2 tabular-nums">
+                                <div className="p-3 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800 space-y-2 tabular-nums">
                                     <div className="flex justify-between">
-                                        <span className="text-slate-400">Original Posters Backed Up:</span>
-                                        <strong className="text-sky-300">{vaultStats?.backupCount || 0} files</strong>
+                                        <span className="text-slate-600 dark:text-slate-400">Original Posters Backed Up:</span>
+                                        <strong className="text-sky-800 dark:text-sky-300">{vaultStats?.backupCount || 0} files</strong>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-slate-400">Vault Disk Usage:</span>
-                                        <strong className="text-sky-300">
+                                        <span className="text-slate-600 dark:text-slate-400">Vault Disk Usage:</span>
+                                        <strong className="text-sky-800 dark:text-sky-300">
                                             {vaultStats?.backupBytes ? `${(vaultStats.backupBytes / (1024 * 1024)).toFixed(1)} MB` : "0 MB"}
                                         </strong>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-slate-400">Custom Badges Vault:</span>
-                                        <strong className="text-sky-300">{vaultStats?.badgeCount || 0} badges</strong>
+                                        <span className="text-slate-600 dark:text-slate-400">Custom Badges Vault:</span>
+                                        <strong className="text-sky-800 dark:text-sky-300">{vaultStats?.badgeCount || 0} badges</strong>
                                     </div>
                                 </div>
                             </div>
@@ -4432,61 +4432,61 @@ export function PruneStudio() {
 
             {/* Manual Flag Modal */}
             <Dialog open={manualFlagModalOpen} onOpenChange={setManualFlagModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
-                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-amber-400" />
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                             <span>Manually Flag Media as Leaving Soon</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Add an item directly to the Leaving Soon collection hub with a custom notice period.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3 py-3 text-xs flex-1 overflow-y-auto min-h-0">
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-300">Item Title:</Label>
+                            <Label className="text-xs text-slate-700 dark:text-slate-300">Item Title:</Label>
                             <Input
                                 placeholder="e.g. Inception (2010)"
                                 value={manualTitle}
                                 onChange={(e) => setManualTitle(e.target.value)}
-                                className="h-8 text-xs bg-slate-950 border-slate-800"
+                                className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800"
                             />
                         </div>
 
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-300">Plex Rating Key:</Label>
+                            <Label className="text-xs text-slate-700 dark:text-slate-300">Plex Rating Key:</Label>
                             <Input
                                 placeholder="e.g. 12345"
                                 value={manualRatingKey}
                                 onChange={(e) => setManualRatingKey(e.target.value)}
-                                className="h-8 text-xs bg-slate-950 border-slate-800 font-mono"
+                                className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800 font-mono"
                             />
                         </div>
 
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-300">Days Notice Remaining:</Label>
+                            <Label className="text-xs text-slate-700 dark:text-slate-300">Days Notice Remaining:</Label>
                             <Input
                                 type="number"
                                 min="1"
                                 max="90"
                                 value={manualDaysRemaining}
                                 onChange={(e) => setManualDaysRemaining(parseInt(e.target.value, 10) || 14)}
-                                className="h-8 text-xs bg-slate-950 border-slate-800 font-mono"
+                                className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800 font-mono"
                             />
                         </div>
 
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-300">Reason:</Label>
+                            <Label className="text-xs text-slate-700 dark:text-slate-300">Reason:</Label>
                             <Input
                                 value={manualReason}
                                 onChange={(e) => setManualReason(e.target.value)}
-                                className="h-8 text-xs bg-slate-950 border-slate-800"
+                                className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800"
                             />
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button type="button" variant="ghost" size="sm" onClick={() => setManualFlagModalOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
@@ -4517,20 +4517,20 @@ export function PruneStudio() {
 
             {/* Save Custom Rule Preset Modal */}
             <Dialog open={saveCustomPresetModalOpen} onOpenChange={setSaveCustomPresetModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
-                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Sparkles className="h-5 w-5 text-rose-400" />
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-rose-700 dark:text-rose-400" />
                             <span>Save Custom Maintainerr Rule Preset</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Save your current criteria as a named rule preset to quickly reload anytime.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3 py-3 text-xs flex-1 overflow-y-auto min-h-0">
                         <div className="space-y-1">
-                            <Label className="text-xs text-slate-300 font-semibold">Preset Name:</Label>
+                            <Label className="text-xs text-slate-700 dark:text-slate-300 font-semibold">Preset Name:</Label>
                             <Input
                                 placeholder="e.g. 4K HDR 60-Day Prune"
                                 value={newCustomPresetName}
@@ -4540,42 +4540,42 @@ export function PruneStudio() {
                                         handleSaveCustomRulePreset();
                                     }
                                 }}
-                                className="h-8 text-xs bg-slate-950 border-slate-800"
+                                className="h-8 text-xs bg-muted dark:bg-slate-950 border-border dark:border-slate-800"
                                 autoFocus
                             />
                         </div>
 
                         {/* Summary of Configuration to be Saved */}
-                        <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1.5 font-mono text-[11px]">
-                            <span className="text-slate-400 font-bold block text-[10px] uppercase">Included Rule Configuration:</span>
-                            <div className="flex justify-between text-slate-300">
+                        <div className="p-3 bg-muted/80 dark:bg-slate-950/80 rounded-xl border border-border dark:border-slate-800 space-y-1.5 font-mono text-[11px]">
+                            <span className="text-slate-600 dark:text-slate-400 font-bold block text-[10px] uppercase">Included Rule Configuration:</span>
+                            <div className="flex justify-between text-slate-700 dark:text-slate-300">
                                 <span className="text-slate-500">Minimum Age:</span>
                                 <span>{simMinAgeDays} days</span>
                             </div>
-                            <div className="flex justify-between text-slate-300">
+                            <div className="flex justify-between text-slate-700 dark:text-slate-300">
                                 <span className="text-slate-500">Grace Notice:</span>
                                 <span>{simGracePeriodDays} days</span>
                             </div>
-                            <div className="flex justify-between text-slate-300">
+                            <div className="flex justify-between text-slate-700 dark:text-slate-300">
                                 <span className="text-slate-500">Filter Mode:</span>
                                 <span>{simUnwatchedOnly ? "Unwatched Only (0 plays)" : "All Media"}</span>
                             </div>
-                            <div className="flex justify-between text-slate-300">
+                            <div className="flex justify-between text-slate-700 dark:text-slate-300">
                                 <span className="text-slate-500">Sort Strategy:</span>
                                 <span className="capitalize">{simSortBy.replace(/_/g, " ")}</span>
                             </div>
-                            <div className="flex justify-between text-slate-300">
+                            <div className="flex justify-between text-slate-700 dark:text-slate-300">
                                 <span className="text-slate-500">Oldest Limit:</span>
                                 <span>{simOldestLimit === 0 ? "All files" : `${simOldestLimit} files`}</span>
                             </div>
-                            <div className="flex justify-between text-slate-300">
+                            <div className="flex justify-between text-slate-700 dark:text-slate-300">
                                 <span className="text-slate-500">Banner Template:</span>
                                 <span>{PRUNE_BANNER_PRESETS.find(p => p.id === simBannerType)?.label || simBannerType}</span>
                             </div>
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <DialogFooter className="pt-3 border-t border-border dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button type="button" variant="ghost" size="sm" onClick={() => setSaveCustomPresetModalOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
@@ -4609,13 +4609,13 @@ export function PruneStudio() {
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
-                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Layers className="h-5 w-5 text-rose-400" />
+                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                            <Layers className="h-5 w-5 text-rose-700 dark:text-rose-400" />
                             <span>Configure Target Pruning Libraries</span>
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400">
+                        <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                             Select which Plex library sections should be evaluated for aging media pruning. Excluded sections are completely protected and will never be touched.
                         </DialogDescription>
                     </DialogHeader>
@@ -4624,11 +4624,11 @@ export function PruneStudio() {
                         {servers.map(srv => {
                             const srvSections = srv.sections || [];
                             return (
-                                <div key={srv.serverId} className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
-                                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <div key={srv.serverId} className="p-3.5 bg-muted dark:bg-slate-950 rounded-xl border border-border dark:border-slate-800 space-y-3">
+                                    <div className="flex items-center justify-between border-b border-border dark:border-slate-800/80 pb-2">
                                         <div className="flex items-center gap-2">
-                                            <HardDrive className="h-4 w-4 text-cyan-400" />
-                                            <span className="text-xs font-bold text-white">{srv.serverName}</span>
+                                            <HardDrive className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
+                                            <span className="text-xs font-bold text-foreground dark:text-white">{srv.serverName}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <Button
@@ -4636,17 +4636,17 @@ export function PruneStudio() {
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, true)}
-                                                className="h-6 text-[10px] px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"
+                                                className="h-6 text-[10px] px-2 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/40"
                                             >
                                                 Enable All
                                             </Button>
-                                            <span className="text-slate-400">•</span>
+                                            <span className="text-slate-600 dark:text-slate-400">•</span>
                                             <Button
                                                 type="button"
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, false)}
-                                                className="h-6 text-[10px] px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                                                className="h-6 text-[10px] px-2 text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10 dark:hover:bg-rose-950/40"
                                             >
                                                 Disable All
                                             </Button>
@@ -4662,19 +4662,19 @@ export function PruneStudio() {
                                                         key={String(sec.key)}
                                                         className={`p-2.5 rounded-lg border flex items-center justify-between transition-all ${
                                                             enabled
-                                                                ? "bg-emerald-950/20 border-emerald-600/40 text-emerald-200"
-                                                                : "bg-slate-900/60 border-slate-800 text-slate-400"
+                                                                ? "bg-emerald-500/10 dark:bg-emerald-950/20 border-emerald-600/40 text-emerald-900 dark:text-emerald-200"
+                                                                : "bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-800 text-slate-600 dark:text-slate-400"
                                                         }`}
                                                     >
                                                         <div className="flex items-center gap-2.5 min-w-0">
                                                             {sec.type === "movie" ? (
-                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`} />
                                                             ) : (
-                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500"}`} />
                                                             )}
                                                             <div className="min-w-0">
-                                                                <span className="text-xs font-bold text-white block truncate">{sec.title}</span>
-                                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                                <span className="text-xs font-bold text-foreground dark:text-white block truncate">{sec.title}</span>
+                                                                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">
                                                                     Section #{sec.key} • {sec.type === "movie" ? "Movies" : "TV Shows"}
                                                                 </span>
                                                             </div>
@@ -4682,7 +4682,7 @@ export function PruneStudio() {
 
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             <Badge className={`text-[10px] font-bold ${
-                                                                enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
+                                                                enabled ? "bg-emerald-600 text-white" : "bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-border dark:border-slate-700"
                                                             }`}>
                                                                 {enabled ? "Active" : "Excluded"}
                                                             </Badge>
@@ -4696,14 +4696,14 @@ export function PruneStudio() {
                                             })}
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-slate-400 py-1">No library sections loaded for this server.</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 py-1">No library sections loaded for this server.</p>
                                     )}
                                 </div>
                             );
                         })}
                     </div>
 
-                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
+                    <DialogFooter className="pt-2 border-t border-border dark:border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             size="sm"

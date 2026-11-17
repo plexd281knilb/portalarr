@@ -42,12 +42,12 @@ export function MediaCarousel({
 
     const getIcon = () => {
         switch (iconName) {
-            case "Flame": return <Flame className="h-4 w-4 text-orange-400" />;
-            case "TrendingUp": return <TrendingUp className="h-4 w-4 text-emerald-400" />;
-            case "Calendar": return <Calendar className="h-4 w-4 text-blue-400" />;
-            case "Tv": return <Tv className="h-4 w-4 text-cyan-400" />;
-            case "Star": return <Star className="h-4 w-4 text-amber-400" />;
-            default: return <Film className="h-4 w-4 text-sky-400" />;
+            case "Flame": return <Flame className="h-4 w-4 text-orange-700 dark:text-orange-400" />;
+            case "TrendingUp": return <TrendingUp className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />;
+            case "Calendar": return <Calendar className="h-4 w-4 text-blue-700 dark:text-blue-400" />;
+            case "Tv": return <Tv className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />;
+            case "Star": return <Star className="h-4 w-4 text-amber-700 dark:text-amber-400" />;
+            default: return <Film className="h-4 w-4 text-sky-700 dark:text-sky-400" />;
         }
     };
 

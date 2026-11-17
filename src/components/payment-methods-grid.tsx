@@ -135,7 +135,7 @@ export function PaymentMethodsGrid({ config, username = "USER", membershipTier, 
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-accent dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
                                     onClick={(e) => handleOpenQr(e, key)}
                                     title={`Show QR code for ${item.providerName}`}
                                 >
@@ -147,12 +147,12 @@ export function PaymentMethodsGrid({ config, username = "USER", membershipTier, 
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-accent dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
                                     onClick={(e) => handleCopyClick(e, rawValue, item.provider)}
                                     title={`Copy ${item.providerName} handle`}
                                 >
                                     {isCopied ? (
-                                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                        <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                     ) : (
                                         <Copy className="h-3.5 w-3.5" />
                                     )}

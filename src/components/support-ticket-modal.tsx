@@ -54,7 +54,7 @@ export default function SupportTicketModal({ trigger }: SupportTicketModalProps 
                     variant="ghost"
                     size="sm"
                     onClick={() => setOpen(true)}
-                    className="text-xs text-muted-foreground hover:text-foreground hover:bg-white/[0.04] gap-1.5 h-7 px-2.5 rounded-lg transition-all"
+                    className="text-xs text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04] gap-1.5 h-7 px-2.5 rounded-lg transition-all"
                 >
                     <LifeBuoy className="h-3.5 w-3.5 text-primary" />
                     <span>Need to open a manual support ticket? Click here</span>
@@ -62,7 +62,7 @@ export default function SupportTicketModal({ trigger }: SupportTicketModalProps 
             )}
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="sm:max-w-md bg-[#121218] border border-border/60 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-md bg-popover dark:bg-[#121218] border border-border/60 shadow-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
                             <LifeBuoy className="h-5 w-5 text-primary" />
@@ -75,7 +75,7 @@ export default function SupportTicketModal({ trigger }: SupportTicketModalProps 
 
                     {success ? (
                         <div className="py-8 text-center space-y-2">
-                            <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto animate-bounce" />
+                            <CheckCircle2 className="h-10 w-10 text-emerald-700 dark:text-emerald-400 mx-auto animate-bounce" />
                             <h4 className="text-sm font-bold text-foreground">Ticket Submitted Successfully</h4>
                             <p className="text-xs text-muted-foreground">The administrator has been notified via email.</p>
                         </div>

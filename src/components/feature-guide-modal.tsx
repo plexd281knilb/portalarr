@@ -598,7 +598,7 @@ export default function FeatureGuideModal({
                 </DialogTrigger>
             )}
 
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
+            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-popover dark:bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
                 <div className="flex flex-col min-h-0 min-w-0 w-full overflow-x-hidden">
                     
                     {/* MODAL HEADER */}
@@ -610,7 +610,7 @@ export default function FeatureGuideModal({
                                         {currentTopic.category}
                                     </Badge>
                                     <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                                        <Sparkles className="h-3 w-3 text-amber-400" /> Interactive Feature Guide
+                                        <Sparkles className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Interactive Feature Guide
                                     </span>
                                 </div>
                                 <DialogTitle className="text-lg sm:text-xl font-extrabold tracking-tight flex items-center gap-2 text-foreground">
@@ -638,7 +638,7 @@ export default function FeatureGuideModal({
                                         className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
                                             isSelected 
                                                 ? "bg-primary text-primary-foreground shadow-sm" 
-                                                : "bg-white/[0.03] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground border border-white/[0.04]"
+                                                : "bg-muted/50 dark:bg-white/[0.03] text-muted-foreground hover:bg-accent dark:hover:bg-white/[0.08] hover:text-foreground border border-border/70 dark:border-white/[0.04]"
                                         }`}
                                     >
                                         {t.category}
@@ -653,10 +653,10 @@ export default function FeatureGuideModal({
                         
                         {/* KEY HIGHLIGHTS BAR */}
                         {currentTopic.highlights && currentTopic.highlights.length > 0 && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-2xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06]">
                                 {currentTopic.highlights.map((h, idx) => (
                                     <div key={idx} className="flex items-center gap-2 text-xs text-foreground">
-                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="truncate">{h}</span>
                                     </div>
                                 ))}
@@ -666,7 +666,7 @@ export default function FeatureGuideModal({
                         {/* DETAILED SECTIONS */}
                         <div className="space-y-4">
                             {currentTopic.sections.map((sec, idx) => (
-                                <div key={idx} className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 space-y-2.5">
+                                <div key={idx} className="p-4 rounded-2xl bg-muted/70 dark:bg-slate-900/60 border border-border dark:border-slate-800/80 space-y-2.5">
                                     <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                                         <span className="flex items-center justify-center h-5 w-5 rounded-full bg-primary/20 text-primary text-[10px] font-extrabold shrink-0">
                                             {idx + 1}
@@ -679,7 +679,7 @@ export default function FeatureGuideModal({
                                     </p>
 
                                     {sec.bullets && sec.bullets.length > 0 && (
-                                        <ul className="space-y-1.5 pl-6 list-disc text-xs text-slate-300">
+                                        <ul className="space-y-1.5 pl-6 list-disc text-xs text-slate-700 dark:text-slate-300">
                                             {sec.bullets.map((b, bIdx) => (
                                                 <li key={bIdx} className="leading-relaxed">
                                                     {b}
@@ -689,15 +689,15 @@ export default function FeatureGuideModal({
                                     )}
 
                                     {sec.proTip && (
-                                        <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-start gap-2 mt-2">
-                                            <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" />
+                                        <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2 mt-2">
+                                            <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-amber-700 dark:text-amber-400" />
                                             <span className="leading-relaxed"><strong>Pro Tip:</strong> {sec.proTip}</span>
                                         </div>
                                     )}
 
                                     {sec.warning && (
-                                        <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300 flex items-start gap-2 mt-2">
-                                            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
+                                        <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-800 dark:text-red-300 flex items-start gap-2 mt-2">
+                                            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-700 dark:text-red-400" />
                                             <span className="leading-relaxed"><strong>Important:</strong> {sec.warning}</span>
                                         </div>
                                     )}

@@ -747,7 +747,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     {/* 3. Root Folder Dropdown (Populated directly from Arr API) */}
                     <div className="space-y-1">
                         <Label className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-                            <FolderTree className="h-3 w-3 text-emerald-400/70" />
+                            <FolderTree className="h-3 w-3 text-emerald-700/70 dark:text-emerald-400/70" />
                             Default Root Folder
                         </Label>
                         {isExplicitlyDisabled ? (
@@ -769,7 +769,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                         <SelectItem key={f.id} value={f.path}>
                                             <span className="font-mono">{f.path}</span>
                                             {f.freeSpaceFormatted && (
-                                                <span className="ml-1.5 text-[10px] text-emerald-400/90 font-sans">
+                                                <span className="ml-1.5 text-[10px] text-emerald-700/90 dark:text-emerald-400/90 font-sans">
                                                     ({f.freeSpaceFormatted})
                                                 </span>
                                             )}
@@ -803,15 +803,15 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
 
     return (
         <div className="space-y-6">
-            <Card className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md shadow-sm ${hasUnsavedChanges ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-rose-500/30 shadow-rose-950/20"}`}>
+            <Card className={`transition-all duration-300 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm ${hasUnsavedChanges ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-rose-500/30 shadow-rose-950/20"}`}>
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-rose-400">
-                                <Compass className="h-5 w-5 text-rose-400" />
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-rose-700 dark:text-rose-400">
+                                <Compass className="h-5 w-5 text-rose-700 dark:text-rose-400" />
                                 Native Media Requests & Seerr Engine
                                 {hasUnsavedChanges && (
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
                                         ● Unsaved Changes
                                     </Badge>
                                 )}
@@ -820,7 +820,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 Configure instance routing, quality profiles, root paths, Full vs Trial accounts, and Dual 4K+1080p ingestion rules.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-rose-500/10 text-rose-300 border-rose-500/30 font-bold px-2.5 py-1">
+                        <Badge variant="outline" className="bg-rose-500/10 text-rose-800 dark:text-rose-300 border-rose-500/30 font-bold px-2.5 py-1">
                             Seerr Engine v{process.env.NEXT_PUBLIC_PORTALARR_VERSION || "1.0.0-beta.1"}
                         </Badge>
                     </div>
@@ -829,7 +829,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     {/* 1. MAIN MOVIES & TV SHOWS ARRS (1080p & 4K) */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-                            <Layers className="h-5 w-5 text-blue-400" />
+                            <Layers className="h-5 w-5 text-blue-700 dark:text-blue-400" />
                             <div>
                                 <h3 className="text-sm font-bold text-foreground">Main Arrs Dispatch Defaults (1080p & 4K UHD)</h3>
                                 <p className="text-xs text-muted-foreground">
@@ -844,7 +844,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 title: "Standard Movies (1080p)",
                                 badgeText: "1080p",
                                 badgeVariant: "blue",
-                                icon: <Film className="h-4 w-4 text-blue-400" />,
+                                icon: <Film className="h-4 w-4 text-blue-700 dark:text-blue-400" />,
                                 appsList: radarrApps,
                                 selectedAppId: defaultMovieAppId,
                                 onAppChange: setDefaultMovieAppId,
@@ -860,7 +860,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 title: "4K UHD Movies",
                                 badgeText: "4K UHD",
                                 badgeVariant: "sky",
-                                icon: <Film className="h-4 w-4 text-sky-400" />,
+                                icon: <Film className="h-4 w-4 text-sky-700 dark:text-sky-400" />,
                                 appsList: radarrApps,
                                 selectedAppId: defaultMovie4kAppId,
                                 onAppChange: setDefaultMovie4kAppId,
@@ -877,7 +877,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 title: "Standard TV Shows (1080p)",
                                 badgeText: "1080p",
                                 badgeVariant: "cyan",
-                                icon: <Tv className="h-4 w-4 text-cyan-400" />,
+                                icon: <Tv className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />,
                                 appsList: sonarrApps,
                                 selectedAppId: defaultTvAppId,
                                 onAppChange: setDefaultTvAppId,
@@ -893,7 +893,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 title: "4K UHD TV Shows",
                                 badgeText: "4K UHD",
                                 badgeVariant: "sky",
-                                icon: <Tv className="h-4 w-4 text-sky-400" />,
+                                icon: <Tv className="h-4 w-4 text-sky-700 dark:text-sky-400" />,
                                 appsList: sonarrApps,
                                 selectedAppId: defaultTv4kAppId,
                                 onAppChange: setDefaultTv4kAppId,
@@ -910,7 +910,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     {/* 2. KIDS SECTION & DEDICATED KIDS ARRS */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-                            <Smile className="h-5 w-5 text-orange-400" />
+                            <Smile className="h-5 w-5 text-orange-700 dark:text-orange-400" />
                             <div>
                                 <h3 className="text-sm font-bold text-foreground">Kids Section & Dedicated Kids Arrs</h3>
                                 <p className="text-xs text-muted-foreground">Content ratings filtering and dedicated 1080p & 4K Kids Radarr/Sonarr destinations.</p>
@@ -922,7 +922,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-center justify-between p-3.5 rounded-xl bg-background/50 border border-border/40">
                                 <div className="space-y-0.5 max-w-xl">
                                     <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                         Auto-Approve PG & Below Ratings
                                     </Label>
                                     <p className="text-[11px] text-muted-foreground">
@@ -938,7 +938,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-center justify-between p-3.5 rounded-xl bg-background/50 border border-border/40">
                                 <div className="space-y-0.5 max-w-xl">
                                     <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                        <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+                                        <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                         Require Admin Approval for PG-13 & Unrated
                                     </Label>
                                     <p className="text-[11px] text-muted-foreground">
@@ -951,8 +951,8 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 />
                             </div>
 
-                            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                                <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400" />
+                            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+                                <ShieldAlert className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />
                                 <span><strong>Mature Content Filter:</strong> R, NC-17, TV-MA, and TV-14 content is automatically excluded from Kids discovery and search.</span>
                             </div>
                         </div>
@@ -968,7 +968,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 title: "Kids Movies (1080p)",
                                 badgeText: "Kids 1080p",
                                 badgeVariant: "orange",
-                                icon: <Film className="h-4 w-4 text-orange-400" />,
+                                icon: <Film className="h-4 w-4 text-orange-700 dark:text-orange-400" />,
                                 appsList: radarrApps,
                                 selectedAppId: kidsMovieAppId,
                                 onAppChange: setKidsMovieAppId,
@@ -985,7 +985,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 title: "Kids 4K UHD Movies",
                                 badgeText: "Kids 4K",
                                 badgeVariant: "sky",
-                                icon: <Film className="h-4 w-4 text-sky-400" />,
+                                icon: <Film className="h-4 w-4 text-sky-700 dark:text-sky-400" />,
                                 appsList: radarrApps,
                                 selectedAppId: kidsMovie4kAppId,
                                 onAppChange: setKidsMovie4kAppId,
@@ -1002,7 +1002,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 title: "Kids TV Shows (1080p)",
                                 badgeText: "Kids 1080p",
                                 badgeVariant: "orange",
-                                icon: <Tv className="h-4 w-4 text-orange-400" />,
+                                icon: <Tv className="h-4 w-4 text-orange-700 dark:text-orange-400" />,
                                 appsList: sonarrApps,
                                 selectedAppId: kidsTvAppId,
                                 onAppChange: setKidsTvAppId,
@@ -1019,7 +1019,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                 title: "Kids 4K UHD TV Shows",
                                 badgeText: "Kids 4K",
                                 badgeVariant: "sky",
-                                icon: <Tv className="h-4 w-4 text-sky-400" />,
+                                icon: <Tv className="h-4 w-4 text-sky-700 dark:text-sky-400" />,
                                 appsList: sonarrApps,
                                 selectedAppId: kidsTv4kAppId,
                                 onAppChange: setKidsTv4kAppId,
@@ -1036,7 +1036,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     {/* 3. DUAL 4K + 1080P INGESTION RULE */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-                            <CopyCheck className="h-5 w-5 text-sky-400" />
+                            <CopyCheck className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                             <div>
                                 <h3 className="text-sm font-bold text-foreground">Dual 4K + 1080p Ingestion Rule</h3>
                                 <p className="text-xs text-muted-foreground">Ensure backward compatibility for non-4K streaming devices and remote transcoding.</p>
@@ -1062,7 +1062,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     {/* 4. FULL ACCOUNTS CONFIGURATION */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-                            <UserCheck className="h-5 w-5 text-emerald-400" />
+                            <UserCheck className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                             <div>
                                 <h3 className="text-sm font-bold text-foreground">Full Accounts (Approved / Paying Users)</h3>
                                 <p className="text-xs text-muted-foreground">Rules applied to approved regular members and active subscribers.</p>
@@ -1073,7 +1073,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-center justify-between p-3.5 rounded-xl bg-background/50 border border-border/40">
                                 <div className="space-y-0.5 max-w-xl">
                                     <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                        <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                                        <Sparkles className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                         Auto-Approve Full Account Requests
                                     </Label>
                                     <p className="text-[11px] text-muted-foreground">
@@ -1141,7 +1141,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     {/* 5. TRIAL ACCOUNTS CONFIGURATION */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-                            <Clock className="h-5 w-5 text-amber-400" />
+                            <Clock className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                             <div>
                                 <h3 className="text-sm font-bold text-foreground">Trial Accounts (Guest / Limited Users)</h3>
                                 <p className="text-xs text-muted-foreground">Strict request limits with mandatory administrator approval.</p>
@@ -1213,7 +1213,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="space-y-1.5 p-3.5 rounded-xl bg-background/50 border border-border/40">
                                 <div className="flex items-center justify-between">
                                     <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                        <Link className="h-3.5 w-3.5 text-rose-400" /> Discord Webhook URL
+                                        <Link className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" /> Discord Webhook URL
                                     </Label>
                                     <span className="text-[10px] text-muted-foreground">Server Settings &rarr; Integrations &rarr; Webhooks</span>
                                 </div>
@@ -1269,8 +1269,8 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             {testDiscordResult && (
                                 <div className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
                                     testDiscordResult.success 
-                                        ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-300" 
-                                        : "bg-rose-500/15 border border-rose-500/40 text-rose-300"
+                                        ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300" 
+                                        : "bg-rose-500/15 border border-rose-500/40 text-rose-800 dark:text-rose-300"
                                 }`}>
                                     {testDiscordResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
                                     <span>{testDiscordResult.message || testDiscordResult.error}</span>
@@ -1285,7 +1285,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                     <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                         <div className="space-y-0.5 pr-2">
                                             <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                                <Clock className="h-3.5 w-3.5 text-amber-400" /> New Request (Pending)
+                                                <Clock className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> New Request (Pending)
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-tight">
                                                 Alert Discord when a request requiring admin review is submitted.
@@ -1302,7 +1302,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                     <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                         <div className="space-y-0.5 pr-2">
                                             <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                                <Sparkles className="h-3.5 w-3.5 text-blue-400" /> Auto-Approved Request
+                                                <Sparkles className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" /> Auto-Approved Request
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-tight">
                                                 Alert Discord when a request is auto-approved and queued for download.
@@ -1319,7 +1319,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                     <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                         <div className="space-y-0.5 pr-2">
                                             <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Admin Approved
+                                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Admin Approved
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-tight">
                                                 Alert Discord when an administrator manually approves a pending request.
@@ -1336,7 +1336,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                     <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                         <div className="space-y-0.5 pr-2">
                                             <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                                <AlertCircle className="h-3.5 w-3.5 text-rose-400" /> Request Declined
+                                                <AlertCircle className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" /> Request Declined
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-tight">
                                                 Alert Discord when a request is declined with reason.
@@ -1353,7 +1353,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                     <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                         <div className="space-y-0.5 pr-2">
                                             <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                                <Film className="h-3.5 w-3.5 text-emerald-400" /> Media Available on Plex
+                                                <Film className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Media Available on Plex
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-tight">
                                                 Broadcast announcement when media is ready to stream.
@@ -1370,7 +1370,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                     <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                         <div className="space-y-0.5 pr-2">
                                             <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                                <ShieldAlert className="h-3.5 w-3.5 text-amber-400" /> Request Issue / Failure
+                                                <ShieldAlert className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Request Issue / Failure
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-tight">
                                                 Notify admins when a request encounters a download or dispatch error.
@@ -1391,7 +1391,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     <div className="space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-border/40">
                             <div className="flex items-center gap-2">
-                                <Mail className="h-5 w-5 text-amber-400" />
+                                <Mail className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                 <div>
                                     <h3 className="text-sm font-bold text-foreground">Email Notifications</h3>
                                     <p className="text-xs text-muted-foreground">Automated transactional emails dispatched via your server SMTP configuration.</p>
@@ -1408,7 +1408,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                                         router.push("/settings?tab=emails");
                                     }
                                 }}
-                                className="h-7 text-[11px] gap-1.5 border-rose-500/30 text-rose-400 hover:bg-rose-500/10 self-start sm:self-auto cursor-pointer"
+                                className="h-7 text-[11px] gap-1.5 border-rose-500/30 text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 self-start sm:self-auto cursor-pointer"
                             >
                                 <Mail className="h-3 w-3" /> Customize Email Templates
                             </Button>
@@ -1419,7 +1419,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                 <div className="space-y-0.5 pr-2">
                                     <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-400" /> Admin Request Alerts
+                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" /> Admin Request Alerts
                                     </div>
                                     <p className="text-[10px] text-muted-foreground leading-tight">
                                         Email server administrators when a new user request requires manual approval.
@@ -1435,7 +1435,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                 <div className="space-y-0.5 pr-2">
                                     <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Sparkles className="h-3.5 w-3.5 text-amber-400" /> User Auto-Approved Notice
+                                        <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> User Auto-Approved Notice
                                     </div>
                                     <p className="text-[10px] text-muted-foreground leading-tight">
                                         Email user when their request is automatically approved and queued.
@@ -1451,7 +1451,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                 <div className="space-y-0.5 pr-2">
                                     <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> User Admin-Approved Notice
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> User Admin-Approved Notice
                                     </div>
                                     <p className="text-[10px] text-muted-foreground leading-tight">
                                         Email user when an admin reviews and approves their pending request.
@@ -1467,7 +1467,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                 <div className="space-y-0.5 pr-2">
                                     <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <AlertCircle className="h-3.5 w-3.5 text-rose-400" /> User Declined Notice
+                                        <AlertCircle className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" /> User Declined Notice
                                     </div>
                                     <p className="text-[10px] text-muted-foreground leading-tight">
                                         Email user with the administrator decline reason when rejected.
@@ -1483,7 +1483,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                 <div className="space-y-0.5 pr-2">
                                     <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Film className="h-3.5 w-3.5 text-emerald-400" /> Ready to Stream (Plex)
+                                        <Film className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Ready to Stream (Plex)
                                     </div>
                                     <p className="text-[10px] text-muted-foreground leading-tight">
                                         Email user with a direct "Watch on Plex" button when media is available.
@@ -1502,7 +1502,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                 <div className="space-y-0.5 pr-2">
                                     <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <ShieldAlert className="h-3.5 w-3.5 text-amber-400" /> Request Failure Alert
+                                        <ShieldAlert className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Request Failure Alert
                                     </div>
                                     <p className="text-[10px] text-muted-foreground leading-tight">
                                         Email alert if a request encounters a download or dispatch error.
@@ -1518,13 +1518,13 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
 
                     {/* Status Feedback Messages */}
                     {successMsg && (
-                        <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center gap-2">
+                        <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center gap-2">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{successMsg}</span>
                         </div>
                     )}
                     {errorMsg && (
-                        <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium flex items-center gap-2">
+                        <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-800 dark:text-rose-300 text-xs font-medium flex items-center gap-2">
                             <AlertCircle className="h-4 w-4 shrink-0" />
                             <span>{errorMsg}</span>
                         </div>

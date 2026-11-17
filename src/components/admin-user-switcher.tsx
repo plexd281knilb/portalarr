@@ -82,7 +82,7 @@ export default function AdminUserSwitcher({
 
     if (loading) {
         return (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-[#121218]/60 border border-border/40 px-3 py-2 rounded-xl">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/80 dark:bg-[#121218]/60 border border-border/40 px-3 py-2 rounded-xl">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
                 <span>Loading user accounts for switcher...</span>
             </div>
@@ -96,7 +96,7 @@ export default function AdminUserSwitcher({
     return (
         <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 border rounded-xl shadow-sm transition-all ${containerGradient}`}>
             <div className="flex items-start sm:items-center gap-2.5 min-w-0">
-                <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 sm:mt-0 ${isImpersonating ? "bg-amber-500/20 text-amber-400" : "bg-sky-500/10 text-sky-400"}`}>
+                <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 sm:mt-0 ${isImpersonating ? "bg-amber-500/20 text-amber-700 dark:text-amber-400" : "bg-sky-500/10 text-sky-700 dark:text-sky-400"}`}>
                     <Eye className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 space-y-0.5">
@@ -110,8 +110,8 @@ export default function AdminUserSwitcher({
                             variant="outline" 
                             className={`text-[9px] shrink-0 ${
                                 isImpersonating 
-                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold" 
-                                    : "bg-sky-500/10 text-sky-300 border-sky-500/30"
+                                    ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 font-bold" 
+                                    : "bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30"
                             }`}
                         >
                             {isImpersonating ? "Preview Active" : "Admin Tool"}
@@ -125,12 +125,12 @@ export default function AdminUserSwitcher({
                 </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-white/[0.06]">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-border/70 dark:border-white/[0.06]">
                 <div className="w-full sm:w-72 min-w-0">
                     <Select value={selectedUser} onValueChange={handleSelectUser} disabled={switching}>
-                        <SelectTrigger className={`h-9 text-xs bg-background/80 w-full min-w-0 ${isImpersonating ? "border-amber-500/40 text-amber-200" : "border-sky-500/30"}`}>
+                        <SelectTrigger className={`h-9 text-xs bg-background/80 w-full min-w-0 ${isImpersonating ? "border-amber-500/40 text-amber-900 dark:text-amber-200" : "border-sky-500/30"}`}>
                             {switching ? (
-                                <span className="flex items-center gap-1.5 text-sky-300">
+                                <span className="flex items-center gap-1.5 text-sky-800 dark:text-sky-300">
                                     <Loader2 className="h-3 w-3 animate-spin" /> Switching view...
                                 </span>
                             ) : (
@@ -139,9 +139,9 @@ export default function AdminUserSwitcher({
                         </SelectTrigger>
                         <SelectContent className="max-h-72">
                             {isImpersonating && (
-                                <SelectItem value="admin" className="text-xs py-2 font-bold text-amber-400 border-b border-border/40">
+                                <SelectItem value="admin" className="text-xs py-2 font-bold text-amber-700 dark:text-amber-400 border-b border-border/40">
                                     <span className="flex items-center gap-1.5">
-                                        <Undo2 className="h-3.5 w-3.5 text-amber-400" />
+                                        <Undo2 className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                         <span>Return to Admin Mission Control</span>
                                     </span>
                                 </SelectItem>
@@ -155,24 +155,24 @@ export default function AdminUserSwitcher({
                                 return (
                                     <SelectItem key={u.id} value={u.id} className="text-xs py-2">
                                         <div className="flex items-center justify-between gap-2 w-full">
-                                            <span className={`font-semibold ${isCurrent ? "text-amber-400 underline decoration-amber-400/50" : "text-foreground"}`}>
+                                            <span className={`font-semibold ${isCurrent ? "text-amber-700 dark:text-amber-400 underline decoration-amber-400/50" : "text-foreground"}`}>
                                                 {u.username} {isCurrent && "(Active)"}
                                             </span>
                                             <div className="flex items-center gap-1 shrink-0">
                                                 {isTrial ? (
-                                                    <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                    <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                         Trial
                                                     </Badge>
                                                 ) : isSuper ? (
-                                                    <Badge variant="outline" className="text-[9px] bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                                                    <Badge variant="outline" className="text-[9px] bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30">
                                                         Super User
                                                     </Badge>
                                                 ) : isAdmin ? (
-                                                    <Badge variant="outline" className="text-[9px] bg-sky-500/10 text-sky-300 border-sky-500/30">
+                                                    <Badge variant="outline" className="text-[9px] bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                                         Admin
                                                     </Badge>
                                                 ) : (
-                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                         Full User
                                                     </Badge>
                                                 )}
@@ -191,7 +191,7 @@ export default function AdminUserSwitcher({
                         variant="outline"
                         onClick={() => handleSelectUser("admin")}
                         disabled={switching}
-                        className="h-9 px-3 w-full sm:w-auto justify-center bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 text-xs font-bold gap-1.5 shrink-0 active:scale-95 transition-all"
+                        className="h-9 px-3 w-full sm:w-auto justify-center bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs font-bold gap-1.5 shrink-0 active:scale-95 transition-all"
                     >
                         {switching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
                         <span>Return to Admin</span>

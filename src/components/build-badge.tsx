@@ -92,10 +92,10 @@ export function BuildBadge({
                 <div
                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-[10px] uppercase font-bold tracking-wider select-none cursor-default ${
                         isBeta 
-                            ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_8px_rgba(56,189,248,0.15)]" 
+                            ? "bg-sky-500/15 text-sky-800 dark:text-sky-300 border border-sky-500/30 shadow-[0_0_8px_rgba(56,189,248,0.15)]" 
                             : isStable 
-                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_8px_rgba(52,211,153,0.15)]"
-                            : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                            ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 shadow-[0_0_8px_rgba(52,211,153,0.15)]"
+                            : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30"
                     } ${className}`}
                 >
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
@@ -111,18 +111,18 @@ export function BuildBadge({
                 <div
                     className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-semibold border select-none cursor-default ${
                         isBeta
-                            ? "bg-sky-500/10 text-sky-300 border-sky-500/30"
+                            ? "bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30"
                             : isStable
-                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
-                            : "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                            ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30"
+                            : "bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30"
                     } ${className}`}
                 >
                     {isBeta ? (
-                        <FlaskConical className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                        <FlaskConical className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                     ) : isStable ? (
-                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                     ) : (
-                        <Workflow className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <Workflow className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                     )}
                     <span className="font-bold tracking-tight">
                         {isBeta ? "Beta Preview" : isStable ? "Production" : "Development"}
@@ -155,10 +155,10 @@ export function BuildBadge({
                     onClick={() => setOpen(true)}
                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-[10px] uppercase font-bold tracking-wider transition-all duration-200 cursor-pointer ${
                         isBeta 
-                            ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 hover:bg-sky-500/25 hover:border-sky-500/50 shadow-[0_0_8px_rgba(56,189,248,0.2)]" 
+                            ? "bg-sky-500/15 text-sky-800 dark:text-sky-300 border border-sky-500/30 hover:bg-sky-500/25 hover:border-sky-500/50 shadow-[0_0_8px_rgba(56,189,248,0.2)]" 
                             : isStable 
-                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/50 shadow-[0_0_8px_rgba(52,211,153,0.2)]"
-                            : "bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 hover:border-amber-500/50"
+                            ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/50 shadow-[0_0_8px_rgba(52,211,153,0.2)]"
+                            : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 hover:border-amber-500/50"
                     } ${className}`}
                     title="Click to view build & workflow details (Admin Only)"
                 >
@@ -175,19 +175,19 @@ export function BuildBadge({
                     onClick={() => setOpen(true)}
                     className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all duration-200 cursor-pointer ${
                         isBeta
-                            ? "bg-sky-500/10 text-sky-300 border-sky-500/30 hover:bg-sky-500/20 hover:border-sky-500/50 shadow-sm"
+                            ? "bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30 hover:bg-sky-500/20 hover:border-sky-500/50 shadow-sm"
                             : isStable
-                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/50 shadow-sm"
-                            : "bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 shadow-sm"
+                            ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/50 shadow-sm"
+                            : "bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 shadow-sm"
                     } ${className}`}
                     title="Click for full build & workflow details (Admin Only)"
                 >
                     {isBeta ? (
-                        <FlaskConical className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                        <FlaskConical className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                     ) : isStable ? (
-                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                     ) : (
-                        <Workflow className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <Workflow className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                     )}
                     <span className="font-bold tracking-tight">
                         {isBeta ? `BETA (${telemetry.branch})` : isStable ? `PROD (${telemetry.branch})` : `DEV (${telemetry.branch})`}
@@ -201,7 +201,7 @@ export function BuildBadge({
                         </>
                     )}
                     {telemetry.buildNumber && (
-                        <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 font-mono bg-white/5 border-white/20">
+                        <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 font-mono bg-muted/50 dark:bg-white/5 border-border/70 dark:border-white/20">
                             build #{telemetry.buildNumber}
                         </Badge>
                     )}
@@ -223,11 +223,11 @@ export function BuildBadge({
 
             {/* Build & Workflow Diagnostics Modal (Admin Only) */}
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="max-w-md bg-[#101014] border-border/50 text-foreground p-6 shadow-2xl rounded-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+                <DialogContent className="max-w-md bg-popover dark:bg-[#101014] border-border/50 text-foreground p-6 shadow-2xl rounded-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
                     <DialogHeader className="space-y-1">
                         <div className="flex items-center gap-2">
                             <div className={`p-2 rounded-lg ${
-                                isBeta ? "bg-sky-500/15 text-sky-400" : isStable ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"
+                                isBeta ? "bg-sky-500/15 text-sky-700 dark:text-sky-400" : isStable ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
                             }`}>
                                 {isBeta ? <FlaskConical className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
                             </div>
@@ -246,10 +246,10 @@ export function BuildBadge({
                         {/* Status banner */}
                         <div className={`p-3 rounded-lg border flex items-center justify-between text-xs font-semibold ${
                             isBeta 
-                                ? "bg-sky-500/10 border-sky-500/30 text-sky-300"
+                                ? "bg-sky-500/10 border-sky-500/30 text-sky-800 dark:text-sky-300"
                                 : isStable
-                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                                : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+                                : "bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300"
                         }`}>
                             <div className="flex items-center gap-2">
                                 <span className={`h-2 w-2 rounded-full ${isBeta ? "bg-sky-400" : isStable ? "bg-emerald-400" : "bg-amber-400"}`} />
@@ -265,7 +265,7 @@ export function BuildBadge({
                                     <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
                                     Git Branch
                                 </span>
-                                <Badge variant="outline" className="font-mono text-[11px] bg-white/[0.03]">
+                                <Badge variant="outline" className="font-mono text-[11px] bg-muted/50 dark:bg-white/[0.03]">
                                     {telemetry.branch}
                                 </Badge>
                             </div>
@@ -283,10 +283,10 @@ export function BuildBadge({
                                         <button
                                             type="button"
                                             onClick={handleCopySha}
-                                            className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                            className="p-1 rounded hover:bg-accent dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                                             title="Copy full SHA"
                                         >
-                                            {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                            {copied ? <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                                         </button>
                                     )}
                                 </div>
@@ -326,14 +326,14 @@ export function BuildBadge({
                         </div>
 
                         {/* Branch info summary */}
-                        <div className="p-3 rounded-lg bg-white/[0.02] border border-border/30 text-[11px] text-muted-foreground space-y-1">
+                        <div className="p-3 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/30 text-[11px] text-muted-foreground space-y-1">
                             <p className="font-semibold text-foreground flex items-center gap-1.5">
                                 {isBeta ? (
-                                    <FlaskConical className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                    <FlaskConical className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                                 ) : isStable ? (
-                                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                 ) : (
-                                    <Workflow className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                    <Workflow className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                                 )}
                                 <span>
                                     {isBeta ? `Beta Channel (${telemetry.branch} branch)` : isStable ? `Production Channel (${telemetry.branch} branch)` : `Development Channel (${telemetry.branch} branch)`}
@@ -349,7 +349,7 @@ export function BuildBadge({
                         </div>
 
                         {telemetry.workflowUrl && (
-                            <Button asChild size="sm" variant="outline" className="w-full text-xs h-9 border-border/40 hover:bg-white/5 cursor-pointer">
+                            <Button asChild size="sm" variant="outline" className="w-full text-xs h-9 border-border/40 hover:bg-accent dark:hover:bg-white/5 cursor-pointer">
                                 <a href={telemetry.workflowUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5">
                                     <ExternalLink className="h-3.5 w-3.5" /> View GitHub Actions Workflow Runs
                                 </a>
