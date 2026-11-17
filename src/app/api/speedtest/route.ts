@@ -69,6 +69,11 @@ export async function POST(req: NextRequest) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
+        const contentLength = Number(req.headers.get("content-length") || 0);
+        if (contentLength > 64 * 1024 * 1024) {
+            return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+        }
+
         const start = Date.now();
         const blob = await req.blob();
         const durationMs = Date.now() - start;

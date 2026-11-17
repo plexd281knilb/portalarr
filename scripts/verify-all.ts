@@ -167,6 +167,8 @@ async function runTestSuite() {
         if (!matchesCloudflareAdmin("/settings/profile")) throw new Error("/settings/profile must match admin (under /settings*)");
         if (!matchesCloudflareAdmin("/admin/monitoring")) throw new Error("/admin/monitoring must match admin");
         if (!matchesCloudflareAdmin("/admin/scripts")) throw new Error("/admin/scripts must match admin");
+        if (!matchesCloudflareAdmin("/api/admin/scripts/run")) throw new Error("/api/admin/scripts/run must match admin");
+        if (!matchesCloudflareAdmin("/api/curation/badges")) throw new Error("/api/curation/badges must match admin");
         if (!matchesCloudflareAdmin("/admin/streams")) throw new Error("/admin/streams must match admin");
         if (!matchesCloudflareSuperUser("/radarr")) throw new Error("/radarr must match super user");
         if (!matchesCloudflareSuperUser("/sonarr")) throw new Error("/sonarr must match super user");
@@ -887,6 +889,39 @@ async function runTestSuite() {
             if (extendedTrialInfo.status !== "due_today") {
                 throw new Error(`Expected extended trial with old cycleTarget to be due_today, got ${extendedTrialInfo.status}`);
             }
+
+            // Q4 early renewal for Dec 31 active member must advance full extra year (2026 -> 2028, NOT 2027)
+            const q4EarlyRenewal = calculateAlignedExpiryDate({
+                paymentDate: new Date("2026-11-16T12:00:00Z"),
+                totalAmount: 180,
+                yearlyPrice: 180,
+                monthlyPrice: 17.5,
+                existingExpiry: new Date(2026, 11, 31, 23, 59, 59, 999),
+                forceCadence: "YEARLY"
+            });
+            if (q4EarlyRenewal.newExpiryDate.getFullYear() !== 2028) {
+                throw new Error(`Expected Q4 early renewal for Dec 31 2026 member to advance to 2028, got ${q4EarlyRenewal.newExpiryDate.toISOString()}`);
+            }
+
+            // Deterministic fallback externalTxId when parsed email date is absent (no Date.now() duplicates)
+            const { parseVenmoEmail } = await import("../src/lib/payment-email-scraper");
+            const undatedVenmo: any = {
+                from: { text: "Venmo <venmo@venmo.com>" },
+                subject: "Alice paid you $180.00",
+                text: "Alice paid you $180.00"
+            };
+            const p1 = parseVenmoEmail(undatedVenmo, "uid_det_999");
+            const p2 = parseVenmoEmail(undatedVenmo, "uid_det_999");
+            if (!p1 || !p2 || p1.externalTxId !== p2.externalTxId) {
+                throw new Error(`Expected deterministic fallback externalTxId across scans, got ${p1?.externalTxId} vs ${p2?.externalTxId}`);
+            }
+
+            // Referral stats API returns both totalUsers/totalReferred and totalConverted/totalConversions aliases
+            const { getReferralStats } = await import("../src/app/actions");
+            const refStatsRes: any = await getReferralStats();
+            if (!refStatsRes?.success || typeof refStatsRes.stats?.totalReferred !== "number" || typeof refStatsRes.stats?.totalConversions !== "number") {
+                throw new Error(`Expected getReferralStats() to expose totalReferred & totalConversions aliases, got ${JSON.stringify(refStatsRes)}`);
+            }
         } finally {
             process.env.PORTALARR_TEST_AUTH = prevBillingTestAuth;
             await prisma.user.deleteMany({ where: { id: { in: [shortUser.id, subPayUser.id, billingParent.id] } } }).catch(() => {});
@@ -1300,6 +1335,15 @@ async function runTestSuite() {
                 if (persistedLib?.mediaType !== "ebook") {
                     throw new Error(`Expected getLibraries() not to overwrite explicit 'ebook' mediaType, got ${persistedLib?.mediaType}`);
                 }
+
+                // Contained path helper rejects relative parent traversal
+                const { resolveContainedPath } = await import("../src/lib/book-route-auth");
+                if (resolveContainedPath("/tmp/audio_root", "../../etc/passwd") !== null) {
+                    throw new Error("resolveContainedPath must reject ../ path traversal");
+                }
+                if (resolveContainedPath("/tmp/audio_root", "chapter_01.mp3") === null) {
+                    throw new Error("resolveContainedPath must accept contained relative chapter path");
+                }
             } finally {
                 await prisma.library.delete({ where: { id: audioNamedEbookLib.id } }).catch(() => {});
             }
@@ -1407,6 +1451,13 @@ async function runTestSuite() {
             const stillThere = await prisma.mediaCollection.findUnique({ where: { id: collB.id } });
             if (!stillThere) {
                 throw new Error("deleteMediaCollectionAction improperly deleted collection on another server with matching title");
+            }
+
+            // yt-dlp argument injection guard rejects leading hyphen flags
+            const { downloadWithYtDlp } = await import("../src/lib/curation/trailer-downloader");
+            const rejectedFlag = await downloadWithYtDlp("--exec touch /tmp/pwn", "/tmp/noop.mp4");
+            if (rejectedFlag !== false) {
+                throw new Error("downloadWithYtDlp must immediately reject flag-like inputs starting with '-'");
             }
         } finally {
             process.env.PORTALARR_TEST_AUTH = prevCurationAuth;
@@ -2318,6 +2369,9 @@ async function runTestSuite() {
         const { testMediaServerConnection } = await import("../src/lib/media-servers");
 
         // 1. MediaServer Model CRUD and Encryption
+        await prisma.mediaServer.deleteMany({
+            where: { name: { in: ["Test Jellyfin Lab", "Updated Jellyfin Node"] } }
+        }).catch(() => {});
         const testServerApiKey = "test_emby_api_key_secret_12345";
         const testMediaServer = await prisma.mediaServer.create({
             data: {
@@ -2338,6 +2392,7 @@ async function runTestSuite() {
             }
         });
         if (!testMediaServer.id) throw new Error("MediaServer creation failed");
+        try {
 
         // Verify API key decryption
         const decryptedKey = decryptData(testMediaServer.apiKey);
@@ -2384,22 +2439,37 @@ async function runTestSuite() {
         }
 
         // 3. Test User Account Preferences Persistence
-        process.env.PORTALARR_TEST_AUTH = "true";
-        const prefResult = await updateUserAccountPreferencesAction({
-            qualityCap: "1080p_10mbps",
-            audioLanguage: "eng",
-            subtitleMode: "forced",
-            weeklyDigest: true,
-            hideWatchHistory: false
+        const prefUser = await prisma.user.create({
+            data: {
+                username: `test_pref_user_${Date.now()}`,
+                email: `test_pref_${Date.now()}@example.com`,
+                password: "mock_password_hash",
+                role: "ADMIN",
+                status: "APPROVED"
+            }
         });
-        if (!prefResult.success) {
-            throw new Error(`Failed to update account preferences: ${prefResult.error}`);
-        }
+        process.env.PORTALARR_TEST_AUTH = "true";
+        process.env.PORTALARR_TEST_USER_ID = prefUser.id;
+        try {
+            const prefResult = await updateUserAccountPreferencesAction({
+                qualityCap: "1080p_10mbps",
+                audioLanguage: "eng",
+                subtitleMode: "forced",
+                weeklyDigest: true,
+                hideWatchHistory: false
+            });
+            if (!prefResult.success) {
+                throw new Error(`Failed to update account preferences: ${prefResult.error}`);
+            }
 
-        // 4. Test User Server & Library Access Query
-        const userAccess = await getUserMediaServersAndLibrariesAction();
-        if (!userAccess.success) {
-            throw new Error(`Failed to query user media servers: ${userAccess.error}`);
+            // 4. Test User Server & Library Access Query
+            const userAccess = await getUserMediaServersAndLibrariesAction();
+            if (!userAccess.success) {
+                throw new Error(`Failed to query user media servers: ${userAccess.error}`);
+            }
+        } finally {
+            delete process.env.PORTALARR_TEST_USER_ID;
+            await prisma.user.delete({ where: { id: prefUser.id } }).catch(() => {});
         }
 
         // 5. Strict Admin Whitelist Enforcement Test
@@ -2568,6 +2638,8 @@ async function runTestSuite() {
             }
         } finally {
             await prisma.user.delete({ where: { id: memberUser.id } }).catch(() => {});
+        }
+        } finally {
             await prisma.mediaServer.delete({ where: { id: testMediaServer.id } }).catch(() => {});
         }
     });
@@ -2982,7 +3054,7 @@ async function runTestSuite() {
             }
 
             // 8. User-Level Email Preference Second Gate Verification
-            const { sendOrQueueEmail: testSendOrQueueEmail } = await import("../src/app/actions");
+            const { sendOrQueueEmail: testSendOrQueueEmail } = await import("../src/lib/email-dispatcher");
             const testOptOutUser = await prisma.user.create({
                 data: {
                     username: `optout_${testId}`,
@@ -3127,7 +3199,8 @@ async function runTestSuite() {
                 }
 
                 // 6. Fan-out integration check: mapping helper
-                const { getLinkedEmailCategoryForTemplate, sendBroadcastEmailAction } = await import("../src/app/actions");
+                const { getLinkedEmailCategoryForTemplate } = await import("../src/lib/email-dispatcher");
+                const { sendBroadcastEmailAction } = await import("../src/app/actions");
                 if ((await getLinkedEmailCategoryForTemplate("payment_reminder")) !== "receiveSubscriptionReminders") {
                     throw new Error("payment_reminder must map to receiveSubscriptionReminders");
                 }

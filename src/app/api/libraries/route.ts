@@ -9,7 +9,10 @@ export async function GET() {
         const libs = await getLibraries();
         return NextResponse.json({ libraries: libs || [] });
     } catch (e: any) {
-        console.error("GET /api/libraries error:", e);
-        return NextResponse.json({ error: e.message || "Failed to fetch libraries" }, { status: 500 });
+        const msg = e?.message || "Failed to fetch libraries";
+        const lower = msg.toLowerCase();
+        const status = lower.includes("forbidden") ? 403 : lower.includes("unauthorized") ? 401 : 500;
+        if (status === 500) console.error("GET /api/libraries error:", e);
+        return NextResponse.json({ error: msg }, { status });
     }
 }

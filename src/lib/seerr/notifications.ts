@@ -416,7 +416,7 @@ export async function sendSeerrEmailNotification(
                                 appUrl
                             });
 
-                            const { sendOrQueueEmail } = await import("../../app/actions");
+                            const { sendOrQueueEmail } = await import("../email-dispatcher");
                             await sendOrQueueEmail({
                                 to: adminEmails,
                                 subject: isAuto ? `${adminSubjectPrefix} ${subject}` : subject,
@@ -432,7 +432,7 @@ export async function sendSeerrEmailNotification(
                                 status: isAuto ? "Auto-Approved & Queued for Download" : "Pending Administrator Review"
                             });
 
-                            const { sendOrQueueEmail } = await import("../../app/actions");
+                            const { sendOrQueueEmail } = await import("../email-dispatcher");
                             await sendOrQueueEmail({
                                 to: adminEmails,
                                 subject: isAuto ? `${adminSubjectPrefix} ${subject}` : subject,
@@ -497,7 +497,7 @@ export async function sendSeerrEmailNotification(
             requestedBy: requesterUser.username
         });
 
-        const { sendOrQueueEmail } = await import("../../app/actions");
+        const { sendOrQueueEmail } = await import("../email-dispatcher");
         await sendOrQueueEmail({
             to: requesterUser.email,
             subject,

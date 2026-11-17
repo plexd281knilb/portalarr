@@ -110,7 +110,7 @@ function getCurrentBuildIdentifier(): string {
         if (fs.existsSync(gitHeadPath)) {
             const headRef = fs.readFileSync(gitHeadPath, 'utf8').trim();
             if (headRef.startsWith('ref:')) {
-                const refPath = path.join(process.cwd(), '.git', headRef.replace(/^ref:\s*/, ''));
+                const refPath = path.join(/*turbopackIgnore: true*/ process.cwd(), '.git', headRef.replace(/^ref:\s*/, ''));
                 if (fs.existsSync(refPath)) {
                     return `git_${fs.readFileSync(refPath, 'utf8').trim().substring(0, 10)}`;
                 }

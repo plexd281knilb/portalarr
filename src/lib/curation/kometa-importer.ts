@@ -350,9 +350,9 @@ export async function readLocalKometaConfigFile(
 ): Promise<{ success: boolean; content?: string; fileName?: string; error?: string }> {
     const candidatePaths = [
         customPath,
-        path.join(process.cwd(), "kometaconfig.yml"),
-        path.join(process.cwd(), "config.yml"),
-        path.join(process.cwd(), "config", "config.yml"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "kometaconfig.yml"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "config.yml"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "config", "config.yml"),
         "/config/config.yml",
         "/mnt/user/appdata/kometa/config.yml",
         "/mnt/user/appdata/plex-meta-manager/config.yml"

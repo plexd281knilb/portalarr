@@ -8,6 +8,11 @@ import { resolveContainedPath } from "@/lib/book-route-auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const user = await getCurrentUser();
+        if (!user || (user.role !== "ADMIN" && ["PENDING", "REJECTED", "SUSPENDED", "EXPIRED"].includes(String(user.status || "").toUpperCase()))) {
+            return new NextResponse("Unauthorized", { status: 401 });
+        }
+
         const { id } = await params;
         const decodedId = decodeURIComponent(id || "").trim();
         if (!decodedId || decodedId.includes("..") || decodedId.includes("\0")) {
@@ -102,9 +107,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             );
             if (fallbackBuiltin && fallbackBuiltin.svgContent) {
                 try {
-                    const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+                    const badgeVaultDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
                     if (!fs.existsSync(badgeVaultDir)) fs.mkdirSync(badgeVaultDir, { recursive: true });
-                    fs.writeFileSync(path.join(badgeVaultDir, `${badge.id}.svg`), fallbackBuiltin.svgContent, "utf-8");
+                    fs.writeFileSync(path.join(/*turbopackIgnore: true*/ badgeVaultDir, `${badge.id}.svg`), fallbackBuiltin.svgContent, "utf-8");
                 } catch (e) {}
 
                 return new NextResponse(fallbackBuiltin.svgContent, {
@@ -134,8 +139,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
         if (badge) {
             try {
-                if (fs.existsSync(badge.filePath)) {
-                    fs.unlinkSync(badge.filePath);
+                const safeDeletePath = badge.filePath
+                    ? resolveContainedPath(path.join(/*turbopackIgnore: true*/ process.cwd(), "data"), badge.filePath)
+                    : null;
+                if (safeDeletePath && fs.existsSync(safeDeletePath)) {
+                    fs.unlinkSync(safeDeletePath);
                 }
             } catch (err) {}
             await prisma.customBadge.delete({ where: { id } });

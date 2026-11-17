@@ -17,7 +17,7 @@ import {
 } from "@/lib/ai-agent-guardrails";
 import { getPlexServers } from "@/lib/plex";
 import { searchPlexLibraryItems, inspectPlexMediaItemFull, deleteMediaFromPlexServer, type PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
-import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, arrApiDelete } from "@/app/arr-actions";
+import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, arrApiDelete } from "@/lib/arr-client";
 export { validateMediaReleaseCandidate } from "@/lib/ai-agent-guardrails";
 
 /**
@@ -527,7 +527,7 @@ export async function inspectMediaStreams(
 
     // 1.8 Check connected Sonarr instances for exact monitored series title
     try {
-        const { getEnabledArrInstancesInternal, arrApiGet } = await import("@/app/arr-actions");
+        const { getEnabledArrInstancesInternal, arrApiGet } = await import("@/lib/arr-client");
         if (season !== undefined || episode !== undefined) {
             const sonarrApps = await getEnabledArrInstancesInternal("sonarr");
             if (sonarrApps.success && Array.isArray(sonarrApps.data)) {
@@ -848,7 +848,7 @@ export async function inspectMediaStreams(
         logAgentEvent("WARN", `Media item "${searchTitle}" was not found in Plex library.`);
         let sonarrContext = "";
         try {
-            const { getEnabledArrInstancesInternal, arrApiGet } = await import("@/app/arr-actions");
+            const { getEnabledArrInstancesInternal, arrApiGet } = await import("@/lib/arr-client");
             const sonarrApps = await getEnabledArrInstancesInternal("sonarr");
             if (sonarrApps.success && Array.isArray(sonarrApps.data)) {
                 const cleanQ = searchTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -1657,12 +1657,13 @@ export async function redownloadBookWithDiagnostics(
 
     try {
         const { autoDownloadBookRequest } = await import("@/app/actions");
+        const { runAsServerInternal } = await import("@/lib/internal-context");
         const existingReq = await prisma.bookRequest.findFirst({
             where: { title: { contains: title } }
         });
 
         if (existingReq) {
-            await autoDownloadBookRequest(existingReq.id, existingReq.title, existingReq.author || author || "");
+            await runAsServerInternal(() => autoDownloadBookRequest(existingReq.id, existingReq.title, existingReq.author || author || ""));
             recordAgentGrabAction(userIdentifier, "BOOK_REPLACE", title, maxGrabs);
             return { success: true };
         } else {
@@ -1675,7 +1676,7 @@ export async function redownloadBookWithDiagnostics(
                     status: "Searching"
                 }
             });
-            await autoDownloadBookRequest(newReq.id, title, author || "");
+            await runAsServerInternal(() => autoDownloadBookRequest(newReq.id, title, author || ""));
             recordAgentGrabAction(userIdentifier, "BOOK_REPLACE", title, maxGrabs);
             return { success: true };
         }
@@ -1751,7 +1752,7 @@ ${params.recommendation}
                     appUrl
                 });
 
-                const { sendOrQueueEmail } = await import("@/app/actions");
+                const { sendOrQueueEmail } = await import("@/lib/email-dispatcher");
                 const { resolveAdminNotificationEmails } = await import("@/lib/email-templates");
                 const adminRecipients = await resolveAdminNotificationEmails(settings);
                 if (adminRecipients.length > 0) {

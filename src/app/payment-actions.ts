@@ -23,6 +23,17 @@ import {
 } from "@/lib/payment-email-scraper";
 import { evaluatePaymentThreshold } from "@/lib/payment-threshold-engine";
 
+async function isDirectExternalServerActionCall(): Promise<boolean> {
+    if (process.env.NODE_ENV !== "production" && (process.env.PORTALARR_TEST === "true" || process.env.PORTALARR_TEST_AUTH === "true")) return false;
+    try {
+        const { headers } = await import("next/headers");
+        const h = await headers();
+        return Boolean(h.get("next-action"));
+    } catch {
+        return false;
+    }
+}
+
 async function verifyAdmin() {
     if (process.env.NODE_ENV !== "production" && process.env.PORTALARR_TEST_AUTH === "true") {
         if (process.env.PORTALARR_TEST_USER_ID) {
@@ -523,7 +534,8 @@ export async function recheckUserAccessAndPaymentAction() {
         // 1. Run email scraper in background to pick up any recent payments
         let scanResult: any = null;
         try {
-            scanResult = await scanPaymentEmailsInternal();
+            const { runAsServerInternal } = await import("@/lib/internal-context");
+            scanResult = await runAsServerInternal(() => scanPaymentEmailsInternal());
         } catch (scanErr: any) {
             console.warn("[RECHECK-ACCESS] Payment scan warning:", scanErr.message);
         }
@@ -659,7 +671,7 @@ export async function purgeUnmatchedPaymentTransactionsAction() {
 /**
  * Helper to recalculate a user's subscription and Plex access based on their currently matched payments.
  */
-export async function recalculateUserSubscriptionFromPayments(userId: string) {
+async function recalculateUserSubscriptionFromPayments(userId: string) {
     if (!userId) return;
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -1351,6 +1363,9 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
     remindersSent: number;
     details: Array<{ username: string; plan: string; milestone: string; daysRemaining: number }>;
 }> {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
     if (!settings || !settings.emailNotificationsEnabled || settings.notifySubscriptionRenewal === false) {
         return { success: true, scannedUsers: 0, remindersSent: 0, details: [] };
@@ -1362,7 +1377,7 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
     const { getAppUrl } = await import("@/lib/app-url");
     const appUrl = await getAppUrl();
     const { renderEmailTemplate } = await import("@/lib/email-templates");
-    const { sendOrQueueEmail } = await import("@/app/actions");
+    const { sendOrQueueEmail } = await import("@/lib/email-dispatcher");
     const { calculateUserRenewalSummary } = await import("@/lib/referral-rewards");
     const { 
         parseReminderDays, 

@@ -109,10 +109,13 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
     startDate: new Date(),
     trialDays: 0,
     yearlyPrice,
-    monthlyPrice
+    monthlyPrice,
+    renewalMonth: paymentConfig?.renewalMonth ?? 1,
+    renewalDay: paymentConfig?.renewalDay ?? 1
   });
-  const yearlyAmountDue = prorated?.amountDueNow ?? yearlyPrice;
-  const monthlyAmountDue = prorated?.monthlyAmountDueNow ?? monthlyPrice;
+  const accountCredit = Math.max(0, Number((user as any)?.accountCredit || 0));
+  const yearlyAmountDue = Math.max(0, Math.round(((prorated?.amountDueNow ?? yearlyPrice) - accountCredit) * 100) / 100);
+  const monthlyAmountDue = Math.max(0, Math.round(((prorated?.monthlyAmountDueNow ?? monthlyPrice) - accountCredit) * 100) / 100);
   const effectiveAmount = selectedCadence === "yearly" ? yearlyAmountDue : monthlyAmountDue;
 
   return (

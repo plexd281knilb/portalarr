@@ -75,7 +75,7 @@ async function verifySessionUser(): Promise<any> {
         }
         const testUser = await prisma.user.findFirst({
             where: { role: "ADMIN" }
-        }) || await prisma.user.findFirst();
+        });
         if (testUser) return testUser;
         return {
             id: "test-admin-id",
@@ -1113,7 +1113,8 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
                 adminPlexToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
             }
             if (adminPlexToken) {
-                syncUserPlexShareInternal(adminPlexToken, user, plexTargetKeys).catch(e => 
+                const { runAsServerInternal } = await import("@/lib/internal-context");
+                runAsServerInternal(() => syncUserPlexShareInternal(adminPlexToken, user, plexTargetKeys)).catch(e => 
                     console.warn("[PLEX-SYNC-BG-ERROR]:", e?.message || e)
                 );
             }

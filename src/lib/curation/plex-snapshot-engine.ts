@@ -660,7 +660,7 @@ export async function evaluatePruneCandidatesFromSnapshotsUnified(
         const unionQueries = serverSources.map(src => `
             SELECT 
                 mi.id AS rating_key,
-                '${src.serverId}' AS server_id,
+                '${String(src.serverId).replace(/'/g, "''")}' AS server_id,
                 '${src.serverName.replace(/'/g, "''")}' AS server_name,
                 mi.metadata_type,
                 mi.title,
@@ -746,7 +746,7 @@ export async function evaluatePruneCandidatesFromSnapshotsUnified(
                     gga.server_names
                 FROM RawMedia rm
                 JOIN GlobalGuidActivity gga ON gga.unit_guid = rm.unit_guid
-                WHERE rm.server_id = '${primaryServer.serverId}'
+                WHERE rm.server_id = '${String(primaryServer.serverId).replace(/'/g, "''")}'
                 GROUP BY rm.unit_guid
             )
             SELECT * FROM AggregatedUnits

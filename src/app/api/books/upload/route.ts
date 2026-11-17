@@ -24,6 +24,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const dbUser = await prisma.user.findUnique({
+        where: { id: String(payload.userId || payload.id || "") },
+        select: { role: true }
+    });
+    if (dbUser?.role !== "ADMIN") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     try {
         const formData = await req.formData();
         const file = formData.get("file") as File | null;
@@ -35,12 +43,22 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
+        if (file.size > 500 * 1024 * 1024) {
+            return NextResponse.json({ error: "File exceeds maximum allowed size (500MB)" }, { status: 400 });
+        }
+
+        const allowedExtensions = new Set([".epub", ".pdf", ".mobi", ".azw3", ".cbz", ".cbr", ".m4b", ".mp3"]);
+        const fileExtension = (path.extname(file.name) || ".pdf").toLowerCase();
+        if (!allowedExtensions.has(fileExtension)) {
+            return NextResponse.json({ error: `Unsupported file extension: ${fileExtension}` }, { status: 400 });
+        }
+
         const library = await prisma.library.findUnique({ where: { id: libraryId } });
         if (!library) {
             return NextResponse.json({ error: "Library not found" }, { status: 404 });
         }
 
-              let dirPath = library.path;
+        let dirPath = library.path;
         if (!dirPath || !fs.existsSync(dirPath)) {
             dirPath = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "books");
             if (!fs.existsSync(dirPath)) {
@@ -48,10 +66,9 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const fileExtension = path.extname(file.name) || ".pdf";
         const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
         const fileName = `${libraryId}_${sanitizedTitle}_${Date.now()}${fileExtension}`;
-        const filePath = path.join(dirPath, fileName);
+        const filePath = path.join(/*turbopackIgnore: true*/ dirPath, fileName);
 
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);

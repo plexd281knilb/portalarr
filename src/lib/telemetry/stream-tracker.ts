@@ -1007,7 +1007,7 @@ export function analyzeUserAccountSharing(userSessions: any[]): {
 
                         detectedOverlaps.push({
                             timestamp: new Date(Math.max(start1, start2)),
-                            durationMinutes: Math.round(Math.min(dur1, dur2) / 60000),
+                            durationMinutes: Math.max(1, Math.round((Math.min(end1, end2) - Math.max(start1, start2)) / 60000)),
                             isDualTv,
                             session1: {
                                 title: s1.grandparentTitle ? `${s1.grandparentTitle} - ${s1.title}` : s1.title,
@@ -1136,11 +1136,11 @@ export async function recordActivePlexSessions(
         const defaultMaxStreams = settings?.maxConcurrentStreamsPerUser || 3;
         const detectSharing = settings?.detectPasswordSharing ?? true;
 
-        const dbUsersWithLimits = await prisma.user.findMany({
-            select: { username: true, plexUsername: true, email: true, maxConcurrentStreams: true }
+        const allUsers = await prisma.user.findMany({
+            select: { id: true, username: true, plexUsername: true, email: true, maxConcurrentStreams: true, sharingAlertCount: true, lastSharingAlertAt: true }
         }).catch(() => []);
         const perUserLimitsMap = new Map<string, number>();
-        for (const u of dbUsersWithLimits) {
+        for (const u of allUsers) {
             if (typeof u.maxConcurrentStreams === "number" && u.maxConcurrentStreams > 0) {
                 if (u.username) perUserLimitsMap.set(u.username.toLowerCase().trim(), u.maxConcurrentStreams);
                 if (u.plexUsername) perUserLimitsMap.set(u.plexUsername.toLowerCase().trim(), u.maxConcurrentStreams);
@@ -1200,27 +1200,25 @@ export async function recordActivePlexSessions(
             // Resolve Portalarr user account if exists
             let userId: string | null = null;
             try {
-                const matchedUser = await prisma.user.findFirst({
-                    where: {
-                        OR: [
-                            { username: { equals: rawUser } },
-                            { plexUsername: { equals: rawUser } },
-                            { email: { equals: s.email || "" } }
-                        ]
-                    },
-                    select: { id: true, sharingAlertCount: true, lastSharingAlertAt: true }
-                });
+                const rawEmailLower = (s.email || "").toLowerCase().trim();
+                const matchedUser = allUsers.find(u =>
+                    (u.username && u.username.toLowerCase().trim() === userKey) ||
+                    (u.plexUsername && u.plexUsername.toLowerCase().trim() === userKey) ||
+                    (rawEmailLower && u.email && u.email.toLowerCase().trim() === rawEmailLower)
+                );
                 if (matchedUser) {
                     userId = matchedUser.id;
                     if (isSharingAlert) {
                         const lastAlertMs = matchedUser.lastSharingAlertAt ? new Date(matchedUser.lastSharingAlertAt).getTime() : 0;
                         const shouldCountNewIncident = !lastAlertMs || (Date.now() - lastAlertMs) >= 5 * 60 * 1000;
                         if (shouldCountNewIncident) {
+                            const nowAlert = new Date();
+                            matchedUser.lastSharingAlertAt = nowAlert;
                             await prisma.user.update({
                                 where: { id: matchedUser.id },
                                 data: {
                                     sharingAlertCount: { increment: 1 },
-                                    lastSharingAlertAt: new Date()
+                                    lastSharingAlertAt: nowAlert
                                 }
                             }).catch(() => {});
                         }

@@ -35,6 +35,35 @@ interface AuthSession {
 }
 
 async function verifyAuth(): Promise<AuthSession> {
+    if (process.env.NODE_ENV !== "production" && process.env.PORTALARR_TEST_AUTH === "true") {
+        if (process.env.PORTALARR_TEST_USER_ID) {
+            const specificUser = await prisma.user.findUnique({
+                where: { id: process.env.PORTALARR_TEST_USER_ID },
+                select: { id: true, username: true, role: true, status: true, email: true }
+            });
+            if (specificUser) {
+                const role = String(specificUser.role || "USER").toUpperCase();
+                const status = String(specificUser.status || "APPROVED").toUpperCase();
+                if (role !== "ADMIN" && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED" || status === "TRIAL")) {
+                    throw new Error("Unauthorized: Book library access is not available for trial or inactive accounts.");
+                }
+                return {
+                    userId: specificUser.id,
+                    username: specificUser.username,
+                    role: specificUser.role,
+                    status: specificUser.status,
+                    email: specificUser.email ? String(specificUser.email) : undefined
+                };
+            }
+        }
+        return {
+            userId: "test-admin-id",
+            username: "admin",
+            role: "ADMIN",
+            status: "APPROVED",
+            email: "admin@example.com"
+        };
+    }
     const session = await getSession();
     if (!session || !session.username) {
         throw new Error("Unauthorized. Please log in.");
@@ -52,8 +81,8 @@ async function verifyAuth(): Promise<AuthSession> {
     }
     const role = String(dbUser.role || "USER").toUpperCase();
     const status = String(dbUser.status || "APPROVED").toUpperCase();
-    if (role !== "ADMIN" && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED")) {
-        throw new Error("Unauthorized: Account is inactive or pending approval.");
+    if (role !== "ADMIN" && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED" || status === "TRIAL")) {
+        throw new Error("Unauthorized: Book library access is not available for trial or inactive accounts.");
     }
     return {
         userId: dbUser.id,
@@ -62,6 +91,14 @@ async function verifyAuth(): Promise<AuthSession> {
         status: dbUser.status,
         email: dbUser.email ? String(dbUser.email) : undefined
     };
+}
+
+async function verifyAdmin(): Promise<AuthSession> {
+    const session = await verifyAuth();
+    if (String(session.role || "").toUpperCase() !== "ADMIN") {
+        throw new Error("Unauthorized. Admin privileges required.");
+    }
+    return session;
 }
 
 interface CacheEntry<T> {
@@ -484,7 +521,8 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
                 }).catch(() => {});
             }
 
-            autoDownloadBookRequest(bookRequest.id, title, author).catch(err => {
+            const { runAsServerInternal } = await import("@/lib/internal-context");
+            runAsServerInternal(() => autoDownloadBookRequest(bookRequest.id, title, author)).catch(err => {
                 console.error(`[BOOK-REQUEST] Auto-download failed for ${bookRequest.id}:`, err.message);
             });
         }
@@ -574,7 +612,7 @@ export async function getAccessibleBookLibrariesAction(mediaType?: MediaType) {
  */
 export async function toggleMonitorAuthorAction(authorId: string, monitored: boolean) {
     try {
-        await verifyAuth();
+        await verifyAdmin();
         await prisma.author.update({
             where: { id: authorId },
             data: { monitored }
@@ -590,7 +628,7 @@ export async function toggleMonitorAuthorAction(authorId: string, monitored: boo
  */
 export async function toggleMonitorBookSeriesAction(seriesId: string, monitored: boolean) {
     try {
-        await verifyAuth();
+        await verifyAdmin();
         await prisma.bookSeries.update({
             where: { id: seriesId },
             data: { monitored }
@@ -648,7 +686,7 @@ export async function previewBookMatchSuggestionsAction(bookId: string): Promise
     suggestions: BookMatchSuggestion[];
 }> {
     try {
-        await verifyAuth();
+        await verifyAdmin();
         const book = await prisma.book.findUnique({
             where: { id: bookId },
             include: { library: true }
@@ -830,7 +868,7 @@ export async function matchAndLinkBookAction(
     }
 ) {
     try {
-        const session = await verifyAuth();
+        const session = await verifyAdmin();
         const book = await prisma.book.findUnique({
             where: { id: bookId },
             include: { library: true }

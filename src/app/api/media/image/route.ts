@@ -41,9 +41,24 @@ function isSafeExternalImageUrl(rawUrl: string): boolean {
     try {
         const parsed = new URL(rawUrl);
         if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-        const host = parsed.hostname.toLowerCase();
-        // Block cloud instance metadata / link-local endpoints
-        if (host === "metadata.google.internal" || host.startsWith("169.254.") || host.startsWith("fe80:")) {
+        const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+        // Block cloud instance metadata, loopback, link-local, and private network endpoints
+        if (
+            host === "metadata.google.internal" ||
+            host === "localhost" ||
+            host === "0.0.0.0" ||
+            host === "::1" ||
+            host.endsWith(".local") ||
+            host.endsWith(".internal") ||
+            host.startsWith("127.") ||
+            host.startsWith("10.") ||
+            host.startsWith("192.168.") ||
+            host.startsWith("169.254.") ||
+            /^172\.(1[6-9]|2\d|3[0-1])\./.test(host) ||
+            host.startsWith("fe80:") ||
+            host.startsWith("fc00:") ||
+            host.startsWith("fd00:")
+        ) {
             return false;
         }
         return true;
@@ -52,8 +67,33 @@ function isSafeExternalImageUrl(rawUrl: string): boolean {
     }
 }
 
-async function tryFetchImage(url: string, headers: Record<string, string> = {}, timeoutMs = 3500): Promise<NextResponse | null> {
-    if (!isSafeExternalImageUrl(url)) return null;
+function normalizeServerHostPort(rawUrl: string): string | null {
+    try {
+        const trimmed = rawUrl.trim();
+        if (!trimmed) return null;
+        const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+        const parsed = new URL(withProto);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+        const defaultPort = parsed.protocol === "https:" ? "443" : "80";
+        const port = parsed.port || defaultPort;
+        return `${parsed.hostname.toLowerCase()}:${port}`;
+    } catch {
+        return null;
+    }
+}
+
+async function tryFetchImage(url: string, headers: Record<string, string> = {}, timeoutMs = 3500, allowConfiguredInternal = false): Promise<NextResponse | null> {
+    if (!allowConfiguredInternal && !isSafeExternalImageUrl(url)) return null;
+    if (allowConfiguredInternal) {
+        try {
+            const parsed = new URL(url);
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+            const host = parsed.hostname.toLowerCase();
+            if (host === "metadata.google.internal" || host.startsWith("169.254.")) return null;
+        } catch {
+            return null;
+        }
+    }
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -86,10 +126,25 @@ export async function GET(req: NextRequest) {
         const session = req.cookies.get("session")?.value;
         if (!session) return new NextResponse("Unauthorized", { status: 401 });
         
+        let payload: any;
         try {
-            await jwtVerify(session, getJwtSecret());
+            const decoded = await jwtVerify(session, getJwtSecret());
+            payload = decoded.payload;
         } catch (e) {
             return new NextResponse("Unauthorized", { status: 401 });
+        }
+
+        const userId = String(payload?.userId || payload?.id || "");
+        if (!userId) return new NextResponse("Unauthorized", { status: 401 });
+        const dbUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, role: true, status: true }
+        });
+        if (!dbUser) return new NextResponse("Unauthorized", { status: 401 });
+        const role = String(dbUser.role || "").toUpperCase();
+        const status = String(dbUser.status || "").toUpperCase();
+        if (role !== "ADMIN" && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED")) {
+            return new NextResponse("Forbidden", { status: 403 });
         }
 
         const searchParams = req.nextUrl.searchParams;
@@ -156,31 +211,44 @@ export async function GET(req: NextRequest) {
             if (apiKey) {
                 // Tautulli API v2 cmd=pms_image_proxy with dimensions
                 const apiV2Url = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(cleanImg)}&width=300&height=450&fallback=poster`;
-                const v2Res = await tryFetchImage(apiV2Url, {}, 3500);
+                const v2Res = await tryFetchImage(apiV2Url, {}, 3500, true);
                 if (v2Res) return v2Res;
 
                 // Tautulli API v2 raw
                 const apiV2UrlRaw = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(cleanImg)}`;
-                const v2RawRes = await tryFetchImage(apiV2UrlRaw, {}, 3000);
+                const v2RawRes = await tryFetchImage(apiV2UrlRaw, {}, 3000, true);
                 if (v2RawRes) return v2RawRes;
 
                 // Stripped timestamp variation
                 const strippedThumb = cleanImg.replace(/\/thumb\/[0-9]+$/, "/thumb");
                 if (strippedThumb !== cleanImg) {
                     const fallbackTautulli = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(strippedThumb)}&width=300&height=450&fallback=poster`;
-                    const fbRes = await tryFetchImage(fallbackTautulli, {}, 2500);
+                    const fbRes = await tryFetchImage(fallbackTautulli, {}, 2500, true);
                     if (fbRes) return fbRes;
                 }
 
                 // Web UI proxy endpoint
                 const targetUrl = `${cleanBase}/pms_image_proxy?img=${encodeURIComponent(cleanImg)}&apikey=${encodeURIComponent(apiKey)}`;
-                const tautulliRes = await tryFetchImage(targetUrl, {}, 2000);
+                const tautulliRes = await tryFetchImage(targetUrl, {}, 2000, true);
                 if (tautulliRes) return tautulliRes;
             }
         }
 
         const settings = (await prisma.settings.findFirst()) || (await prisma.settings.findUnique({ where: { id: "global" } }));
         const adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        const configuredPlexServers = await prisma.plexServer.findMany({ select: { url: true } }).catch(() => []);
+        const trustedHostPorts = new Set(
+            [settings?.mainPlexUrl || "", ...configuredPlexServers.map((s) => s.url || "")]
+                .map((u) => normalizeServerHostPort(u))
+                .filter((v): v is string => Boolean(v))
+        );
+
+        if (serverUrl && !tokenParam) {
+            const requestedHostPort = normalizeServerHostPort(serverUrl);
+            if (!requestedHostPort || !trustedHostPorts.has(requestedHostPort)) {
+                return new NextResponse("Forbidden: Untrusted Plex server URL", { status: 403 });
+            }
+        }
 
         // 3. Direct Plex Media Server image resolution using lookupServerId, serverName or serverUrl
         if (cleanImg && (lookupServerId || serverUrl || serverName || adminToken)) {
@@ -231,16 +299,18 @@ export async function GET(req: NextRequest) {
             if (cleanImg.includes("/thumb/")) imgCandidates.push(cleanImg.replace("/thumb/", "/art/").replace(/\/art\/[0-9]+$/, "/art"));
 
             for (const serverBase of Array.from(new Set(candidateUrls))) {
+                const baseHostPort = normalizeServerHostPort(serverBase);
+                const isTrustedBase = Boolean(baseHostPort && trustedHostPorts.has(baseHostPort)) || (!serverUrl && Boolean(lookupServerId || serverName));
                 for (const targetPath of imgCandidates) {
                     // Method A: Direct PMS image URL
                     const sep = targetPath.includes("?") ? "&" : "?";
                     const directUrl = `${serverBase}${targetPath}${sep}X-Plex-Token=${encodeURIComponent(candidateToken)}`;
-                    const directRes = await tryFetchImage(directUrl, {}, 2500);
+                    const directRes = await tryFetchImage(directUrl, {}, 2500, isTrustedBase);
                     if (directRes) return directRes;
 
                     // Method B: Transcoded PMS thumbnail (2:3 portrait poster ratio)
                     const photoUrl = `${serverBase}/photo/:/transcode?url=${encodeURIComponent(targetPath)}&width=600&height=900&minSize=1&upscale=1&X-Plex-Token=${encodeURIComponent(candidateToken)}`;
-                    const photoRes = await tryFetchImage(photoUrl, {}, 2500);
+                    const photoRes = await tryFetchImage(photoUrl, {}, 2500, isTrustedBase);
                     if (photoRes) return photoRes;
                 }
             }
@@ -260,11 +330,11 @@ export async function GET(req: NextRequest) {
             const apiKey = decryptData(fallbackInstance.apiKey);
             if (apiKey) {
                 const apiV2Url = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(cleanImg)}&width=300&height=450&fallback=poster`;
-                const v2Res = await tryFetchImage(apiV2Url, {}, 3500);
+                const v2Res = await tryFetchImage(apiV2Url, {}, 3500, true);
                 if (v2Res) return v2Res;
 
                 const targetUrl = `${cleanBase}/pms_image_proxy?img=${encodeURIComponent(cleanImg)}&apikey=${encodeURIComponent(apiKey)}`;
-                const tautulliRes = await tryFetchImage(targetUrl, {}, 2000);
+                const tautulliRes = await tryFetchImage(targetUrl, {}, 2000, true);
                 if (tautulliRes) return tautulliRes;
             }
         }
@@ -279,11 +349,11 @@ export async function GET(req: NextRequest) {
                         const cleanBase = conn.uri.replace(/\/+$/, "");
                         const sep = cleanImg.includes("?") ? "&" : "?";
                         const directUrl = `${cleanBase}${cleanImg}${sep}X-Plex-Token=${encodeURIComponent(sToken)}`;
-                        const dRes = await tryFetchImage(directUrl, {}, 2000);
+                        const dRes = await tryFetchImage(directUrl, {}, 2000, true);
                         if (dRes) return dRes;
 
                         const photoUrl = `${cleanBase}/photo/:/transcode?url=${encodeURIComponent(cleanImg)}&width=600&height=900&minSize=1&upscale=1&X-Plex-Token=${encodeURIComponent(sToken)}`;
-                        const pRes = await tryFetchImage(photoUrl, {}, 2000);
+                        const pRes = await tryFetchImage(photoUrl, {}, 2000, true);
                         if (pRes) return pRes;
                     }
                 }

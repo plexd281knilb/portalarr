@@ -3,7 +3,7 @@ import path from "path";
 import { UserScript, ScriptRunRecord, ScriptStatus } from "./types";
 
 const getScriptsDir = (): string => {
-    const scriptsDir = path.join(process.cwd(), "data", "scripts");
+    const scriptsDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "scripts");
     if (!fs.existsSync(scriptsDir)) {
         try {
             fs.mkdirSync(scriptsDir, { recursive: true });
@@ -13,7 +13,7 @@ const getScriptsDir = (): string => {
 };
 
 const getLogsDir = (): string => {
-    const logsDir = path.join(getScriptsDir(), "logs");
+    const logsDir = path.join(/*turbopackIgnore: true*/ getScriptsDir(), "logs");
     if (!fs.existsSync(logsDir)) {
         try {
             fs.mkdirSync(logsDir, { recursive: true });
@@ -23,11 +23,11 @@ const getLogsDir = (): string => {
 };
 
 const getMetaFilePath = (): string => {
-    return path.join(getScriptsDir(), "scripts-meta.json");
+    return path.join(/*turbopackIgnore: true*/ getScriptsDir(), "scripts-meta.json");
 };
 
 const getRunsFilePath = (): string => {
-    return path.join(getScriptsDir(), "runs-history.json");
+    return path.join(/*turbopackIgnore: true*/ getScriptsDir(), "runs-history.json");
 };
 
 export const DEFAULT_SCRIPTS: UserScript[] = [
@@ -342,7 +342,7 @@ export function ensureScriptsInitialized(): void {
 
     let modified = false;
     for (const def of DEFAULT_SCRIPTS) {
-        const filePath = path.join(scriptsDir, def.filename);
+        const filePath = path.join(/*turbopackIgnore: true*/ scriptsDir, def.filename);
         if (!fs.existsSync(filePath)) {
             try {
                 fs.writeFileSync(filePath, def.content.replace(/\r\n/g, "\n"), "utf-8");
@@ -388,7 +388,7 @@ export function getAllScripts(): UserScript[] {
     const result: UserScript[] = [];
     for (const [id, meta] of Object.entries(metaMap)) {
         const filename = meta.filename || `${id}.sh`;
-        const filePath = path.join(scriptsDir, filename);
+        const filePath = path.join(/*turbopackIgnore: true*/ scriptsDir, filename);
         let content = "";
         if (fs.existsSync(filePath)) {
             try {
@@ -442,12 +442,12 @@ export function saveScript(scriptData: Partial<UserScript> & { name: string }): 
         throw new Error("Invalid script ID.");
     }
 
-    const baseScriptsDir = path.resolve(scriptsDir);
+    const baseScriptsDir = path.resolve(/*turbopackIgnore: true*/ scriptsDir);
     const safeFilename = path.basename((scriptData.filename || `${id}.sh`).trim());
     if (!safeFilename || safeFilename === "." || safeFilename === ".." || safeFilename.includes("..")) {
         throw new Error("Invalid script filename.");
     }
-    const filePath = path.resolve(baseScriptsDir, safeFilename);
+    const filePath = path.resolve(/*turbopackIgnore: true*/ baseScriptsDir, safeFilename);
     if (!filePath.startsWith(baseScriptsDir + path.sep)) {
         throw new Error("Script path escapes managed scripts directory.");
     }
@@ -506,8 +506,8 @@ export function deleteScript(id: string): boolean {
     if (!target) return false;
 
     if (target.filename) {
-        const baseScriptsDir = path.resolve(scriptsDir);
-        const filePath = path.resolve(baseScriptsDir, path.basename(target.filename));
+        const baseScriptsDir = path.resolve(/*turbopackIgnore: true*/ scriptsDir);
+        const filePath = path.resolve(/*turbopackIgnore: true*/ baseScriptsDir, path.basename(target.filename));
         if (filePath.startsWith(baseScriptsDir + path.sep) && fs.existsSync(filePath)) {
             try {
                 fs.unlinkSync(filePath);
@@ -570,8 +570,8 @@ export function recordScriptRunFinish(
 
     const safeScriptId = path.basename(scriptId).replace(/[^a-zA-Z0-9_-]/g, "");
     const safeRunId = path.basename(runId).replace(/[^a-zA-Z0-9_-]/g, "");
-    const baseLogsDir = path.resolve(getLogsDir());
-    const logFile = path.resolve(baseLogsDir, `${safeScriptId}_${safeRunId}.log`);
+    const baseLogsDir = path.resolve(/*turbopackIgnore: true*/ getLogsDir());
+    const logFile = path.resolve(/*turbopackIgnore: true*/ baseLogsDir, `${safeScriptId}_${safeRunId}.log`);
     if (logFile.startsWith(baseLogsDir + path.sep)) {
         try {
             fs.writeFileSync(logFile, fullLogs.join("\n"), "utf-8");

@@ -506,14 +506,15 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
         }
     };
 
-    const handleBulkApprove = async () => {
-        if (selectedApprovalIds.length === 0) return;
+    const handleBulkApprove = async (overrideIds?: string[]) => {
+        const targetIds = Array.isArray(overrideIds) ? overrideIds : selectedApprovalIds;
+        if (targetIds.length === 0) return;
         setLoadingApprovals(true);
         try {
-            const res = await bulkApproveAdminApprovalsAction(selectedApprovalIds);
+            const res = await bulkApproveAdminApprovalsAction(targetIds);
             if (res.success) {
                 setApprovalSuccessMsg(res.message || "Selected items approved.");
-                setSelectedApprovalIds([]);
+                setSelectedApprovalIds(prev => prev.filter(id => !targetIds.includes(id)));
                 loadApprovals();
                 loadUsers();
             } else {
@@ -526,14 +527,15 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
         }
     };
 
-    const handleBulkReject = async () => {
-        if (selectedApprovalIds.length === 0) return;
+    const handleBulkReject = async (overrideIds?: string[]) => {
+        const targetIds = Array.isArray(overrideIds) ? overrideIds : selectedApprovalIds;
+        if (targetIds.length === 0) return;
         setLoadingApprovals(true);
         try {
-            const res = await bulkRejectAdminApprovalsAction(selectedApprovalIds);
+            const res = await bulkRejectAdminApprovalsAction(targetIds);
             if (res.success) {
                 setApprovalSuccessMsg(res.message || "Selected items rejected.");
-                setSelectedApprovalIds([]);
+                setSelectedApprovalIds(prev => prev.filter(id => !targetIds.includes(id)));
                 loadApprovals();
             } else {
                 setApprovalErrMsg(res.error || "Bulk rejection failed.");
@@ -4998,7 +5000,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => {
                                         const pendingIds = approvals.filter(a => a.status === "PENDING").map(a => a.id);
                                         setSelectedApprovalIds(pendingIds);
-                                        handleBulkApprove();
+                                        handleBulkApprove(pendingIds);
                                     }}
                                     className="h-7 px-2.5 text-[11px] font-semibold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
                                 >
@@ -5013,7 +5015,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => {
                                         const pendingIds = approvals.filter(a => a.status === "PENDING").map(a => a.id);
                                         setSelectedApprovalIds(pendingIds);
-                                        handleBulkReject();
+                                        handleBulkReject(pendingIds);
                                     }}
                                     className="h-7 px-2.5 text-[11px] font-semibold border-rose-500/40 text-rose-400 hover:bg-rose-500/10 gap-1.5"
                                 >

@@ -1308,7 +1308,9 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
               startDate: user?.createdAt || new Date(),
               trialEndDate: user?.trialEndsAt || null,
               yearlyPrice: effectiveYearlyPrice,
-              monthlyPrice: effectiveMonthlyPrice
+              monthlyPrice: effectiveMonthlyPrice,
+              renewalMonth: paymentConfig?.renewalMonth ?? 1,
+              renewalDay: paymentConfig?.renewalDay ?? 1
           })
         : paymentConfig?.proratedBilling;
     const userCreditBalance = Math.max(0, Number(user?.accountCredit || 0));
@@ -1549,13 +1551,17 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 <CreditCard className="h-5 w-5 text-emerald-400" /> Subscription & Prorated Billing
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Transparent annual billing renewing on January 1st with prorated first-year rates.
+                                {user?.subscriptionCadence === "MONTHLY"
+                                    ? `Flexible monthly billing at $${effectiveMonthlyPrice}/month with optional annual renewal.`
+                                    : "Transparent annual billing renewing on January 1st with prorated first-year rates."}
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
                             <FeatureGuideModal guideId="referral-rewards" triggerText="Referral & Billing Guide" />
                             <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold w-fit">
-                                ${effectiveYearlyPrice} / year
+                                {user?.subscriptionCadence === "MONTHLY"
+                                    ? `$${effectiveMonthlyPrice} / month`
+                                    : `$${effectiveYearlyPrice} / year`}
                             </Badge>
                         </div>
                     </div>
@@ -1586,10 +1592,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     </p>
                                 </div>
                                 <div className="p-2.5 rounded-lg bg-black/40 border border-purple-500/20 space-y-1">
-                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Discounted Plan (${effectiveYearlyPrice.toFixed(2)}/yr)</span>
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Discounted Plan (${(referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice).toFixed(2)}/yr)</span>
                                     <p className="font-semibold text-foreground text-xs">
-                                        {(effectiveYearlyPrice - user.accountCredit) > 0 
-                                            ? <>Send <strong className="text-purple-400">${(effectiveYearlyPrice - user.accountCredit).toFixed(2)}</strong> more for 1 full year (${(effectiveYearlyPrice / 12).toFixed(0)}/mo)</>
+                                        {((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) - user.accountCredit) > 0 
+                                            ? <>Send <strong className="text-purple-400">${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) - user.accountCredit).toFixed(2)}</strong> more for 1 full year (${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) / 12).toFixed(0)}/mo)</>
                                             : <span className="text-emerald-400 font-bold">Credit covers yearly rate!</span>
                                         }
                                     </p>

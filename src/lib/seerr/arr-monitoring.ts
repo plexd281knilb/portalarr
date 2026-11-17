@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
-import { arrApiGet, getEnabledArrInstancesInternal } from "@/app/arr-actions";
+import { arrApiGet, getEnabledArrInstancesInternal } from "@/lib/arr-client";
 import { logger } from "@/lib/logger";
 
 export interface ArrEpisodeMonitoring {
