@@ -14,9 +14,9 @@ export function resolveContainedPath(
     allowBaseSelf: boolean = false
 ): string | null {
     if (!relativeInput || relativeInput.includes("\0")) return null;
-    const resolvedBase = path.resolve(baseDir);
+    const resolvedBase = path.resolve(/*turbopackIgnore: true*/ baseDir);
     const cleanRel = relativeInput.replace(/^[/\\]+/, "");
-    const resolvedTarget = path.resolve(resolvedBase, cleanRel);
+    const resolvedTarget = path.resolve(/*turbopackIgnore: true*/ resolvedBase, cleanRel);
 
     if (resolvedTarget === resolvedBase) {
         return allowBaseSelf ? resolvedTarget : null;

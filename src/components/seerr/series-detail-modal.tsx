@@ -338,6 +338,11 @@ export function SeriesDetailModal({
                                                 <Download className="h-3 w-3" />
                                                 <span>Downloading</span>
                                             </Badge>
+                                        ) : (vol.status === "SEARCHING" || vol.status === "PROCESSING") ? (
+                                            <Badge className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] font-bold gap-1">
+                                                <Search className="h-3 w-3" />
+                                                <span>Missing (Searching)</span>
+                                            </Badge>
                                         ) : vol.status === "REQUESTED" ? (
                                             <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] font-bold gap-1">
                                                 <Clock className="h-3 w-3" />

@@ -662,7 +662,7 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
             const { getSpellingSuggestion } = await import("@/lib/curation/tmdb");
             const suggestion = await getSpellingSuggestion(cleanQuery);
             if (suggestion && suggestion.toLowerCase() !== cleanQuery.toLowerCase()) {
-                return await searchBooksUnified(suggestion, mediaType);
+                return await searchBooksUnified(suggestion, mediaType, isKids);
             }
         } catch {}
     }
@@ -709,6 +709,12 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
     });
 
     const finalResults = results.slice(0, 40);
+    if (booksSearchCache.size >= 200) {
+        const firstKey = booksSearchCache.keys().next().value;
+        if (firstKey !== undefined) {
+            booksSearchCache.delete(firstKey);
+        }
+    }
     booksSearchCache.set(cacheKey, { data: finalResults, timestamp: Date.now() });
     return finalResults;
 }

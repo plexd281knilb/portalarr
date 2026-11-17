@@ -28,6 +28,7 @@ import {
     DialogFooter
 } from "@/components/ui/dialog";
 import { getUserTranscodeAlertAction } from "@/app/actions";
+import { withTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import type { UserTranscodeAlertResult } from "@/lib/telemetry/device-diagnostics";
 
 interface StreamQualityDoctorBannerProps {
@@ -43,13 +44,17 @@ export default function StreamQualityDoctorBanner({ initialAlert }: StreamQualit
 
     useEffect(() => {
         if (!initialAlert) {
-            getUserTranscodeAlertAction()
+            withTimeout(getUserTranscodeAlertAction(), 10000, "Stream quality alert")
                 .then((res) => {
                     if (res && res.hasAlert) {
                         setAlert(res as UserTranscodeAlertResult);
                     }
                 })
-                .catch(() => {})
+                .catch((err) => {
+                    if (isStaleDeploymentError(err)) {
+                        triggerDeploymentRecoveryReload();
+                    }
+                })
                 .finally(() => setLoading(false));
         }
     }, [initialAlert]);

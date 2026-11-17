@@ -257,9 +257,13 @@ export async function unlinkUserFromDiscord(userId: string): Promise<{ success: 
 /**
  * Pushes a single Portalarr user's role to Discord
  */
-export async function syncUserRoleToDiscord(userId: string): Promise<{ success: boolean; error?: string; roleAssigned?: string }> {
+export async function syncUserRoleToDiscord(
+    userId: string,
+    preloadedConfig?: { botToken: string; guildId: string } | null,
+    preloadedRoleMap?: ResolvedRoleMap
+): Promise<{ success: boolean; error?: string; roleAssigned?: string }> {
     try {
-        const config = await getBotConfig();
+        const config = preloadedConfig || await getBotConfig();
         if (!config) return { success: false, error: "Discord bot not configured" };
 
         const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -267,7 +271,7 @@ export async function syncUserRoleToDiscord(userId: string): Promise<{ success: 
             return { success: false, error: "User has no linked Discord account" };
         }
 
-        const roleMap = await getDiscordRoleMap(config.botToken, config.guildId);
+        const roleMap = preloadedRoleMap || await getDiscordRoleMap(config.botToken, config.guildId);
         const expectedRoleId = computeExpectedDiscordRole(user, roleMap);
 
         if (!expectedRoleId) {
@@ -311,11 +315,21 @@ export async function syncAllUsersRolesToDiscord(): Promise<{ success: boolean; 
             select: { id: true, username: true }
         });
 
+        if (linkedUsers.length === 0) {
+            return { success: true, syncedCount: 0, errors: [] };
+        }
+
+        const config = await getBotConfig();
+        if (!config) {
+            return { success: false, syncedCount: 0, errors: ["Discord bot not configured"] };
+        }
+        const roleMap = await getDiscordRoleMap(config.botToken, config.guildId);
+
         let syncedCount = 0;
         const errors: string[] = [];
 
         for (const u of linkedUsers) {
-            const res = await syncUserRoleToDiscord(u.id);
+            const res = await syncUserRoleToDiscord(u.id, config, roleMap);
             if (res.success) syncedCount++;
             else errors.push(`${u.username}: ${res.error}`);
         }
@@ -329,15 +343,19 @@ export async function syncAllUsersRolesToDiscord(): Promise<{ success: boolean; 
 /**
  * Pulls Discord roles into a Portalarr user's account status
  */
-export async function syncDiscordRolesToPortalarr(discordId: string): Promise<{ success: boolean; error?: string; user?: any }> {
+export async function syncDiscordRolesToPortalarr(
+    discordId: string,
+    preloadedConfig?: { botToken: string; guildId: string } | null,
+    preloadedRoleMap?: ResolvedRoleMap
+): Promise<{ success: boolean; error?: string; user?: any }> {
     try {
-        const config = await getBotConfig();
+        const config = preloadedConfig || await getBotConfig();
         if (!config) return { success: false, error: "Discord bot not configured" };
 
         const user = await prisma.user.findFirst({ where: { discordId } });
         if (!user) return { success: false, error: "No DomsHomeLab user linked to this Discord ID" };
 
-        const roleMap = await getDiscordRoleMap(config.botToken, config.guildId);
+        const roleMap = preloadedRoleMap || await getDiscordRoleMap(config.botToken, config.guildId);
         const memberRes = await discordFetch<any>(`/guilds/${config.guildId}/members/${discordId}`, { method: "GET" }, config.botToken);
 
         if (!memberRes.ok || !memberRes.data) {
@@ -348,7 +366,6 @@ export async function syncDiscordRolesToPortalarr(discordId: string): Promise<{ 
         const updateData: any = {};
 
         if (roleMap.admin && roles.includes(roleMap.admin)) {
-            updateData.role = "ADMIN";
             updateData.status = "APPROVED";
         } else if (roleMap.member && roles.includes(roleMap.member)) {
             updateData.status = "APPROVED";
@@ -359,12 +376,14 @@ export async function syncDiscordRolesToPortalarr(discordId: string): Promise<{ 
         } else if (roleMap.trial && roles.includes(roleMap.trial)) {
             updateData.status = "TRIAL";
             updateData.membershipTier = "TRIAL";
-        } else if (roleMap.kids && roles.includes(roleMap.kids)) {
+        } else if (roleMap.pending && roles.includes(roleMap.pending)) {
+            updateData.status = "PENDING";
+        }
+
+        if (roleMap.kids && roles.includes(roleMap.kids)) {
             updateData.accountType = "KID";
         } else if (roleMap.livingRoom && roles.includes(roleMap.livingRoom)) {
             updateData.accountType = "LIVING_ROOM";
-        } else if (roleMap.pending && roles.includes(roleMap.pending)) {
-            updateData.status = "PENDING";
         }
 
         if (Object.keys(updateData).length > 0) {
@@ -391,12 +410,22 @@ export async function syncAllDiscordRolesToPortalarr(): Promise<{ success: boole
             select: { id: true, username: true, discordId: true }
         });
 
+        if (linkedUsers.length === 0) {
+            return { success: true, syncedCount: 0, errors: [] };
+        }
+
+        const config = await getBotConfig();
+        if (!config) {
+            return { success: false, syncedCount: 0, errors: ["Discord bot not configured"] };
+        }
+        const roleMap = await getDiscordRoleMap(config.botToken, config.guildId);
+
         let syncedCount = 0;
         const errors: string[] = [];
 
         for (const u of linkedUsers) {
             if (!u.discordId) continue;
-            const res = await syncDiscordRolesToPortalarr(u.discordId);
+            const res = await syncDiscordRolesToPortalarr(u.discordId, config, roleMap);
             if (res.success) syncedCount++;
             else errors.push(`${u.username}: ${res.error}`);
         }

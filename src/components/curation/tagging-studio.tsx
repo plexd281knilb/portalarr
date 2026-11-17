@@ -1,6 +1,7 @@
 "use client";
 
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 
 import React, { useState, useEffect } from "react";
 import {
@@ -421,23 +422,17 @@ export function TaggingStudio() {
         }
     };
 
-    // Initial Load: Fetch Plex Servers, Sections, and Curation Settings
+    // Initial Load: Fast DB settings first, live Plex sections async in parallel
     useEffect(() => {
+        let cancelled = false;
         const loadInitialData = async () => {
             setLoading(true);
             try {
-                const srvRes = await getPlexServersAndSectionsAction();
-                if (srvRes.success && srvRes.servers && srvRes.servers.length > 0) {
-                    setServers(srvRes.servers);
-                    const firstServer = srvRes.servers[0];
-                    setSelectedServerId(firstServer.serverId);
-                    if (firstServer.sections && firstServer.sections.length > 0) {
-                        setSelectedSectionKey(String(firstServer.sections[0].key));
-                    }
-                }
+                const bootstrap = await fetchJsonWithTimeout<{ settings?: any }>("/api/curation/bootstrap", {}, 15000);
+                if (cancelled) return;
 
-                const settingsRes = await getCurationSettingsAction();
-                if (settingsRes.success) {
+                const settingsRes = bootstrap?.settings;
+                if (settingsRes?.success) {
                     const loadedSyncTags = settingsRes.taggingSyncEnabled ?? settingsRes.curationSyncParentalTags ?? settingsRes.parentalTaggingEnabled ?? true;
                     const loadedSchedule = settingsRes.taggingSyncSchedule || settingsRes.curationSyncSchedule || "daily_3am";
                     const loadedParentalOpts: ParentalTaggingOptions = {
@@ -464,13 +459,39 @@ export function TaggingStudio() {
                     }
                 }
             } catch (err) {
+                if (isStaleDeploymentError(err)) {
+                    triggerDeploymentRecoveryReload();
+                    return;
+                }
                 console.error("Failed loading tagging studio data:", err);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
+            }
+
+            // Fetch live Plex servers asynchronously without blocking initial DB render
+            try {
+                const srvRes = await fetchJsonWithTimeout<{ success?: boolean; servers?: any[] }>(
+                    "/api/curation/plex-sections",
+                    {},
+                    20000
+                );
+                if (!cancelled && srvRes?.success && srvRes.servers && srvRes.servers.length > 0) {
+                    setServers(srvRes.servers);
+                    const firstServer = srvRes.servers[0];
+                    setSelectedServerId(firstServer.serverId);
+                    if (firstServer.sections && firstServer.sections.length > 0) {
+                        setSelectedSectionKey(String(firstServer.sections[0].key));
+                    }
+                }
+            } catch (plexErr) {
+                console.warn("Async Plex server section lookup failed:", plexErr);
             }
         };
 
         loadInitialData();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     // When Server or Section changes, load relevant data

@@ -210,7 +210,7 @@ export function extractAmount(text: string): number | null {
 /**
  * Extract payment details from Venmo notification emails
  */
-function parseVenmoEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null {
+export function parseVenmoEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null {
     const subject = parsed.subject || "";
     const text = parsed.text || parsed.html || "";
     const fromAddress = parsed.from?.text || "";
@@ -280,7 +280,7 @@ function parseVenmoEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null
     if (txMatch && txMatch[1]) {
         externalTxId = txMatch[1].trim();
     } else {
-        externalTxId = `VENMO-${uid}-${parsed.date ? parsed.date.getTime() : Date.now()}`;
+        externalTxId = `VENMO-${uid}-${amount}`;
     }
 
     return {
@@ -366,7 +366,7 @@ function parsePayPalEmail(parsed: ParsedMail, uid: string): ScrapedPayment | nul
     if (txMatch && txMatch[1]) {
         externalTxId = txMatch[1].trim();
     } else {
-        externalTxId = `PAYPAL-${uid}-${parsed.date ? parsed.date.getTime() : Date.now()}`;
+        externalTxId = `PAYPAL-${uid}-${amount}`;
     }
 
     return {
@@ -461,7 +461,7 @@ function parseZelleEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null
     if (refMatch && refMatch[1]) {
         externalTxId = refMatch[1].trim();
     } else {
-        externalTxId = `ZELLE-${uid}-${parsed.date ? parsed.date.getTime() : Date.now()}`;
+        externalTxId = `ZELLE-${uid}-${amount}`;
     }
 
     return {
@@ -540,7 +540,7 @@ export function parseCashAppEmail(parsed: ParsedMail, uid: string): ScrapedPayme
     if (txMatch && txMatch[1]) {
         externalTxId = txMatch[1].trim();
     } else {
-        externalTxId = `CASHAPP-${uid}-${parsed.date ? parsed.date.getTime() : Date.now()}`;
+        externalTxId = `CASHAPP-${uid}-${amount}`;
     }
 
     return {
@@ -663,7 +663,7 @@ export function calculateAlignedExpiryDate(params: {
             const currentExpYear = existingExpiry.getFullYear();
             if (paymentCycleYear >= currentExpYear) {
                 // Payment is for a future renewal cycle at or beyond the current expiration
-                targetYear = currentExpYear + yearsCount;
+                targetYear = Math.max(baseTargetYear, currentExpYear + yearsCount);
             } else {
                 // Payment is for the current/past cycle already covered up to currentExpYear.
                 // Do NOT add an extra year unless the amount paid exceeds the coverage!
@@ -1011,7 +1011,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
             if (user.email && isCurrentlyActive) {
                 if (settings?.emailNotificationsEnabled && settings?.notifySubscriptionActive) {
                     const { renderEmailTemplate } = await import("@/lib/email-templates");
-                    const { sendOrQueueEmail } = await import("@/app/actions");
+                    const { sendOrQueueEmail } = await import("@/lib/email-dispatcher");
                     const { getAppUrl } = await import("@/lib/app-url");
                     const appUrl = await getAppUrl();
 
@@ -1058,7 +1058,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
 
                 if (recipientEmails.length > 0) {
                     const { renderEmailTemplate } = await import("@/lib/email-templates");
-                    const { sendOrQueueEmail } = await import("@/app/actions");
+                    const { sendOrQueueEmail } = await import("@/lib/email-dispatcher");
                     const { getAppUrl } = await import("@/lib/app-url");
                     const appUrl = await getAppUrl();
 
@@ -1122,7 +1122,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
         try {
             if (user.email && (settings?.notifyPaymentUnderpayment ?? true)) {
                 const { renderEmailTemplate } = await import("@/lib/email-templates");
-                const { sendOrQueueEmail } = await import("@/app/actions");
+                const { sendOrQueueEmail } = await import("@/lib/email-dispatcher");
                 const { getAppUrl } = await import("@/lib/app-url");
                 const appUrl = await getAppUrl();
 
@@ -1179,7 +1179,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
 
                 if (recipientEmails.length > 0) {
                     const { renderEmailTemplate } = await import("@/lib/email-templates");
-                    const { sendOrQueueEmail } = await import("@/app/actions");
+                    const { sendOrQueueEmail } = await import("@/lib/email-dispatcher");
                     const { getAppUrl } = await import("@/lib/app-url");
                     const appUrl = await getAppUrl();
 
@@ -1233,7 +1233,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
     const effectiveLookbackDays = typeof lookbackDays === "number" 
         ? lookbackDays 
-        : (settings?.paymentEmailLookbackDays ?? 1);
+        : (settings?.paymentEmailLookbackDays ?? 365);
 
     const whereClause = sourceId ? { id: sourceId, enabled: true } : { enabled: true };
     const sources = await prisma.paymentEmailSource.findMany({ where: whereClause });
@@ -1249,7 +1249,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?
         await prisma.settings.upsert({
             where: { id: "global" },
             update: {
-                paymentEmailLookbackDays: effectiveLookbackDays,
+                ...(lookbackDays === undefined ? { paymentEmailLookbackDays: effectiveLookbackDays } : {}),
                 paymentLastScanAt: new Date(),
                 paymentLastScanResult: JSON.stringify({
                     scannedAt: new Date().toISOString(),
@@ -1265,7 +1265,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?
             },
             create: {
                 id: "global",
-                paymentEmailLookbackDays: effectiveLookbackDays,
+                ...(lookbackDays === undefined ? { paymentEmailLookbackDays: effectiveLookbackDays } : {}),
                 paymentLastScanAt: new Date()
             }
         }).catch(() => {});
@@ -1473,13 +1473,13 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?
     await prisma.settings.upsert({
         where: { id: "global" },
         update: {
-            paymentEmailLookbackDays: effectiveLookbackDays,
+            ...(lookbackDays === undefined ? { paymentEmailLookbackDays: effectiveLookbackDays } : {}),
             paymentLastScanAt: new Date(),
             paymentLastScanResult: JSON.stringify(summaryResult)
         },
         create: {
             id: "global",
-            paymentEmailLookbackDays: effectiveLookbackDays,
+            ...(lookbackDays === undefined ? { paymentEmailLookbackDays: effectiveLookbackDays } : {}),
             paymentLastScanAt: new Date(),
             paymentLastScanResult: JSON.stringify(summaryResult)
         }

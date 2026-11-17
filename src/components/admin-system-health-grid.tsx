@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { getAdminInfrastructureStatusAction, type InfrastructureServiceItem } from "@/app/actions";
+import { type InfrastructureServiceItem } from "@/app/actions";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
 export default function AdminSystemHealthGrid() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const inFlightRef = useRef(false);
     const [services, setServices] = useState<InfrastructureServiceItem[]>([]);
     const [summary, setSummary] = useState({
         totalConfigured: 0,
@@ -50,16 +52,23 @@ export default function AdminSystemHealthGrid() {
     };
 
     const loadStatus = async (isManual = false) => {
+        if (!isManual && inFlightRef.current) return;
+        inFlightRef.current = true;
         if (isManual) setRefreshing(true);
         try {
-            const res = await getAdminInfrastructureStatusAction();
+            const res = await fetchJsonWithTimeout<any>("/api/admin/infrastructure-status", {}, 15000);
             if (res && res.success) {
                 setServices(res.services);
                 setSummary(res.summary);
             }
         } catch (err) {
+            if (isStaleDeploymentError(err)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load infrastructure status:", err);
         } finally {
+            inFlightRef.current = false;
             setLoading(false);
             setRefreshing(false);
         }
@@ -67,7 +76,10 @@ export default function AdminSystemHealthGrid() {
 
     useEffect(() => {
         loadStatus();
-        const interval = setInterval(() => loadStatus(), 15000);
+        const interval = setInterval(() => {
+            if (typeof document !== "undefined" && document.hidden) return;
+            loadStatus();
+        }, 15000);
         return () => clearInterval(interval);
     }, []);
 

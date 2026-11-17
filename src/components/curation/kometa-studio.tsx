@@ -108,6 +108,7 @@ import {
     calculateNextRunTime,
     formatLastRunDisplay
 } from "@/lib/curation/schedule-helper";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 
 interface PlexServerItem {
     serverId: string;
@@ -833,33 +834,26 @@ export function KometaStudio() {
         }
     };
 
-    // Initial Data Fetch
+    // Initial Data Fetch (Fast DB bootstrap first, live Plex sections async in parallel)
     useEffect(() => {
+        let cancelled = false;
         const loadInitialData = async () => {
             setLoading(true);
             try {
-                let initialServerId = "";
-                let initialSectionKey = "";
+                const bootstrap = await fetchJsonWithTimeout<{
+                    settings?: any;
+                    badges?: { success?: boolean; badges?: any[] };
+                    rules?: { success?: boolean; rules?: any[]; backupsCount?: number };
+                }>("/api/curation/bootstrap", {}, 15000);
+                if (cancelled) return;
 
-                const srvRes = await getPlexServersAndSectionsAction();
-                if (srvRes.success && srvRes.servers && srvRes.servers.length > 0) {
-                    setServers(srvRes.servers);
-                    const firstServer = srvRes.servers[0];
-                    initialServerId = firstServer.serverId;
-                    setSelectedServerId(initialServerId);
-                    if (firstServer.sections && firstServer.sections.length > 0) {
-                        initialSectionKey = String(firstServer.sections[0].key);
-                        setSelectedSectionKey(initialSectionKey);
-                    }
-                }
-
-                const badgeRes = await getCustomBadgesAction();
+                const badgeRes = bootstrap?.badges;
                 if (badgeRes?.success && badgeRes.badges) {
                     setCustomBadges(badgeRes.badges);
                 }
 
-                const rulesRes = await getOverlayRulesAction(initialServerId || undefined, initialSectionKey || undefined);
-                if (rulesRes.success && rulesRes.rules) {
+                const rulesRes = bootstrap?.rules;
+                if (rulesRes?.success && rulesRes.rules) {
                     setOverlayRules(rulesRes.rules);
                     if (rulesRes.rules.length > 0) {
                         applyRuleToSimulator(rulesRes.rules[0]);
@@ -869,8 +863,8 @@ export function KometaStudio() {
                     setBackupsCount(rulesRes.backupsCount);
                 }
 
-                const settingsRes = await getCurationSettingsAction();
-                if (settingsRes.success) {
+                const settingsRes = bootstrap?.settings;
+                if (settingsRes?.success) {
                     setOverlayIncrementalEnabled(settingsRes.overlayIncrementalEnabled ?? true);
                     setOverlayIncrementalSchedule(settingsRes.overlayIncrementalSchedule || "every_hour");
                     setOverlayIncrementalBatchSize(settingsRes.overlayIncrementalBatchSize !== undefined ? settingsRes.overlayIncrementalBatchSize : 0);
@@ -897,13 +891,47 @@ export function KometaStudio() {
                     });
                 }
             } catch (err) {
-                console.error("Failed loading Kometa studio data:", err);
+                if (isStaleDeploymentError(err)) {
+                    triggerDeploymentRecoveryReload();
+                    return;
+                }
+                console.error("Failed loading Kometa studio DB state:", err);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
+            }
+
+            // Load live Plex server library sections asynchronously without blocking the UI
+            try {
+                const srvRes = await fetchJsonWithTimeout<{ success?: boolean; servers?: PlexServerItem[] }>(
+                    "/api/curation/plex-sections",
+                    {},
+                    20000
+                );
+                if (!cancelled && srvRes?.success && srvRes.servers && srvRes.servers.length > 0) {
+                    setServers(srvRes.servers);
+                    const firstServer = srvRes.servers[0];
+                    setSelectedServerId(firstServer.serverId);
+                    if (firstServer.sections && firstServer.sections.length > 0) {
+                        const secKey = String(firstServer.sections[0].key);
+                        setSelectedSectionKey(secKey);
+                        const secRules = await getOverlayRulesAction(firstServer.serverId, secKey).catch(() => null);
+                        if (!cancelled && secRules?.success && secRules.rules) {
+                            setOverlayRules(secRules.rules);
+                            if (secRules.rules.length > 0) {
+                                applyRuleToSimulator(secRules.rules[0]);
+                            }
+                        }
+                    }
+                }
+            } catch (plexErr) {
+                console.warn("Async Plex server section lookup failed:", plexErr);
             }
         };
 
         loadInitialData();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     // Server / Section Switch

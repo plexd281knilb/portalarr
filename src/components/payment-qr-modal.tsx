@@ -49,10 +49,10 @@ export function PaymentQrModal({
     }, [initialCadence, isOpen]);
 
     const isTier2 = membershipTier === "TIER_2_VIP";
-    const baseYearlyAmount = isTier2 ? (config?.tier2YearlyPrice || 240) : (config?.yearlyPrice || 180);
-    const baseMonthlyAmount = isTier2 ? (config?.tier2MonthlyPrice || 25) : (config?.monthlyPrice || 17.50);
-    const yearlyAmount = (cadence === "yearly" && initialCadence === "yearly" && customAmount) ? customAmount : baseYearlyAmount;
-    const monthlyAmount = (cadence === "monthly" && initialCadence === "monthly" && customAmount) ? customAmount : baseMonthlyAmount;
+    const baseYearlyAmount = isTier2 ? (config?.tier2YearlyPrice ?? 240) : (config?.yearlyPrice ?? 180);
+    const baseMonthlyAmount = isTier2 ? (config?.tier2MonthlyPrice ?? 25) : (config?.monthlyPrice ?? 17.50);
+    const yearlyAmount = (cadence === "yearly" && initialCadence === "yearly" && customAmount !== undefined && customAmount > 0) ? customAmount : baseYearlyAmount;
+    const monthlyAmount = (cadence === "monthly" && initialCadence === "monthly" && customAmount !== undefined && customAmount > 0) ? customAmount : baseMonthlyAmount;
     const selectedAmount = cadence === "yearly" ? yearlyAmount : monthlyAmount;
 
     const memoTag = useMemo(() => generatePaymentMemo(username), [username]);

@@ -136,7 +136,7 @@ export async function GET(
                         headers: {
                             "Content-Type": contentType,
                             "Content-Length": String(imgBuffer.length),
-                            "Cache-Control": "public, max-age=86400, immutable"
+                            "Cache-Control": "private, max-age=86400, immutable"
                         }
                     });
                 }
@@ -203,7 +203,7 @@ export async function GET(
             headers: {
                 "Content-Type": getImageContentType(targetEntry),
                 "Content-Length": String(imgBuffer.length),
-                "Cache-Control": "public, max-age=86400, immutable"
+                "Cache-Control": "private, max-age=86400, immutable"
             }
         });
     } catch (e: any) {

@@ -101,7 +101,7 @@ export interface OverlayOptions {
     layerPriorityOrder?: string[];
 }
 
-const BACKUP_DIR = path.join(process.cwd(), "data", "art_backups");
+const BACKUP_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "art_backups");
 const CUSTOM_BADGES_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
 const STOCK_KOMETA_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "kometa_stock");
 
@@ -119,7 +119,7 @@ function ensureBackupDir() {
  */
 export function getStockKometaAssetBuffer(relativePath: string): Buffer | null {
     try {
-        const fullPath = path.join(STOCK_KOMETA_DIR, relativePath);
+        const fullPath = path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, relativePath);
         if (fs.existsSync(fullPath)) {
             return fs.readFileSync(fullPath);
         }
@@ -169,15 +169,15 @@ export function resolveStockResolutionBadgePath(
         else if (isHlg) candidate = `resolution/hlg.png`;
     }
 
-    if (candidate && fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
+    if (candidate && fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, candidate))) {
         return candidate;
     }
 
     // Fallback candidates
-    if (hasRes && fs.existsSync(path.join(STOCK_KOMETA_DIR, `resolution/${basePrefix}.png`))) {
+    if (hasRes && fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, `resolution/${basePrefix}.png`))) {
         return `resolution/${basePrefix}.png`;
     }
-    if (!hasRes && fs.existsSync(path.join(STOCK_KOMETA_DIR, `resolution/hdr.png`))) {
+    if (!hasRes && fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, `resolution/hdr.png`))) {
         return `resolution/hdr.png`;
     }
     return null;
@@ -219,24 +219,24 @@ export function resolveStockRibbonPath(
     else if (nameLower.includes("common")) assetName = "common";
 
     const candidate = `ribbon/${color}/${assetName}.png`;
-    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
+    if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, candidate))) {
         return candidate;
     }
 
     // Color fallback to yellow or red
     const yellowCandidate = `ribbon/yellow/${assetName}.png`;
-    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, yellowCandidate))) {
+    if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, yellowCandidate))) {
         return yellowCandidate;
     }
 
     const redCandidate = `ribbon/red/${assetName}.png`;
-    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, redCandidate))) {
+    if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, redCandidate))) {
         return redCandidate;
     }
 
     // Default blank ribbon in theme color
     const blankCandidate = `ribbon/${color}/blank-${color}.png`;
-    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, blankCandidate))) {
+    if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, blankCandidate))) {
         return blankCandidate;
     }
 
@@ -277,7 +277,7 @@ export function resolveStockEditionBadgePath(edition: string): string | null {
     else if (nameKey.includes("alternate")) nameKey = "alternate";
 
     const candidate = `edition/${nameKey}.png`;
-    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
+    if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, candidate))) {
         return candidate;
     }
     return null;
@@ -306,7 +306,7 @@ export function resolveStockAudioCodecBadgePath(codec: string, channels?: string
 
     if (filename) {
         const p = `audio_codec/standard/${filename}`;
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     return null;
 }
@@ -347,7 +347,7 @@ export function resolveStockContentRatingBadgePath(rating: string): string | nul
 
     if (filename) {
         const p = `cr/${filename}`;
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     return null;
 }
@@ -361,35 +361,35 @@ export function resolveStockStudioBadgePath(studio: string): string | null {
     // 1. Check streaming logos first
     if (sLower.includes("netflix")) {
         const p = "streaming/color/Netflix.png";
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     if (sLower.includes("disney")) {
         const p = "streaming/color/Disney+.png";
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     if (sLower.includes("hbo") || sLower.includes("max")) {
         const p = "streaming/color/HBO Max.png";
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     if (sLower.includes("apple")) {
         const p = "streaming/color/AppleTV+.png";
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     if (sLower.includes("prime") || sLower.includes("amazon")) {
         const p = "streaming/color/Prime Video.png";
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     if (sLower.includes("paramount")) {
         const p = "streaming/color/Paramount+.png";
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     if (sLower.includes("hulu")) {
         const p = "streaming/color/Hulu.png";
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     if (sLower.includes("peacock")) {
         const p = "streaming/color/Peacock.png";
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
 
     // 2. Check movie studio standard directories
@@ -447,7 +447,7 @@ export function resolveStockRatingBadgePath(source: string, score?: number): str
 
     if (filename) {
         const p = `rating/${filename}`;
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+        if (fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, p))) return p;
     }
     return null;
 }
@@ -1153,9 +1153,9 @@ let cachedOverlayFont: opentype.Font | null = null;
 function getOverlayFont(): opentype.Font | null {
     if (cachedOverlayFont) return cachedOverlayFont;
     const candidates = [
-        path.join(process.cwd(), "public", "fonts", "arialbd.ttf"),
-        path.resolve("./public/fonts/arialbd.ttf"),
-        path.resolve("/app/public/fonts/arialbd.ttf")
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "fonts", "arialbd.ttf"),
+        path.resolve(/*turbopackIgnore: true*/ "./public/fonts/arialbd.ttf"),
+        path.resolve(/*turbopackIgnore: true*/ "/app/public/fonts/arialbd.ttf")
     ];
     for (const fontPath of candidates) {
         if (fs.existsSync(fontPath)) {
@@ -1747,7 +1747,7 @@ export async function applyOverlaysToPoster(
                 const isCustomTextOnStockImdb = isStockImdb && Boolean(winningRibbonText && !/^IMDb?\s*TOP\s*250$/i.test(winningRibbonText.trim()));
 
                 // If it's a blank ribbon (e.g. leaving_soon or custom text or generic tier), Top 150, or custom text, render dynamic corner banner with crisp text!
-                if (ribbonRelPath.includes("blank-") || winningRibbonName === "leaving_soon" || isTop150 || isCustomTextOnStockImdb || !fs.existsSync(path.join(STOCK_KOMETA_DIR, ribbonRelPath))) {
+                if (ribbonRelPath.includes("blank-") || winningRibbonName === "leaving_soon" || isTop150 || isCustomTextOnStockImdb || !fs.existsSync(path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, ribbonRelPath))) {
                     const ribbonText = winningRibbonName === "leaving_soon" 
                         ? (options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays}D` : "LEAVING SOON") 
                         : (winningRibbonText || options.ribbonText || winningRibbonName).replace(/_/g, " ").toUpperCase();
@@ -1772,7 +1772,7 @@ export async function applyOverlaysToPoster(
                     });
                     renderedRibbonCorner = rPos;
                 } else {
-                    const fullRibbonPath = path.join(STOCK_KOMETA_DIR, ribbonRelPath);
+                    const fullRibbonPath = path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, ribbonRelPath);
                     if (fs.existsSync(fullRibbonPath)) {
                         let ribbonSharp = sharp(fullRibbonPath).resize(380, 380);
 
@@ -2066,7 +2066,7 @@ export async function applyOverlaysToPoster(
         targetH = 48
     ): Promise<boolean> => {
         if (!buckets[pos]) return false;
-        const fullPath = path.join(STOCK_KOMETA_DIR, relativePath);
+        const fullPath = path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, relativePath);
         if (!fs.existsSync(fullPath)) return false;
 
         try {
@@ -2442,7 +2442,7 @@ export async function backupAndApplyOverlay(
     const isUpgrade = Boolean(existingBackup && existingBackup.mediaHash && existingBackup.mediaHash !== currentHash);
     const safeServerKey = String(serverId).replace(/[^a-zA-Z0-9._-]/g, "_");
     const safeRatingKey = String(item.ratingKey).replace(/[^a-zA-Z0-9._-]/g, "_");
-    const backupFilePath = existingBackup?.backupFilePath || path.join(BACKUP_DIR, `${safeServerKey}_${safeRatingKey}.jpg`);
+    const backupFilePath = existingBackup?.backupFilePath || path.join(/*turbopackIgnore: true*/ BACKUP_DIR, `${safeServerKey}_${safeRatingKey}.jpg`);
 
     let originalBuffer: Buffer | null = null;
     let downloadedFreshBackup = false;

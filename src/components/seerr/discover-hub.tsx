@@ -8,6 +8,7 @@ import {
     searchMediaAction,
     submitMediaRequestAction 
 } from "@/app/seerr-actions";
+import { withTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
     getDiscoverBooksHomeAction, 
     searchBooksAction 
@@ -91,6 +92,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     const [gridCategory, setGridCategory] = useState<"trending" | "popular" | "upcoming" | "top_rated">("popular");
     const [gridPage, setGridPage] = useState(1);
     const [loadingGrid, setLoadingGrid] = useState(false);
+    const [loadError, setLoadError] = useState<string>("");
 
     const activeTabRef = useRef(activeTab);
     useEffect(() => {
@@ -385,6 +387,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     }, [activeTab, section]);
 
     const loadHomeData = async (targetSection: "main" | "kids") => {
+        setLoadError("");
         const cached = tabCacheRef.current.home?.[targetSection];
         if (cached) {
             setHeroItem(cached.heroItem);
@@ -398,7 +401,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
             setLoading(true);
         }
         try {
-            const res = await getDiscoverHomeAction(targetSection);
+            const res = await withTimeout(getDiscoverHomeAction(targetSection), 15000, "Discover home");
             if (res.success) {
                 setHeroItem(res.heroItem || null);
                 setSections(res.sections || []);
@@ -410,13 +413,24 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                     availabilityMap: res.availabilityMap || {},
                     timestamp: Date.now()
                 };
+            } else if (!cached) {
+                setLoadError((res as any).error || "Failed to load discovery feed.");
             }
-        } catch (e) {} finally {
+        } catch (e: any) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
+            if (!cached) {
+                setLoadError(e?.message || "Discovery request timed out.");
+            }
+        } finally {
             setLoading(false);
         }
     };
 
     const loadBooksData = async (mediaType: "all" | "ebook" | "audiobook", isKidsMode: boolean = false) => {
+        if (mediaType !== "all") setLoadError("");
         const cacheKey = `${mediaType}:${isKidsMode}`;
         const cached = tabCacheRef.current.booksTab?.[cacheKey];
         if (cached) {
@@ -431,7 +445,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
             setLoadingBooks(true);
         }
         try {
-            const res = await getDiscoverBooksHomeAction(mediaType, isKidsMode);
+            const res = await withTimeout(getDiscoverBooksHomeAction(mediaType, isKidsMode), 15000, "Book discovery");
             if (res.success) {
                 setBookHeroItem(res.heroItem || null);
                 setBookSections(res.sections || []);
@@ -443,13 +457,24 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                     bookAvailabilityMap: res.availabilityMap || {},
                     timestamp: Date.now()
                 };
+            } else if (!cached && mediaType !== "all") {
+                setLoadError((res as any).error || "Failed to load book catalog.");
             }
-        } catch (e) {} finally {
+        } catch (e: any) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
+            if (!cached && mediaType !== "all") {
+                setLoadError(e?.message || "Book catalog request timed out.");
+            }
+        } finally {
             setLoadingBooks(false);
         }
     };
 
     const loadGridData = async (type: "movie" | "tv", category: "trending" | "popular" | "upcoming" | "top_rated", page: number, isKidsMode: boolean) => {
+        setLoadError("");
         const cacheKey = `${type}:${category}:${page}:${isKidsMode}`;
         const cached = tabCacheRef.current.grid?.[cacheKey];
         if (cached) {
@@ -464,7 +489,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
             setLoadingGrid(true);
         }
         try {
-            const res = await getDiscoverMediaAction(category, type, page, isKidsMode);
+            const res = await withTimeout(getDiscoverMediaAction(category, type, page, isKidsMode), 15000, "Media catalog");
             const expectedTab = type === "movie" ? "movies" : "tv";
             if (activeTabRef.current !== expectedTab) return;
 
@@ -479,8 +504,18 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                     page,
                     timestamp: Date.now()
                 };
+            } else if (!cached) {
+                setLoadError((res as any).error || "Failed to load media catalog.");
             }
-        } catch (e) {} finally {
+        } catch (e: any) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
+            if (!cached) {
+                setLoadError(e?.message || "Media catalog request timed out.");
+            }
+        } finally {
             const expectedTab = type === "movie" ? "movies" : "tv";
             if (activeTabRef.current === expectedTab) {
                 setLoadingGrid(false);
@@ -753,6 +788,33 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
             {activeTab === "ebooks" && (
                 <div className="mb-4">
                     <KindleSenderUpdateBanner autoOpenModal={true} />
+                </div>
+            )}
+
+            {loadError && activeTab !== "requests" && (
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3">
+                    <span>{loadError}</span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-[11px] shrink-0"
+                        onClick={() => {
+                            if (activeTab === "discover") {
+                                loadHomeData(section);
+                                loadBooksData("all", section === "kids");
+                            } else if (activeTab === "movies") {
+                                loadGridData("movie", gridCategory, gridPage, section === "kids");
+                            } else if (activeTab === "tv") {
+                                loadGridData("tv", gridCategory, gridPage, section === "kids");
+                            } else if (activeTab === "ebooks") {
+                                loadBooksData("ebook", section === "kids");
+                            } else if (activeTab === "audiobooks") {
+                                loadBooksData("audiobook", section === "kids");
+                            }
+                        }}
+                    >
+                        Retry
+                    </Button>
                 </div>
             )}
 

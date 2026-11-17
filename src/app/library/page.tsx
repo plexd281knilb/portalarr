@@ -132,7 +132,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 
 function getAccessBadge(lib: any) {
   if (lib.allowedUsers === "*") {
@@ -1385,10 +1385,22 @@ function BookLibraryPageContent() {
   useEffect(() => {
     async function loadInitData() {
       try {
-        const session = await getSession();
+        const data = await fetchJsonWithTimeout<{
+          session?: any;
+          profile?: any;
+          smtpFromEmail?: string;
+          kindleNotice?: any;
+          libraries?: any[];
+          requests?: any[];
+          allUsers?: any[];
+          guideMarkdown?: string;
+          kindleLogs?: any[];
+        }>("/api/books/bootstrap", {}, 15000);
+
+        const session = data?.session || null;
+        const profile = data?.profile || null;
         setUser(session);
 
-        const profile = await getCurrentUser();
         if (profile && (profile.status === "EXPIRED" || profile.status === "PENDING" || profile.status === "REJECTED" || profile.status === "SUSPENDED")) {
           window.location.href = "/pending";
           return;
@@ -1399,35 +1411,19 @@ function BookLibraryPageContent() {
           setUserKindleEmail(profile.kindleEmail || "");
         }
 
-        const smtpFromEmail = await getPublicSmtpFromEmail("kindle");
-        setServerSmtpFrom(smtpFromEmail || "");
+        setServerSmtpFrom(data?.smtpFromEmail || "");
 
-        // Check if user needs the Kindle Outbound Sender Update notice modal
-        try {
-          const notice = await getKindleSenderUpdateNoticeStatusAction();
-          if (notice?.needsNotice) {
-            setKindleNoticeData(notice);
-            const dismissedSession = sessionStorage.getItem("portalarr_kindle_notice_dismissed_session");
-            if (dismissedSession !== "true") {
-              setKindleNoticeOpen(true);
-            }
+        if (data?.kindleNotice?.needsNotice) {
+          setKindleNoticeData(data.kindleNotice);
+          const dismissedSession = sessionStorage.getItem("portalarr_kindle_notice_dismissed_session");
+          if (dismissedSession !== "true") {
+            setKindleNoticeOpen(true);
           }
-        } catch {}
-
-        let libs = await getLibraries().catch(() => []);
-        if (!libs || libs.length === 0) {
-          try {
-            const res = await fetch("/api/libraries");
-            if (res.ok) {
-              const data = await res.json();
-              if (data.libraries && data.libraries.length > 0) {
-                libs = data.libraries;
-              }
-            }
-          } catch (e) {}
         }
-        setLibraries(libs || []);
-        if (libs && libs.length > 0) {
+
+        const libs = data?.libraries || [];
+        setLibraries(libs);
+        if (libs.length > 0) {
           const savedTab =
             typeof window !== "undefined"
               ? localStorage.getItem("book-library-active-tab")
@@ -1450,40 +1446,25 @@ function BookLibraryPageContent() {
           }
         }
 
-        let reqs = await getBookRequests().catch(() => []);
-        if (!reqs || reqs.length === 0) {
-          try {
-            const res = await fetch("/api/requests");
-            if (res.ok) {
-              const data = await res.json();
-              if (data.requests && data.requests.length > 0) {
-                reqs = data.requests;
-              }
-            }
-          } catch (e) {}
-        }
-        setRequests(reqs || []);
+        setRequests(data?.requests || []);
 
-        // Only admins manage shelves or need the full user list; non-admins must never probe /api/users
         if (session?.role === "ADMIN" || profile?.role === "ADMIN") {
-          const ulist = await getAppUsers().catch(() => []);
-          setAllUsers(ulist || []);
+          setAllUsers(data?.allUsers || []);
         } else {
           setAllUsers([]);
         }
 
-        try {
-          const guide = await getEbooksUserGuide();
-          if (guide) {
-            setGuideMarkdown(guide);
-            setEditGuideText(guide);
-          }
-        } catch (e) {
-          console.warn("Failed to load user guide:", e);
+        if (data?.guideMarkdown) {
+          setGuideMarkdown(data.guideMarkdown);
+          setEditGuideText(data.guideMarkdown);
         }
 
-        getKindleDeliveryLogs().then((l) => setKindleLogs(l || [])).catch(() => {});
+        setKindleLogs(data?.kindleLogs || []);
       } catch (e) {
+        if (isStaleDeploymentError(e)) {
+          triggerDeploymentRecoveryReload();
+          return;
+        }
         console.error("Failed to load initial library data:", e);
       } finally {
         setLoading(false);
@@ -1562,6 +1543,7 @@ function BookLibraryPageContent() {
     const intervalMs = hasActiveRequests ? 5000 : 15000;
 
     const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       refreshRequests();
     }, intervalMs);
 

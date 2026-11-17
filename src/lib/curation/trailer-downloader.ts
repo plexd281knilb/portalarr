@@ -15,13 +15,21 @@ export async function checkYtDlpAvailable(): Promise<boolean> {
     if (isYtDlpChecked) return isYtDlpAvailable;
     return new Promise((resolve) => {
         try {
-            const proc = spawn("yt-dlp", ["--version"]);
+            const proc = spawn("yt-dlp", ["--version"], { timeout: 5000 });
+            const timer = setTimeout(() => {
+                try { proc.kill(); } catch {}
+                isYtDlpChecked = true;
+                isYtDlpAvailable = false;
+                resolve(false);
+            }, 5000);
             proc.on("error", () => {
+                clearTimeout(timer);
                 isYtDlpChecked = true;
                 isYtDlpAvailable = false;
                 resolve(false);
             });
             proc.on("close", (code) => {
+                clearTimeout(timer);
                 isYtDlpChecked = true;
                 isYtDlpAvailable = code === 0;
                 resolve(isYtDlpAvailable);
@@ -40,15 +48,15 @@ export async function checkYtDlpAvailable(): Promise<boolean> {
  */
 export function getYouTubeCookiesPath(): string | null {
     const candidatePaths = [
-        path.join(process.cwd(), "data", "youtube-cookies.txt"),
-        path.join(process.cwd(), "data", "youtube.txt"),
-        path.join(process.cwd(), "data", "cookies.txt"),
-        path.join(process.cwd(), "config", "youtube-cookies.txt"),
-        path.join(process.cwd(), "config", "youtube.txt"),
-        path.join(process.cwd(), "config", "cookies.txt"),
-        path.join(process.cwd(), "youtube-cookies.txt"),
-        path.join(process.cwd(), "youtube.txt"),
-        path.join(process.cwd(), "cookies.txt"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "youtube-cookies.txt"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "youtube.txt"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "cookies.txt"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "config", "youtube-cookies.txt"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "config", "youtube.txt"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "config", "cookies.txt"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "youtube-cookies.txt"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "youtube.txt"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "cookies.txt"),
         "/app/data/youtube-cookies.txt",
         "/app/data/youtube.txt",
         "/app/data/cookies.txt",
@@ -104,11 +112,11 @@ export async function getYouTubeCookiesStatus(): Promise<{
  */
 export async function saveYouTubeCookies(content: string): Promise<{ success: boolean; message: string; path?: string }> {
     try {
-        const targetDir = path.join(process.cwd(), "data");
+        const targetDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data");
         if (!fs.existsSync(targetDir)) {
             fs.mkdirSync(targetDir, { recursive: true });
         }
-        const targetFile = path.join(targetDir, "youtube-cookies.txt");
+        const targetFile = path.join(/*turbopackIgnore: true*/ targetDir, "youtube-cookies.txt");
         await fsPromises.writeFile(targetFile, content.trim(), "utf-8");
         try { fs.chmodSync(targetFile, 0o666); } catch {}
         logger.addLog("INFO", "CURATION", `Saved YouTube cookies file to "${targetFile}" (${content.length} bytes)`);
@@ -148,9 +156,9 @@ export async function searchYouTubeVideoUrl(title: string, year?: number): Promi
  */
 export async function copyFallbackPlaceholderVideo(outputPath: string): Promise<boolean> {
     const candidates = [
-        path.join(process.cwd(), "public", "assets", "placeholder.mp4"),
-        path.join(process.cwd(), "public", "placeholder.mp4"),
-        path.join(__dirname, "..", "..", "..", "public", "assets", "placeholder.mp4")
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "assets", "placeholder.mp4"),
+        path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "placeholder.mp4"),
+        path.join(/*turbopackIgnore: true*/ __dirname, "..", "..", "..", "public", "assets", "placeholder.mp4")
     ];
 
     for (const p of candidates) {
@@ -178,6 +186,14 @@ export async function copyFallbackPlaceholderVideo(outputPath: string): Promise<
  * and automatic YouTube cookie authentication (youtube-cookies.txt / youtube.txt).
  */
 export async function downloadWithYtDlp(videoUrlOrQuery: string, outputPath: string, maxDuration = 240): Promise<boolean> {
+    if (
+        !videoUrlOrQuery ||
+        videoUrlOrQuery.startsWith("-") ||
+        (!videoUrlOrQuery.startsWith("https://") && !videoUrlOrQuery.startsWith("http://") && !videoUrlOrQuery.startsWith("ytsearch1:"))
+    ) {
+        return false;
+    }
+
     const hasBinary = await checkYtDlpAvailable();
     if (!hasBinary) {
         return false;
@@ -207,7 +223,7 @@ export async function downloadWithYtDlp(videoUrlOrQuery: string, outputPath: str
             logger.addLog("INFO", "CURATION", `Using YouTube cookies from "${cookiesPath}" for yt-dlp trailer download`);
         }
 
-        args.push("-o", outputPath, videoUrlOrQuery);
+        args.push("-o", outputPath, "--", videoUrlOrQuery);
 
         let ytdlpProcess: any;
         try {

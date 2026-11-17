@@ -1,6 +1,6 @@
 export type MediaType = "ebook" | "audiobook";
 
-export type BookAvailabilityStatus = "AVAILABLE" | "REQUESTED" | "DOWNLOADING" | "NOT_AVAILABLE";
+export type BookAvailabilityStatus = "AVAILABLE" | "REQUESTED" | "DOWNLOADING" | "SEARCHING" | "NOT_AVAILABLE";
 
 export interface BookDiscoveryItem {
     id?: string;
@@ -65,7 +65,7 @@ export interface SeriesVolumeItem {
     publishYear?: string;
     overview?: string;
     mediaType: MediaType;
-    status: "AVAILABLE" | "REQUESTED" | "DOWNLOADING" | "MISSING";
+    status: "AVAILABLE" | "REQUESTED" | "DOWNLOADING" | "SEARCHING" | "PROCESSING" | "MISSING";
     bookId?: string;
     requestId?: string;
     libraryId?: string;

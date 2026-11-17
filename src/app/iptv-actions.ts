@@ -59,7 +59,7 @@ async function verifySessionUser(): Promise<any> {
         }
         const testUser = await prisma.user.findFirst({
             where: { role: "ADMIN" }
-        }) || await prisma.user.findFirst();
+        });
         if (testUser) return testUser;
         return {
             id: "test-admin-id",

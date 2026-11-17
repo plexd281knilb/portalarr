@@ -328,7 +328,7 @@ export async function sendSeerrEmailNotification(
 
         // Check event email toggle
         if (event === "PENDING" && settings.seerrEmailNotifyAdminNewRequest === false) return { success: true };
-        if (event === "AUTO_APPROVED" && settings.seerrEmailNotifyUserAutoApproved === false && settings.seerrEmailNotifyAdminNewRequest === false) return { success: true };
+        if (event === "AUTO_APPROVED" && settings.seerrEmailNotifyUserAutoApproved !== true && (settings as any).seerrEmailNotifyAdminAutoApproved !== true) return { success: true };
         if (event === "APPROVED" && settings.seerrEmailNotifyUserApproved === false) return { success: true };
         if (event === "DECLINED" && settings.seerrEmailNotifyUserDeclined === false) return { success: true };
         if (event === "AVAILABLE" && (settings.seerrEmailNotifyUserAvailable === false || settings.seerrNotificationOnAvailable === false)) return { success: true };
@@ -386,8 +386,13 @@ export async function sendSeerrEmailNotification(
         };
 
         if (event === "PENDING" || event === "AUTO_APPROVED") {
-            // Send alert to all Admin accounts if enabled
-            if (settings.seerrEmailNotifyAdminNewRequest !== false) {
+            const isAuto = event === "AUTO_APPROVED";
+            const notifyAdmins = isAuto 
+                ? (settings as any).seerrEmailNotifyAdminAutoApproved === true 
+                : settings.seerrEmailNotifyAdminNewRequest !== false;
+
+            // Send alert to all Admin accounts ONLY if required (PENDING requires manual approval; AUTO_APPROVED skipped by default)
+            if (notifyAdmins) {
                 const admins = await prisma.user.findMany({
                     where: { role: { in: ["ADMIN", "SUPER_USER"] } }
                 });
@@ -411,7 +416,7 @@ export async function sendSeerrEmailNotification(
                                 appUrl
                             });
 
-                            const { sendOrQueueEmail } = await import("../../app/actions");
+                            const { sendOrQueueEmail } = await import("../email-dispatcher");
                             await sendOrQueueEmail({
                                 to: adminEmails,
                                 subject: isAuto ? `${adminSubjectPrefix} ${subject}` : subject,
@@ -427,7 +432,7 @@ export async function sendSeerrEmailNotification(
                                 status: isAuto ? "Auto-Approved & Queued for Download" : "Pending Administrator Review"
                             });
 
-                            const { sendOrQueueEmail } = await import("../../app/actions");
+                            const { sendOrQueueEmail } = await import("../email-dispatcher");
                             await sendOrQueueEmail({
                                 to: adminEmails,
                                 subject: isAuto ? `${adminSubjectPrefix} ${subject}` : subject,
@@ -448,7 +453,8 @@ export async function sendSeerrEmailNotification(
             }
         }
 
-        if (event === "AUTO_APPROVED" && settings.seerrEmailNotifyUserAutoApproved === false) {
+        // On AUTO_APPROVED: Do NOT email user unless explicitly opted in (defaults to false to protect Resend email quota)
+        if (event === "AUTO_APPROVED" && settings.seerrEmailNotifyUserAutoApproved !== true) {
             return { success: true };
         }
 
@@ -491,7 +497,7 @@ export async function sendSeerrEmailNotification(
             requestedBy: requesterUser.username
         });
 
-        const { sendOrQueueEmail } = await import("../../app/actions");
+        const { sendOrQueueEmail } = await import("../email-dispatcher");
         await sendOrQueueEmail({
             to: requesterUser.email,
             subject,

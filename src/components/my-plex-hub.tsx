@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ export default function MyPlexHub() {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const inFlightRef = useRef(false);
     const [selectedStreamForDiagnosis, setSelectedStreamForDiagnosis] = useState<any>(null);
     const [streamToKill, setStreamToKill] = useState<any>(null);
     const [killingStream, setKillingStream] = useState(false);
@@ -29,6 +30,8 @@ export default function MyPlexHub() {
     const [isPending, startTransition] = useTransition();
 
     const loadData = async (isManual = false) => {
+        if (!isManual && inFlightRef.current) return;
+        inFlightRef.current = true;
         if (isManual) setRefreshing(true);
         try {
             const res = await getUserPlexHubData();
@@ -41,6 +44,7 @@ export default function MyPlexHub() {
         } catch (e) {
             console.error("Failed to load user Plex hub data:", e);
         } finally {
+            inFlightRef.current = false;
             setLoading(false);
             setRefreshing(false);
         }
@@ -58,6 +62,7 @@ export default function MyPlexHub() {
 
         // Polling interval: every 10 seconds for real-time active stream updates
         const interval = setInterval(() => {
+            if (typeof document !== "undefined" && document.hidden) return;
             loadData();
         }, 10000);
         return () => {

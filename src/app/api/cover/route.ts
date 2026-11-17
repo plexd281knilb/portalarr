@@ -81,6 +81,9 @@ export async function GET(req: NextRequest) {
         if (role !== "ADMIN" && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED")) {
             return new NextResponse("Forbidden", { status: 403 });
         }
+        if (role !== "ADMIN" && status === "TRIAL") {
+            return new NextResponse("Forbidden for trial accounts", { status: 403 });
+        }
 
         const searchParams = req.nextUrl.searchParams;
         const id = searchParams.get("id");
@@ -206,7 +209,7 @@ export async function GET(req: NextRequest) {
                         });
                     }
                 } catch (e) {
-                    return NextResponse.redirect(cleanCoverUrl);
+                    return new NextResponse("Failed to fetch remote cover", { status: 502 });
                 }
             }
         }

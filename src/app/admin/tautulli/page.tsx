@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useTransition, useMemo } from "react";
-import { isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
+import { useState, useEffect, useTransition, useMemo, useRef } from "react";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
     getStreamIntelligenceDataAction, 
     backfillTautulliHistoryAction, 
@@ -40,7 +40,9 @@ import {
 export default function StreamIntelligencePage() {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    const inFlightRef = useRef(false);
     const [selectedTab, setSelectedTab] = useState<string>("activity");
     const [serverFilter, setServerFilter] = useState<string | null>(null);
     const [historySearch, setHistorySearch] = useState<string>("");
@@ -177,27 +179,41 @@ export default function StreamIntelligencePage() {
     };
 
     const loadData = async (isManual = false) => {
+        if (!isManual && inFlightRef.current) return;
+        inFlightRef.current = true;
         if (isManual) setRefreshing(true);
         try {
             const isCustom = dateRange === "custom" && appliedCustomDates;
-            const res = await withTimeout(getStreamIntelligenceDataAction({
-                search: historySearch || undefined,
-                serverFilter: serverFilter || undefined,
-                range: dateRange,
-                startDate: isCustom ? appliedCustomDates?.start : undefined,
-                endDate: isCustom ? appliedCustomDates?.end : undefined,
-                userSort
-            }), 15000, "Stream intelligence");
-            if (res.success) {
-                setData(res);
+            const params = new URLSearchParams();
+            if (historySearch) params.set("search", historySearch);
+            if (serverFilter) params.set("serverFilter", serverFilter);
+            if (dateRange) params.set("range", dateRange);
+            if (isCustom && appliedCustomDates?.start) params.set("startDate", appliedCustomDates.start);
+            if (isCustom && appliedCustomDates?.end) params.set("endDate", appliedCustomDates.end);
+            if (userSort) params.set("userSort", userSort);
+
+            const payload = await fetchJsonWithTimeout<{ telemetry?: any; backfillStatus?: any }>(
+                `/api/admin/tautulli?${params.toString()}`,
+                {},
+                15000
+            );
+            if (payload?.telemetry?.success) {
+                setData(payload.telemetry);
+                setLoadError(null);
             }
-        } catch (e) {
+            if (payload?.backfillStatus?.isRunning) {
+                setIsBackfilling(true);
+                setBackfillProgress(payload.backfillStatus);
+            }
+        } catch (e: any) {
             if (isStaleDeploymentError(e)) {
                 triggerDeploymentRecoveryReload();
                 return;
             }
             console.error("Failed to load stream intelligence data:", e);
+            setLoadError(e?.message || "Failed to load stream intelligence data.");
         } finally {
+            inFlightRef.current = false;
             setLoading(false);
             if (isManual) setRefreshing(false);
         }
@@ -208,6 +224,7 @@ export default function StreamIntelligencePage() {
             loadData();
         }
         const interval = setInterval(() => {
+            if (typeof document !== "undefined" && document.hidden) return;
             if (dateRange !== "custom" || appliedCustomDates) {
                 loadData();
             }
@@ -240,22 +257,6 @@ export default function StreamIntelligencePage() {
             }
         });
     };
-
-    // Check on mount if a backfill is already running in background
-    useEffect(() => {
-        let mounted = true;
-        getTautulliBackfillStatusAction()
-            .then((status) => {
-                if (mounted && status?.isRunning) {
-                    setIsBackfilling(true);
-                    setBackfillProgress(status);
-                }
-            })
-            .catch(() => {});
-        return () => {
-            mounted = false;
-        };
-    }, []);
 
     // Poll status while backfill is running
     useEffect(() => {
@@ -447,6 +448,17 @@ export default function StreamIntelligencePage() {
 
     return (
         <div className="space-y-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] mx-auto w-full min-w-0 pb-12 select-none">
+            {loadError && !data && (
+                <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-rose-300">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <span>{loadError}</span>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => loadData(true)} className="gap-1.5 text-xs shrink-0 cursor-pointer">
+                        <RefreshCw className="h-3.5 w-3.5" /> Retry
+                    </Button>
+                </div>
+            )}
             {/* --- TOP HEADER & TAKEOVER CONTROL BAR --- */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-[#0c0c14]/90 to-slate-900/90 border border-slate-800 shadow-xl backdrop-blur-md">
                 <div className="space-y-1">

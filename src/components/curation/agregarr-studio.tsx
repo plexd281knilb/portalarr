@@ -1,6 +1,7 @@
 "use client";
 
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 
 import React, { useState, useEffect, useTransition, useRef } from "react";
 import {
@@ -690,24 +691,21 @@ export function AgregarrStudio() {
         }
     };
 
-    // Initial Data Fetch
+    // Initial Data Fetch (Fast DB bootstrap first, live Plex sections async in parallel)
     useEffect(() => {
+        let cancelled = false;
         const loadInitialData = async () => {
             setLoading(true);
             try {
-                const srvRes = await getPlexServersAndSectionsAction();
-                if (srvRes.success && srvRes.servers && srvRes.servers.length > 0) {
-                    setServers(srvRes.servers);
-                    const firstServer = srvRes.servers[0];
-                    setSelectedServerId(firstServer.serverId);
-                    if (firstServer.sections && firstServer.sections.length > 0) {
-                        setSelectedSectionKey(String(firstServer.sections[0].key));
-                        loadCollections(firstServer.serverId, String(firstServer.sections[0].key));
-                    }
-                }
+                const bootstrap = await fetchJsonWithTimeout<{
+                    settings?: any;
+                    arr?: { success?: boolean; radarr?: any[]; sonarr?: any[] };
+                    youtubeCookies?: any;
+                }>("/api/curation/bootstrap", {}, 15000);
+                if (cancelled) return;
 
-                const settingsRes = await getCurationSettingsAction();
-                if (settingsRes.success) {
+                const settingsRes = bootstrap?.settings;
+                if (settingsRes?.success) {
                     if (settingsRes.comingSoonShares) setComingSoonShares(settingsRes.comingSoonShares);
                     if (settingsRes.serverStorageConfig) setServerStorageConfig(settingsRes.serverStorageConfig);
                     if (settingsRes.placeholderBannerFontSize) setPlaceholderModalBannerFontSize(settingsRes.placeholderBannerFontSize);
@@ -754,30 +752,53 @@ export function AgregarrStudio() {
                     }
                 }
 
-                const arrRes = await getArrInstancesListAction();
-                if (arrRes.success) {
+                const arrRes = bootstrap?.arr;
+                if (arrRes?.success) {
                     setArrInstances({
                         radarr: (arrRes.radarr as any) || [],
                         sonarr: (arrRes.sonarr as any) || []
                     });
                 }
 
-                try {
-                    const cookieRes = await getYouTubeCookiesStatusAction();
-                    if (cookieRes.success) {
-                        setYoutubeCookiesStatus(cookieRes as any);
-                    }
-                } catch (cErr) {
-                    console.warn("Failed fetching YouTube cookies status:", cErr);
+                const cookieRes = bootstrap?.youtubeCookies;
+                if (cookieRes?.success) {
+                    setYoutubeCookiesStatus(cookieRes as any);
                 }
             } catch (err) {
+                if (isStaleDeploymentError(err)) {
+                    triggerDeploymentRecoveryReload();
+                    return;
+                }
                 console.error("Failed loading Agregarr studio data:", err);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
+            }
+
+            // Fetch live Plex servers & library sections asynchronously without blocking initial DB render
+            try {
+                const srvRes = await fetchJsonWithTimeout<{ success?: boolean; servers?: any[] }>(
+                    "/api/curation/plex-sections",
+                    {},
+                    20000
+                );
+                if (!cancelled && srvRes?.success && srvRes.servers && srvRes.servers.length > 0) {
+                    setServers(srvRes.servers);
+                    const firstServer = srvRes.servers[0];
+                    setSelectedServerId(firstServer.serverId);
+                    if (firstServer.sections && firstServer.sections.length > 0) {
+                        setSelectedSectionKey(String(firstServer.sections[0].key));
+                        loadCollections(firstServer.serverId, String(firstServer.sections[0].key));
+                    }
+                }
+            } catch (plexErr) {
+                console.warn("Async Plex server section lookup failed:", plexErr);
             }
         };
 
         loadInitialData();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const handleSaveCookies = async () => {

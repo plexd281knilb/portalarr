@@ -136,10 +136,35 @@ import {
     convertKometaLibraryToPortalarrOverlay,
     ParsedKometaConfig
 } from "@/lib/curation/kometa-importer";
-import { getEnabledArrInstances, getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, arrApiDelete } from "@/app/arr-actions";
+import { getEnabledArrInstances } from "@/app/arr-actions";
+import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, arrApiDelete } from "@/lib/arr-client";
+import { resolveContainedPath } from "@/lib/book-route-auth";
+
+async function isDirectExternalServerActionCall(): Promise<boolean> {
+    if (process.env.NODE_ENV !== "production" && (process.env.PORTALARR_TEST === "true" || process.env.PORTALARR_TEST_AUTH === "true")) return false;
+    try {
+        const { headers } = await import("next/headers");
+        const h = await headers();
+        return Boolean(h.get("next-action"));
+    } catch {
+        return false;
+    }
+}
 
 // Verify admin permissions
 async function verifyAdmin() {
+    if (process.env.NODE_ENV !== "production" && process.env.PORTALARR_TEST_AUTH === "true") {
+        if (process.env.PORTALARR_TEST_USER_ID) {
+            const specific = await prisma.user.findUnique({ where: { id: process.env.PORTALARR_TEST_USER_ID } });
+            if (specific) {
+                if (String(specific.role || "").toUpperCase() !== "ADMIN") throw new Error("Unauthorized: Admin permissions required.");
+                return specific;
+            }
+        }
+        const admin = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+        if (admin) return admin;
+        return { id: "test-admin-id", username: "admin", email: "admin@example.com", role: "ADMIN", status: "APPROVED" } as any;
+    }
     const user = await getCurrentUser();
     const role = String(user?.role || "").toUpperCase();
     const status = String(user?.status || "APPROVED").toUpperCase();
@@ -999,7 +1024,7 @@ export interface DismissedHubItem {
     dismissedAt: string;
 }
 
-export async function getDismissedHubsInternal(): Promise<DismissedHubItem[]> {
+async function getDismissedHubsInternal(): Promise<DismissedHubItem[]> {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (!settings?.dismissedHubs) return [];
@@ -1009,7 +1034,7 @@ export async function getDismissedHubsInternal(): Promise<DismissedHubItem[]> {
     }
 }
 
-export async function addDismissedHubInternal(item: { id?: string; ratingKey?: string; title: string; serverId?: string; sectionKey?: string }) {
+async function addDismissedHubInternal(item: { id?: string; ratingKey?: string; title: string; serverId?: string; sectionKey?: string }) {
     try {
         const list = await getDismissedHubsInternal();
         const norm = item.title.trim().toLowerCase();
@@ -1039,7 +1064,7 @@ export async function addDismissedHubInternal(item: { id?: string; ratingKey?: s
     }
 }
 
-export async function removeDismissedHubInternal(ratingKeyOrTitle: string, serverId?: string, sectionKey?: string) {
+async function removeDismissedHubInternal(ratingKeyOrTitle: string, serverId?: string, sectionKey?: string) {
     try {
         const list = await getDismissedHubsInternal();
         const targetNorm = ratingKeyOrTitle.trim().toLowerCase();
@@ -1476,7 +1501,7 @@ export async function saveMediaCollectionAction(data: {
     }
 }
 
-export async function syncCollectionToPlexInternal(
+async function syncCollectionToPlexInternal(
     collectionId: string,
     options?: {
         skipHubReorder?: boolean;
@@ -3153,7 +3178,7 @@ export async function updateCollectionExcludedLabelsAction(collectionId: string,
     }
 }
 
-export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: string, sectionKey?: string) {
+async function syncSeasonalAndScheduledCollectionsInternal(serverId?: string, sectionKey?: string) {
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
@@ -3435,7 +3460,7 @@ export async function syncSeasonalAndScheduledCollectionsAction(serverId?: strin
     }
 }
 
-export async function syncLeavingSoonCollectionHubInternal(
+async function syncLeavingSoonCollectionHubInternal(
     serverId?: string,
     sectionKey?: string,
     options: {
@@ -3975,8 +4000,8 @@ export async function deleteAllPlexCollectionsAction(
 /**
  * Internal helper to write essential built-in high-DPI SVGs to data/custom_badges and upsert records into prisma.customBadge.
  */
-export async function seedDefaultCustomBadgesInternal(): Promise<{ count: number }> {
-    const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+async function seedDefaultCustomBadgesInternal(): Promise<{ count: number }> {
+    const badgeVaultDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
     if (!fs.existsSync(badgeVaultDir)) {
         fs.mkdirSync(badgeVaultDir, { recursive: true });
     }
@@ -4056,7 +4081,7 @@ export async function syncOfficialKometaBadgesAction() {
     try {
 
         await verifyAdmin();
-        const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+        const badgeVaultDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
         if (!fs.existsSync(badgeVaultDir)) {
             fs.mkdirSync(badgeVaultDir, { recursive: true });
         }
@@ -4243,7 +4268,7 @@ export async function uploadCustomBadgeAction(formData: FormData) {
             return { success: false, error: "No file provided for upload." };
         }
 
-        const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+        const badgeVaultDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
         if (!fs.existsSync(badgeVaultDir)) {
             fs.mkdirSync(badgeVaultDir, { recursive: true });
         }
@@ -4379,8 +4404,14 @@ export async function deleteCustomBadgeAction(id: string) {
         await verifyAdmin();
         const badge = await prisma.customBadge.findUnique({ where: { id } });
         if (badge) {
+            const safeBadgePath = badge.filePath
+                ? resolveContainedPath(path.join(/*turbopackIgnore: true*/ process.cwd(), "data"), badge.filePath)
+                : null;
+            if (badge.filePath && !safeBadgePath) {
+                throw new Error("Forbidden badge file path");
+            }
             try {
-                if (fs.existsSync(badge.filePath)) fs.unlinkSync(badge.filePath);
+                if (safeBadgePath && fs.existsSync(safeBadgePath)) fs.unlinkSync(safeBadgePath);
             } catch (err) {}
             await prisma.customBadge.delete({ where: { id } });
         }
@@ -4397,6 +4428,7 @@ export async function deleteMultipleCustomBadgesAction(ids: string[]) {
         if (!ids || ids.length === 0) return { success: true, count: 0 };
         let deletedCount = 0;
         const CHUNK_SIZE = 400;
+        const dataDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data");
 
         for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
             const chunk = ids.slice(i, i + CHUNK_SIZE);
@@ -4405,7 +4437,8 @@ export async function deleteMultipleCustomBadgesAction(ids: string[]) {
             });
             for (const b of badges) {
                 try {
-                    if (fs.existsSync(b.filePath)) fs.unlinkSync(b.filePath);
+                    const safeBadgePath = b.filePath ? resolveContainedPath(dataDir, b.filePath) : null;
+                    if (safeBadgePath && fs.existsSync(safeBadgePath)) fs.unlinkSync(safeBadgePath);
                 } catch (err) {}
             }
             const delRes = await prisma.customBadge.deleteMany({
@@ -4430,7 +4463,7 @@ export async function deleteAllCustomBadgesAction(options?: { keepEssential?: bo
 
         await verifyAdmin();
         const keepEssential = options?.keepEssential ?? true;
-        const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+        const badgeVaultDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
 
         // Remove all files from data/custom_badges
         if (fs.existsSync(badgeVaultDir)) {
@@ -4739,7 +4772,7 @@ export async function saveOverlayRuleAction(data: {
  * Loads the active overlay rules and custom badges from the database to create a complete OverlayOptions object,
  * ensuring all badges (4K, HDR, DV, Atmos, audio codecs, ribbons, custom badges) are preserved when adding Leaving Soon banners.
  */
-export async function getActiveOverlayOptionsHelper(
+async function getActiveOverlayOptionsHelper(
     serverId?: string,
     sectionKey?: string,
     overrides: Partial<OverlayOptions> = {}
@@ -4854,7 +4887,7 @@ export async function getActiveOverlayOptionsHelper(
     return { ...baseOptions, ...overrides };
 }
 
-export async function applyOverlaysToLibraryInternal(
+async function applyOverlaysToLibraryInternal(
     serverId: string, 
     sectionKey: string, 
     ruleId?: string,
@@ -5385,7 +5418,7 @@ export async function pruneOrphanArtworkBackupsAction(serverId: string) {
             }
         }
 
-        const BACKUP_DIR = path.join(process.cwd(), "data", "art_backups");
+        const BACKUP_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "art_backups");
         if (fs.existsSync(BACKUP_DIR)) {
             const diskFiles = fs.readdirSync(BACKUP_DIR);
             const prefix = `${resolved.serverId}_`;
@@ -5733,7 +5766,7 @@ export async function testCurationApiKeysAction(tmdbKey?: string, traktKey?: str
     }
 }
 
-export async function getGlancesDisksInternal() {
+async function getGlancesDisksInternal() {
     try {
         const instances = await prisma.glancesInstance.findMany({ orderBy: { createdAt: "asc" } });
         if (!instances || instances.length === 0) {
@@ -5880,6 +5913,9 @@ async function unflagWatchedLeavingSoonItem(
 
 export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: string, syncHub = true, force = false) {
     try {
+        if (await isDirectExternalServerActionCall()) {
+            await verifyAdmin();
+        }
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         if (!token) return { success: false, error: "Plex token not configured." };
@@ -6775,8 +6811,8 @@ export async function getArtBackupAndBadgeStatsAction() {
     try {
 
         await verifyAdmin();
-        const backupDir = path.join(process.cwd(), "data", "art_backups");
-        const badgeDir = path.join(process.cwd(), "data", "custom_badges");
+        const backupDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "art_backups");
+        const badgeDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
 
         let backupCount = 0;
         let backupBytes = 0;
@@ -7273,7 +7309,7 @@ export async function restoreSingleItemPosterAction(serverId: string, ratingKey:
  * Automated full curation sync job (Seasonal collections, Poster overlays, Release calendar & placeholders, Leaving soon).
  * Can be called on-demand or by the background cron timer.
  */
-export async function runFullCurationSyncInternal(): Promise<{
+async function runFullCurationSyncInternal(): Promise<{
     success: boolean;
     seasonalCount: number;
     overlaysAppliedCount: number;
@@ -7513,6 +7549,9 @@ export async function runOverlayIncrementalSyncInternal(targetServerId?: string,
     message: string;
     error?: string;
 }> {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     if (isPlexMaintenanceWindow()) {
         return {
             success: false,
@@ -7731,6 +7770,9 @@ export async function runOverlayRecheckSyncInternal(targetServerId?: string, tar
     message: string;
     error?: string;
 }> {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     if (isPlexMaintenanceWindow()) {
         return {
             success: false,
@@ -7981,6 +8023,9 @@ export async function runParentalTagsSyncInternal(targetServerId?: string, targe
     details: string[];
     error?: string;
 }> {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     if (isPlexMaintenanceWindow()) {
         return {
             success: false,
@@ -8139,6 +8184,9 @@ export async function runAgregarrSyncInternal(targetServerId?: string, targetSec
     timestamp: string;
     error?: string;
 }> {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     if (isPlexMaintenanceWindow()) {
         return {
             success: false,
@@ -8275,6 +8323,9 @@ export async function runMaintainerrSyncInternal(
     timestamp: string;
     error?: string;
 }> {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     if (isPlexMaintenanceWindow()) {
         return {
             success: false,
@@ -8875,7 +8926,7 @@ export async function importGitHubBadgesAction(badges: Array<{
             return { success: false, error: "No badges selected for download." };
         }
 
-        const badgesDir = path.join(process.cwd(), "data", "custom_badges");
+        const badgesDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
         if (!fs.existsSync(badgesDir)) {
             fs.mkdirSync(badgesDir, { recursive: true });
         }
@@ -9011,13 +9062,13 @@ export async function importLocalKometaAssetsAction(folderPath?: string) {
         await verifyAdmin();
         const targetDir = folderPath && folderPath.trim() 
             ? folderPath.trim() 
-            : path.join(process.cwd(), "kometa_assets");
+            : path.join(/*turbopackIgnore: true*/ process.cwd(), "kometa_assets");
 
         if (!fs.existsSync(targetDir)) {
             return { success: false, error: `Assets folder "${targetDir}" not found on disk.` };
         }
 
-        const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+        const badgeVaultDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
         if (!fs.existsSync(badgeVaultDir)) {
             fs.mkdirSync(badgeVaultDir, { recursive: true });
         }
@@ -9430,7 +9481,7 @@ function resolveItemSmartBanner(params: {
 /**
  * Fast multi-instance indexer for Radarr and Sonarr, with optional per-server instance filtering.
  */
-export async function getArrMonitoredIndex(options?: {
+async function getArrMonitoredIndex(options?: {
     targetRadarrId?: string;
     targetSonarrId?: string;
     targetServerId?: string;
@@ -9652,7 +9703,7 @@ export async function getTmdbTrailerAction(tmdbId: number, mediaType: "movie" | 
  * Internal core worker to create/deploy a placeholder item for a title not currently in the Plex library.
  * Writes to the configured coming soon share folder and saves the advisory record.
  */
-export async function createPlaceholderItemInternal(
+async function createPlaceholderItemInternal(
     serverId: string,
     sectionKey: string,
     itemData: {
@@ -9741,8 +9792,8 @@ export async function createPlaceholderItemInternal(
         // 5. Default isolated local storage
         if (!sharePath) {
             const defaultShare = isTv
-                ? path.resolve("./data/coming_soon/tv")
-                : path.resolve("./data/coming_soon/movies");
+                ? path.resolve(/*turbopackIgnore: true*/ "./data/coming_soon/tv")
+                : path.resolve(/*turbopackIgnore: true*/ "./data/coming_soon/movies");
             if (!fs.existsSync(defaultShare)) {
                 try { fs.mkdirSync(defaultShare, { recursive: true }); } catch {}
             }
@@ -10078,7 +10129,7 @@ export async function createPlaceholderItemAction(
 /**
  * Internal worker to batch-generate Coming Soon placeholder trailers & banner posters for missing items in a collection.
  */
-export async function generateCollectionPlaceholdersInternal(collection: any): Promise<{ success: boolean; generatedCount: number; message: string; error?: string }> {
+async function generateCollectionPlaceholdersInternal(collection: any): Promise<{ success: boolean; generatedCount: number; message: string; error?: string }> {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const comingSoonShares: Record<string, string> = settings?.comingSoonShares 
@@ -10687,7 +10738,7 @@ export async function generateCollectionPlaceholdersAction(collectionId: string)
  * - "trailer-placeholder" (with edition: Trailer) for collection-driven placeholders.
  * Also ensures TV show placeholder episodes (S00E00) are titled "Trailer (Placeholder)" and tagged.
  */
-export async function tagAllPlaceholdersInPlexInternal(
+async function tagAllPlaceholdersInPlexInternal(
     targetServerId?: string,
     targetSectionKey?: string
 ): Promise<{ success: boolean; taggedCount: number; message: string }> {
@@ -10945,7 +10996,7 @@ export async function tagAllPlaceholdersInPlexAction(
  */
 export type FilteredHubSubtype = "recently_added" | "recently_released" | "recently_released_episodes" | "top_unwatched";
 
-export async function deployFilteredSmartHubInternal(
+async function deployFilteredSmartHubInternal(
     serverId: string,
     sectionKey: string,
     subtype: FilteredHubSubtype = "recently_added",
@@ -11375,7 +11426,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
     }
 }
 
-export async function evaluateCollectionMediaPreviewInternal(collection: any) {
+async function evaluateCollectionMediaPreviewInternal(collection: any) {
     const isPlexSource = collection.sourceType === "plex_query" || collection.sourceType === "plex_smart";
 
     // 1. Fetch library items to know what is already present in Plex (Concurrent with 3.5s timeout)
@@ -11917,7 +11968,7 @@ export async function evaluateCollectionMediaPreviewInternal(collection: any) {
  * downloaded / acquired into the Plex library, and automatically purges the placeholder
  * directories (.strm, .disc, poster.png) and database tracking records.
  */
-export async function cleanupAvailablePlaceholdersInternal(
+async function cleanupAvailablePlaceholdersInternal(
     targetServerId?: string,
     sectionKey?: string
 ): Promise<{ success: boolean; removedCount: number; removedItems: string[]; message: string }> {
@@ -12290,9 +12341,9 @@ export async function fixPlaceholderPermissionsAction() {
             if (cfg.tvSharePath && fs.existsSync(cfg.tvSharePath)) shareDirectories.add(cfg.tvSharePath);
         }
 
-        const defaultTv = path.resolve("./data/coming_soon/tv");
+        const defaultTv = path.resolve(/*turbopackIgnore: true*/ "./data/coming_soon/tv");
         if (fs.existsSync(defaultTv)) shareDirectories.add(defaultTv);
-        const defaultMovies = path.resolve("./data/coming_soon/movies");
+        const defaultMovies = path.resolve(/*turbopackIgnore: true*/ "./data/coming_soon/movies");
         if (fs.existsSync(defaultMovies)) shareDirectories.add(defaultMovies);
 
         let fixedCount = 0;
@@ -12400,14 +12451,14 @@ export async function readLocalKometaConfigAction(customPath?: string) {
         if (customPath && customPath.trim()) {
             candidatePaths.push(customPath.trim());
             if (!path.isAbsolute(customPath.trim())) {
-                candidatePaths.push(path.join(process.cwd(), customPath.trim()));
+                candidatePaths.push(path.join(/*turbopackIgnore: true*/ process.cwd(), customPath.trim()));
             }
         }
         candidatePaths.push(
-            path.join(process.cwd(), "kometaconfig.yml"),
-            path.join(process.cwd(), "config.yml"),
-            path.join(process.cwd(), "config", "config.yml"),
-            path.join(process.cwd(), "config", "kometaconfig.yml")
+            path.join(/*turbopackIgnore: true*/ process.cwd(), "kometaconfig.yml"),
+            path.join(/*turbopackIgnore: true*/ process.cwd(), "config.yml"),
+            path.join(/*turbopackIgnore: true*/ process.cwd(), "config", "config.yml"),
+            path.join(/*turbopackIgnore: true*/ process.cwd(), "config", "kometaconfig.yml")
         );
 
         let resolvedPath: string | null = null;
@@ -12656,7 +12707,7 @@ export async function importKometaConfigAction(
 
         // 4. Auto-import local kometa_assets folder if present
         let localBadgesImported = 0;
-        const localAssetsDir = path.join(process.cwd(), "kometa_assets");
+        const localAssetsDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "kometa_assets");
         if (fs.existsSync(localAssetsDir)) {
             const assetRes = await importLocalKometaAssetsAction(localAssetsDir);
             if (assetRes.success) {

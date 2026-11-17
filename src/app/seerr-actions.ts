@@ -56,7 +56,8 @@ import {
     ArrMediaMonitoringDetails
 } from "@/lib/seerr/arr-monitoring";
 import { dispatchMediaRequest } from "@/lib/seerr/dispatch";
-import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, getArrProfilesAndFolders } from "@/app/arr-actions";
+import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut } from "@/lib/arr-client";
+import { getArrProfilesAndFolders } from "@/app/arr-actions";
 import { notifyMediaRequestEvent, sendTestSeerrDiscordWebhook } from "@/lib/seerr/notifications";
 import {
     getOrFetchMediaCache,
@@ -75,7 +76,16 @@ import {
     pruneExpiredDiskMediaCache
 } from "@/lib/seerr/media-cache";
 
-export { prewarmDiscoverCachesInternal, pruneExpiredDiskMediaCache, clearMediaCache };
+async function isDirectExternalServerActionCall(): Promise<boolean> {
+    if (process.env.NODE_ENV !== "production" && (process.env.PORTALARR_TEST === "true" || process.env.PORTALARR_TEST_AUTH === "true")) return false;
+    try {
+        const { headers } = await import("next/headers");
+        const h = await headers();
+        return Boolean(h.get("next-action"));
+    } catch {
+        return false;
+    }
+}
 
 interface AuthSession {
     userId: string;
@@ -539,6 +549,7 @@ export async function getArrMonitoringDetailsAction(
     isKids = false
 ) {
     try {
+        await verifyAuth();
         const monitoring = await getArrMediaMonitoringDetails(tmdbId, mediaType, tvdbId, imdbId, title, Boolean(isKids));
         return { success: true, monitoring };
     } catch (e: any) {
@@ -1200,6 +1211,9 @@ export async function submitMediaRequestAction(payload: {
  * Reconciles native BookRequest records with MediaRequest for unified request views
  */
 export async function reconcileBookRequestsWithMediaRequests(targetUsername?: string, force = false) {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAuth();
+    }
     try {
         const now = Date.now();
         if (!force && !targetUsername && (now - lastReconcileTime < RECONCILE_THROTTLE_MS)) {
@@ -1425,8 +1439,10 @@ export async function getAllMediaRequestsAction(filters?: {
     limit?: number;
 }) {
     try {
-        await verifyAuth();
-        await reconcileBookRequestsWithMediaRequests();
+        const session = await verifyAuth();
+        await reconcileBookRequestsWithMediaRequests(
+            session.role !== "ADMIN" && session.role !== "SUPER_USER" ? session.username : undefined
+        );
 
         const page = filters?.page || 1;
         const limit = filters?.limit || 50;
@@ -1466,6 +1482,20 @@ export async function getAllMediaRequestsAction(filters?: {
                 { bookAuthor: { contains: term } },
                 { requestedByUsername: { contains: term } }
             ];
+        }
+        if (session.role !== "ADMIN" && session.role !== "SUPER_USER") {
+            const callerScope = [
+                { requestedByUsername: session.username },
+                ...(session.userId ? [{ requestedByUserId: session.userId }] : []),
+                ...(session.email ? [{ userEmail: session.email }] : [])
+            ];
+            if (where.OR) {
+                where.AND = [{ OR: where.OR }, { OR: callerScope }];
+                delete where.OR;
+            } else {
+                where.OR = callerScope;
+            }
+            delete where.requestedByUsername;
         }
 
         const [requests, total] = await Promise.all([
@@ -1891,6 +1921,9 @@ export async function bulkDeleteMediaRequestsAction(requestIds: string[]) {
  */
 export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
     try {
+        if (await isDirectExternalServerActionCall()) {
+            await verifyAdmin();
+        }
         await reconcileBookRequestsWithMediaRequests(undefined, true);
 
         const activeRequests = await prisma.mediaRequest.findMany({
@@ -2170,7 +2203,7 @@ export async function getSeerrSettingsAction() {
 
                 // Seerr Email Notification Settings
                 seerrEmailNotifyAdminNewRequest: settings?.seerrEmailNotifyAdminNewRequest ?? true,
-                seerrEmailNotifyUserAutoApproved: settings?.seerrEmailNotifyUserAutoApproved ?? true,
+                seerrEmailNotifyUserAutoApproved: settings?.seerrEmailNotifyUserAutoApproved ?? false,
                 seerrEmailNotifyUserApproved: settings?.seerrEmailNotifyUserApproved ?? true,
                 seerrEmailNotifyUserDeclined: settings?.seerrEmailNotifyUserDeclined ?? true,
                 seerrEmailNotifyUserAvailable: settings?.seerrEmailNotifyUserAvailable ?? true,

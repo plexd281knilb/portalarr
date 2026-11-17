@@ -169,7 +169,9 @@ export async function proxy(req: NextRequest) {
         pathname.startsWith("/beta") ||
         pathname.startsWith("/curation") ||
         pathname.startsWith("/admin") ||
-        pathname.startsWith("/api/books")
+        pathname.startsWith("/api/books") ||
+        pathname.startsWith("/api/libraries") ||
+        pathname.startsWith("/api/cover")
       ) {
         if (pathname.startsWith("/api")) {
           return NextResponse.json({ error: "Trial accounts cannot access this service. Please upgrade to a full account." }, { status: 403 });

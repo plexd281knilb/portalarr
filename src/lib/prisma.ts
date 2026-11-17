@@ -65,7 +65,7 @@ if (typeof window === "undefined" && !(global as any).__loggerPatched) {
 function getDatabaseFilePath(): string {
     const dbUrl = process.env.DATABASE_URL || "file:./prisma/dev.db";
     const rawPath = dbUrl.replace(/^file:(\/\/)?/, "").split("?")[0].trim();
-    return path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+    return path.isAbsolute(rawPath) ? rawPath : path.join(/*turbopackIgnore: true*/ process.cwd(), rawPath);
 }
 
 function getSqliteDatasourceUrl(): string {
@@ -140,8 +140,6 @@ function ensureDatabaseFile() {
 
     try {
         const canonicalPath = getDatabaseFilePath();
-        const rootPrismaPath = path.join(process.cwd(), "prisma", "dev.db");
-        const legacyNestedPath = path.join(process.cwd(), "prisma", "prisma", "dev.db");
 
         const targetDir = path.dirname(canonicalPath);
         if (!fs.existsSync(targetDir)) {
@@ -692,11 +690,9 @@ export async function ensureSchemaColumns(): Promise<void> {
             try {
                 await prisma.$executeRawUnsafe(`
                     INSERT OR IGNORE INTO "Settings" ("id", "theme", "refreshInterval", "autoSyncInterval", "defaultTrialDays", "yearlyPrice", "monthlyPrice", "renewalMonth", "renewalDay", "billingType")
-                    VALUES ('global', 'dark', 10, 6, 14, 180, 15, 1, 1, 'YEARLY_PRORATED');
+                    VALUES ('global', 'dark', 10, 6, 14, 180, 17.5, 1, 1, 'YEARLY_PRORATED');
                 `);
             } catch (e) {}
-            // Enforce that standalone IPTV/M3U stream links are strictly restricted to administrators
-            await prisma.$executeRawUnsafe(`UPDATE "User" SET "canAccessIptv" = 0 WHERE "role" != 'ADMIN';`).catch(() => {});
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Settings table check error:", e.message || e);
         }
@@ -830,6 +826,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     }
                 }
             }
+            await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_discordId_key" ON "User"("discordId");`).catch(() => {});
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] User table check error:", e.message || e);
         }
@@ -1753,11 +1750,11 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "amount" REAL NOT NULL,
                     "currency" TEXT NOT NULL DEFAULT 'USD',
                     "note" TEXT,
-                    "emailSubject" TEXT NOT NULL,
+                    "emailSubject" TEXT,
                     "emailDate" DATETIME NOT NULL,
-                    "emailUid" TEXT NOT NULL,
+                    "emailUid" TEXT,
                     "matchedUserId" TEXT,
-                    "status" TEXT NOT NULL DEFAULT 'UNMATCHED',
+                    "status" TEXT NOT NULL DEFAULT 'PROCESSED',
                     "appliedSubscription" BOOLEAN NOT NULL DEFAULT 0,
                     "subscriptionPeriodGranted" TEXT,
                     "adminNotes" TEXT,
@@ -1770,6 +1767,7 @@ export async function ensureSchemaColumns(): Promise<void> {
             `);
 
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PaymentTransaction_matchedUserId_idx" ON "PaymentTransaction"("matchedUserId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "PaymentTransaction_provider_externalTxId_key" ON "PaymentTransaction"("provider", "externalTxId");`).catch(() => {});
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PaymentTransaction_provider_externalTxId_idx" ON "PaymentTransaction"("provider", "externalTxId");`).catch(() => {});
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PaymentTransaction_emailDate_idx" ON "PaymentTransaction"("emailDate");`).catch(() => {});
         } catch (e: any) {
@@ -1907,10 +1905,11 @@ export async function ensureSchemaColumns(): Promise<void> {
                     await prisma.$executeRawUnsafe(`INSERT INTO "MediaRequest_migrating" (${commonCols}) SELECT ${commonCols} FROM "MediaRequest";`);
                     await prisma.$executeRawUnsafe(`DROP TABLE "MediaRequest";`);
                     await prisma.$executeRawUnsafe(`ALTER TABLE "MediaRequest_migrating" RENAME TO "MediaRequest";`);
-                    await prisma.$executeRawUnsafe(`PRAGMA foreign_keys=ON;`);
                     console.log("[DB-SCHEMA-AUTOFIX] ✅ Successfully relaxed tmdbId constraint on MediaRequest.");
                 } catch (migErr: any) {
                     console.error("[DB-SCHEMA-AUTOFIX] Failed MediaRequest tmdbId migration:", migErr.message || migErr);
+                } finally {
+                    await prisma.$executeRawUnsafe(`PRAGMA foreign_keys=ON;`).catch(() => {});
                 }
             }
 
@@ -2076,6 +2075,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                 );
             `);
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_user_idx" ON "WatchHistory"("user");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_userId_idx" ON "WatchHistory"("userId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_mediaType_idx" ON "WatchHistory"("mediaType");`).catch(() => {});
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_watchedAt_idx" ON "WatchHistory"("watchedAt");`).catch(() => {});
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_isSharingAlert_idx" ON "WatchHistory"("isSharingAlert");`).catch(() => {});
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_ratingKey_idx" ON "WatchHistory"("ratingKey");`).catch(() => {});
@@ -2315,7 +2316,7 @@ export async function ensureSchemaColumns(): Promise<void> {
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvUserToken_userId_idx" ON "IptvUserToken"("userId");`).catch(() => {});
 
             // Clean up accidental server names saved as user names (e.g. MainPlexServer)
-            await prisma.$executeRawUnsafe(`UPDATE "User" SET "name" = NULL WHERE "name" LIKE '%Server%' OR "name" LIKE '%MainPlex%' OR "name" LIKE '%KidsPlex%';`).catch(() => {});
+            await prisma.$executeRawUnsafe(`UPDATE "User" SET "name" = NULL WHERE "name" IN ('MainPlexServer', 'KidsPlexServer', 'Main Plex Server', 'Kids Plex Server');`).catch(() => {});
 
             await prisma.$executeRawUnsafe(`
                 CREATE TABLE IF NOT EXISTS "IptvWatchSession" (
@@ -2566,20 +2567,30 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
     }
 
     // Trigger initial boot scan for all libraries
-    try {
-      const { scanLibraryInternal } = await import("../app/actions");
-      console.log(`[BACKGROUND-SCHEDULER] Triggering instant initial boot scan for all libraries...`);
-      const libraries = await prisma.library.findMany();
-      for (const lib of libraries) {
-        try {
-          console.log(`[BACKGROUND-SCHEDULER] Initial boot scan for "${lib.name}"...`);
-          await scanLibraryInternal(lib.id);
-        } catch (libErr: any) {
-          console.error(`[BACKGROUND-SCHEDULER] Boot scan error for "${lib.name}":`, libErr.message || libErr);
+    if (!(global as any).__PORTALARR_LIBRARY_SCAN_RUNNING) {
+      (global as any).__PORTALARR_LIBRARY_SCAN_RUNNING = true;
+      try {
+        const { scanLibraryInternal } = await import("../app/actions");
+        console.log(`[BACKGROUND-SCHEDULER] Triggering instant initial boot scan for all libraries...`);
+        const libraries = await prisma.library.findMany();
+        for (const lib of libraries) {
+          try {
+            console.log(`[BACKGROUND-SCHEDULER] Initial boot scan for "${lib.name}"...`);
+            await scanLibraryInternal(lib.id);
+          } catch (libErr: any) {
+            console.error(`[BACKGROUND-SCHEDULER] Boot scan error for "${lib.name}":`, libErr.message || libErr);
+          }
         }
+        await prisma.settings.upsert({
+          where: { id: "global" },
+          update: { lastAutoSync: new Date() },
+          create: { id: "global", lastAutoSync: new Date() }
+        }).catch(() => {});
+      } catch (bootErr: any) {
+        console.error(`[BACKGROUND-SCHEDULER] Boot scan failed:`, bootErr.message || bootErr);
+      } finally {
+        (global as any).__PORTALARR_LIBRARY_SCAN_RUNNING = false;
       }
-    } catch (bootErr: any) {
-      console.error(`[BACKGROUND-SCHEDULER] Boot scan failed:`, bootErr.message || bootErr);
     }
 
     // Stagger initial Global System & Discovery Cache pre-warming to avoid boot-time SQLite contention
@@ -2639,22 +2650,26 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
 
         if (incEnabled && isScheduleDue(incSchedule, lastIncRun, now)) {
           if (settings) settings.overlayIncrementalLastRunAt = now;
-          await prisma.settings.update({ where: { id: "global" }, data: { overlayIncrementalLastRunAt: now } }).catch(() => {});
-          (async () => {
-            setCurationTaskRunning("Kometa Incremental Overlays");
-            try {
-              console.log(`[OVERLAY-TIMER] Triggering scheduled incremental overlay scan (${incSchedule})...`);
-              const { runOverlayIncrementalSyncInternal } = await import("../app/curation-actions");
-              const res = await runOverlayIncrementalSyncInternal();
-              if (!res.success && res.error) {
-                console.warn("[OVERLAY-TIMER] Incremental overlay scan:", res.error);
+          setCurationTaskRunning("Kometa Incremental Overlays");
+          try {
+            await prisma.settings.update({ where: { id: "global" }, data: { overlayIncrementalLastRunAt: now } });
+            (async () => {
+              try {
+                console.log(`[OVERLAY-TIMER] Triggering scheduled incremental overlay scan (${incSchedule})...`);
+                const { runOverlayIncrementalSyncInternal } = await import("../app/curation-actions");
+                const res = await runOverlayIncrementalSyncInternal();
+                if (!res.success && res.error) {
+                  console.warn("[OVERLAY-TIMER] Incremental overlay scan:", res.error);
+                }
+              } catch (err: any) {
+                console.error("[OVERLAY-TIMER] Error in incremental overlay background runner:", err.message || err);
+              } finally {
+                clearCurationTaskRunning("Kometa Incremental Overlays");
               }
-            } catch (err: any) {
-              console.error("[OVERLAY-TIMER] Error in incremental overlay background runner:", err.message || err);
-            } finally {
-              clearCurationTaskRunning("Kometa Incremental Overlays");
-            }
-          })();
+            })();
+          } catch (err: any) {
+            clearCurationTaskRunning("Kometa Incremental Overlays");
+          }
         }
       }
 
@@ -2666,22 +2681,26 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
 
         if (recheckEnabled && isScheduleDue(recheckSchedule, lastRecheckRun, now)) {
           if (settings) settings.overlayRecheckLastRunAt = now;
-          await prisma.settings.update({ where: { id: "global" }, data: { overlayRecheckLastRunAt: now } }).catch(() => {});
-          (async () => {
-            setCurationTaskRunning("Kometa Deep Library Recheck");
-            try {
-              console.log(`[OVERLAY-TIMER] Triggering scheduled deep library recheck (${recheckSchedule})...`);
-              const { runOverlayRecheckSyncInternal } = await import("../app/curation-actions");
-              const res = await runOverlayRecheckSyncInternal();
-              if (!res.success && res.error) {
-                console.warn("[OVERLAY-TIMER] Deep recheck:", res.error);
+          setCurationTaskRunning("Kometa Deep Library Recheck");
+          try {
+            await prisma.settings.update({ where: { id: "global" }, data: { overlayRecheckLastRunAt: now } });
+            (async () => {
+              try {
+                console.log(`[OVERLAY-TIMER] Triggering scheduled deep library recheck (${recheckSchedule})...`);
+                const { runOverlayRecheckSyncInternal } = await import("../app/curation-actions");
+                const res = await runOverlayRecheckSyncInternal();
+                if (!res.success && res.error) {
+                  console.warn("[OVERLAY-TIMER] Deep recheck:", res.error);
+                }
+              } catch (err: any) {
+                console.error("[OVERLAY-TIMER] Error in deep recheck background runner:", err.message || err);
+              } finally {
+                clearCurationTaskRunning("Kometa Deep Library Recheck");
               }
-            } catch (err: any) {
-              console.error("[OVERLAY-TIMER] Error in deep recheck background runner:", err.message || err);
-            } finally {
-              clearCurationTaskRunning("Kometa Deep Library Recheck");
-            }
-          })();
+            })();
+          } catch (err: any) {
+            clearCurationTaskRunning("Kometa Deep Library Recheck");
+          }
         }
       }
 
@@ -2693,22 +2712,26 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
 
         if (agregarrEnabled && isScheduleDue(agregarrSchedule, lastAgregarrRun, now)) {
           if (settings) settings.agregarrLastRunAt = now;
-          await prisma.settings.update({ where: { id: "global" }, data: { agregarrLastRunAt: now } }).catch(() => {});
-          (async () => {
-            setCurationTaskRunning("Agregarr Collections Sync");
-            try {
-              console.log(`[AGREGARR-TIMER] Triggering scheduled collection sync (${agregarrSchedule})...`);
-              const { runAgregarrSyncInternal } = await import("../app/curation-actions");
-              const aRes = await runAgregarrSyncInternal();
-              if (!aRes.success && aRes.error) {
-                console.warn("[AGREGARR-TIMER] Collection sync:", aRes.error);
+          setCurationTaskRunning("Agregarr Collections Sync");
+          try {
+            await prisma.settings.update({ where: { id: "global" }, data: { agregarrLastRunAt: now } });
+            (async () => {
+              try {
+                console.log(`[AGREGARR-TIMER] Triggering scheduled collection sync (${agregarrSchedule})...`);
+                const { runAgregarrSyncInternal } = await import("../app/curation-actions");
+                const aRes = await runAgregarrSyncInternal();
+                if (!aRes.success && aRes.error) {
+                  console.warn("[AGREGARR-TIMER] Collection sync:", aRes.error);
+                }
+              } catch (aErr: any) {
+                console.error("[AGREGARR-TIMER] Error in Agregarr background runner:", aErr.message || aErr);
+              } finally {
+                clearCurationTaskRunning("Agregarr Collections Sync");
               }
-            } catch (aErr: any) {
-              console.error("[AGREGARR-TIMER] Error in Agregarr background runner:", aErr.message || aErr);
-            } finally {
-              clearCurationTaskRunning("Agregarr Collections Sync");
-            }
-          })();
+            })();
+          } catch (err: any) {
+            clearCurationTaskRunning("Agregarr Collections Sync");
+          }
         }
       }
 
@@ -2720,22 +2743,26 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
 
         if (pruneEnabled && isScheduleDue(pruneSchedule, lastPruneRun, now)) {
           if (settings) settings.pruneLastRunAt = now;
-          await prisma.settings.update({ where: { id: "global" }, data: { pruneLastRunAt: now } }).catch(() => {});
-          (async () => {
-            setCurationTaskRunning("Maintainerr Prune Sync");
-            try {
-              console.log(`[MAINTAINERR-TIMER] Triggering scheduled prune sync (${pruneSchedule})...`);
-              const { runMaintainerrSyncInternal } = await import("../app/curation-actions");
-              const pRes = await runMaintainerrSyncInternal();
-              if (!pRes.success && pRes.error) {
-                console.warn("[MAINTAINERR-TIMER] Prune sync:", pRes.error);
+          setCurationTaskRunning("Maintainerr Prune Sync");
+          try {
+            await prisma.settings.update({ where: { id: "global" }, data: { pruneLastRunAt: now } });
+            (async () => {
+              try {
+                console.log(`[MAINTAINERR-TIMER] Triggering scheduled prune sync (${pruneSchedule})...`);
+                const { runMaintainerrSyncInternal } = await import("../app/curation-actions");
+                const pRes = await runMaintainerrSyncInternal();
+                if (!pRes.success && pRes.error) {
+                  console.warn("[MAINTAINERR-TIMER] Prune sync:", pRes.error);
+                }
+              } catch (pErr: any) {
+                console.error("[MAINTAINERR-TIMER] Error in Maintainerr background runner:", pErr.message || pErr);
+              } finally {
+                clearCurationTaskRunning("Maintainerr Prune Sync");
               }
-            } catch (pErr: any) {
-              console.error("[MAINTAINERR-TIMER] Error in Maintainerr background runner:", pErr.message || pErr);
-            } finally {
-              clearCurationTaskRunning("Maintainerr Prune Sync");
-            }
-          })();
+            })();
+          } catch (err: any) {
+            clearCurationTaskRunning("Maintainerr Prune Sync");
+          }
         }
       }
 
@@ -2747,22 +2774,26 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
 
         if (taggingEnabled && isScheduleDue(taggingSchedule, lastTaggingRun, now)) {
           if (settings) settings.taggingLastRunAt = now;
-          await prisma.settings.update({ where: { id: "global" }, data: { taggingLastRunAt: now } }).catch(() => {});
-          (async () => {
-            setCurationTaskRunning("IMDb Parental Tagging Sync");
-            try {
-              console.log(`[TAGGING-TIMER] Triggering scheduled IMDb parental tagging sync (${taggingSchedule})...`);
-              const { runParentalTagsSyncInternal } = await import("../app/curation-actions");
-              const tRes = await runParentalTagsSyncInternal();
-              if (!tRes.success && tRes.error) {
-                console.warn("[TAGGING-TIMER] Tagging sync:", tRes.error);
+          setCurationTaskRunning("IMDb Parental Tagging Sync");
+          try {
+            await prisma.settings.update({ where: { id: "global" }, data: { taggingLastRunAt: now } });
+            (async () => {
+              try {
+                console.log(`[TAGGING-TIMER] Triggering scheduled IMDb parental tagging sync (${taggingSchedule})...`);
+                const { runParentalTagsSyncInternal } = await import("../app/curation-actions");
+                const tRes = await runParentalTagsSyncInternal();
+                if (!tRes.success && tRes.error) {
+                  console.warn("[TAGGING-TIMER] Tagging sync:", tRes.error);
+                }
+              } catch (tErr: any) {
+                console.error("[TAGGING-TIMER] Error in Tagging background runner:", tErr.message || tErr);
+              } finally {
+                clearCurationTaskRunning("IMDb Parental Tagging Sync");
               }
-            } catch (tErr: any) {
-              console.error("[TAGGING-TIMER] Error in Tagging background runner:", tErr.message || tErr);
-            } finally {
-              clearCurationTaskRunning("IMDb Parental Tagging Sync");
-            }
-          })();
+            })();
+          } catch (err: any) {
+            clearCurationTaskRunning("IMDb Parental Tagging Sync");
+          }
         }
       }
 
@@ -2826,6 +2857,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         const lastKindleCheck = (global as any).__PORTALARR_LAST_KINDLE_BOUNCE_CHECK || 0;
         if (now.getTime() - lastKindleCheck >= 2 * 60 * 1000) {
           (global as any).__PORTALARR_LAST_KINDLE_BOUNCE_CHECK = now.getTime();
+          (global as any).__PORTALARR_KINDLE_BOUNCE_SCAN_RUNNING = true;
           (async () => {
             try {
               const pendingDeliveries = await prisma.kindleDeliveryLog.count({
@@ -2838,7 +2870,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               }).catch(() => 0);
 
               if (pendingDeliveries > 0) {
-                (global as any).__PORTALARR_KINDLE_BOUNCE_SCAN_RUNNING = true;
                 const { scanKindleBouncesInternal } = await import("./kindle-email-scanner");
                 await scanKindleBouncesInternal({ lookbackMinutes: 30 });
               }
@@ -2932,9 +2963,11 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
                         data: { status: "Approved (Retrying)" }
                       });
 
-                      autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
+                      try {
+                        await autoDownloadBookRequest(req.id, req.title, req.author || "");
+                      } catch (err: any) {
                         console.error(`[AUTO-DOWNLOAD-RETRY-BG] Failed for request "${req.title}":`, err.message || err);
-                      });
+                      }
                     } catch (reqErr: any) {
                       console.error(`[BACKGROUND-SCHEDULER] Error auto-retrying request "${req.title}":`, reqErr.message || reqErr);
                     }
@@ -2974,9 +3007,11 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
                         data: { status: "Approved" }
                       });
 
-                      autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
+                      try {
+                        await autoDownloadBookRequest(req.id, req.title, req.author || "");
+                      } catch (err: any) {
                         console.error(`[AUTO-DOWNLOAD-PENDING-BG] Failed for request "${req.title}":`, err.message || err);
-                      });
+                      }
                     } catch (reqErr: any) {
                       console.error(`[BACKGROUND-SCHEDULER] Error auto-approving request "${req.title}":`, reqErr.message || reqErr);
                     }
@@ -3030,9 +3065,11 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
                               }
                             });
 
-                            autoDownloadBookRequest(newReq.id, newReq.title, newReq.author || "").catch(err => {
+                            try {
+                              await autoDownloadBookRequest(newReq.id, newReq.title, newReq.author || "");
+                            } catch (err: any) {
                               console.error(`[SERIES-MONITOR-DOWNLOAD] Failed for "${newReq.title}":`, err.message || err);
-                            });
+                            }
                           }
                         }
                       }

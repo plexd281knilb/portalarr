@@ -207,7 +207,7 @@ export async function prewarmUserSession(user: {
     tasks.push((async () => {
         try {
             const { getUserProfileBootstrapAction } = await import("@/app/actions");
-            const bootstrap = await getUserProfileBootstrapAction(true);
+            const bootstrap = await getUserProfileBootstrapAction(false);
             if (bootstrap && bootstrap.success) {
                 warmedItems.push("profile_bootstrap");
             }
@@ -218,7 +218,7 @@ export async function prewarmUserSession(user: {
     tasks.push((async () => {
         try {
             const { getUserMediaServersAndLibrariesAction } = await import("@/app/media-server-actions");
-            const srvs = await getUserMediaServersAndLibrariesAction(true);
+            const srvs = await getUserMediaServersAndLibrariesAction(false);
             if (srvs && srvs.success) {
                 warmedItems.push("media_servers");
             }
@@ -230,7 +230,7 @@ export async function prewarmUserSession(user: {
         tasks.push((async () => {
             try {
                 const { getAdminDetailedStreamsAction } = await import("@/app/actions");
-                const streams = await getAdminDetailedStreamsAction(true);
+                const streams = await getAdminDetailedStreamsAction(false);
                 if (streams && streams.success) {
                     setUserCache("admin_detailed_streams", streams, 30000); // 30s fresh
                     warmedItems.push("admin_streams");

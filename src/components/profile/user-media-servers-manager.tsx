@@ -7,6 +7,7 @@ import {
     updateUserAccountPreferencesAction,
     UserAvailableServer
 } from "@/app/media-server-actions";
+import { withTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,8 +77,9 @@ export function UserMediaServersManager({
 
     const loadData = async () => {
         setLoading(true);
+        setErr("");
         try {
-            const res = await getUserMediaServersAndLibrariesAction();
+            const res = await withTimeout(getUserMediaServersAndLibrariesAction(), 15000, "Media servers");
             if (res.success) {
                 setIsTrial(res.isTrial);
                 setServers(res.servers);
@@ -95,6 +97,10 @@ export function UserMediaServersManager({
                 setErr(res.error || "Failed to load media servers");
             }
         } catch (e: any) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             setErr(e.message || "Failed to load media servers");
         } finally {
             setLoading(false);
@@ -352,9 +358,14 @@ export function UserMediaServersManager({
                         </div>
                     )}
                     {err && (
-                        <div className="p-3 text-xs bg-red-950/40 border border-red-500/40 text-red-300 rounded-lg flex items-center gap-2">
-                            <XCircle className="h-4 w-4 shrink-0 text-red-400" />
-                            <span>{err}</span>
+                        <div className="p-3 text-xs bg-red-950/40 border border-red-500/40 text-red-300 rounded-lg flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                                <span>{err}</span>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={loadData} className="h-7 text-[11px] shrink-0">
+                                Retry
+                            </Button>
                         </div>
                     )}
 

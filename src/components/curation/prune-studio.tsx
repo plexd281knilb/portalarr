@@ -1,6 +1,7 @@
 "use client";
 
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 
 import React, { useState, useEffect } from "react";
 import {
@@ -1274,8 +1275,9 @@ export function PruneStudio() {
         handlePruneBannerTextChange(next);
     };
 
-    // Initial Data Fetch
+    // Initial Data Fetch (Fast DB bootstrap first, external Plex/Glances async in parallel)
     useEffect(() => {
+        let cancelled = false;
         // Immediately kick off initial preview render so simulator never stalls
         generatePrunePreview(
             null,
@@ -1293,20 +1295,13 @@ export function PruneStudio() {
 
         const loadInitialData = async () => {
             setLoading(true);
+            let savedDiskId = "";
             try {
-                const srvRes = await getPlexServersAndSectionsAction();
-                if (srvRes.success && srvRes.servers && srvRes.servers.length > 0) {
-                    setServers(srvRes.servers);
-                    const firstServer = srvRes.servers[0];
-                    setSelectedServerId(firstServer.serverId);
-                    if (firstServer.sections && firstServer.sections.length > 0) {
-                        setSelectedSectionKey(String(firstServer.sections[0].key));
-                    }
-                }
+                const bootstrap = await fetchJsonWithTimeout<{ settings?: any }>("/api/curation/bootstrap", {}, 15000);
+                if (cancelled) return;
 
-                const settingsRes = await getCurationSettingsAction();
-                let savedDiskId = "";
-                if (settingsRes.success) {
+                const settingsRes = bootstrap?.settings;
+                if (settingsRes?.success) {
                     setSettings(settingsRes);
                     if (settingsRes.serverStorageConfig) setServerStorageConfig(settingsRes.serverStorageConfig);
                     savedDiskId = settingsRes.selectedGlancesDiskId || (settingsRes.serverStorageConfig as any)?.selectedGlancesDiskId || "";
@@ -1460,23 +1455,46 @@ export function PruneStudio() {
                     });
                 }
 
-                const vaultRes = await getArtBackupAndBadgeStatsAction();
-                if (vaultRes.success) {
-                    setVaultStats(vaultRes as any);
-                }
-
-                await Promise.all([
-                    loadLeavingSoonItems(),
-                    loadGlancesDisks(savedDiskId)
-                ]);
             } catch (err) {
+                if (isStaleDeploymentError(err)) {
+                    triggerDeploymentRecoveryReload();
+                    return;
+                }
                 console.error("Failed loading Maintainerr Prune studio data:", err);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
+
+            // Kick off secondary & external queries asynchronously so DB state renders immediately
+            fetchJsonWithTimeout<{ success?: boolean; servers?: any[] }>("/api/curation/plex-sections", {}, 20000)
+                .then((srvRes) => {
+                    if (!cancelled && srvRes?.success && srvRes.servers && srvRes.servers.length > 0) {
+                        setServers(srvRes.servers);
+                        const firstServer = srvRes.servers[0];
+                        setSelectedServerId(firstServer.serverId);
+                        if (firstServer.sections && firstServer.sections.length > 0) {
+                            setSelectedSectionKey(String(firstServer.sections[0].key));
+                        }
+                    }
+                })
+                .catch(() => {});
+
+            getArtBackupAndBadgeStatsAction()
+                .then((vaultRes) => {
+                    if (!cancelled && vaultRes.success) {
+                        setVaultStats(vaultRes as any);
+                    }
+                })
+                .catch(() => {});
+
+            loadLeavingSoonItems().catch(() => {});
+            loadGlancesDisks(savedDiskId).catch(() => {});
         };
 
         loadInitialData();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const loadGlancesDisks = async (savedDiskIdParam?: string) => {

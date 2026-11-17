@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
     CalendarClock, 
     RefreshCw, 
@@ -52,19 +53,32 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
     const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
     const [isMaintenanceWindow, setIsMaintenanceWindow] = useState(false);
     const [serverTime, setServerTime] = useState("");
+    const inFlightRef = useRef(false);
 
     const loadSchedules = useCallback(async (isManualRefresh = false) => {
+        if (!isManualRefresh && inFlightRef.current) return;
+        inFlightRef.current = true;
         if (isManualRefresh) setRefreshing(true);
         try {
-            const res = await getSystemSchedulesStatusAction();
+            const res = await fetchJsonWithTimeout<{
+                success?: boolean;
+                tasks?: SystemScheduleItem[];
+                isMaintenanceWindow?: boolean;
+                serverTime?: string;
+            }>("/api/admin/schedules", {}, 15000);
             if (res.success && res.tasks) {
                 setTasks(res.tasks);
                 setIsMaintenanceWindow(!!res.isMaintenanceWindow);
                 setServerTime(res.serverTime || "");
             }
         } catch (e) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load system schedules:", e);
         } finally {
+            inFlightRef.current = false;
             setLoading(false);
             if (isManualRefresh) setRefreshing(false);
         }
@@ -73,6 +87,7 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
     useEffect(() => {
         loadSchedules();
         const interval = setInterval(() => {
+            if (typeof document !== "undefined" && document.hidden) return;
             loadSchedules();
         }, 30000); // 30s auto-refresh
         return () => clearInterval(interval);

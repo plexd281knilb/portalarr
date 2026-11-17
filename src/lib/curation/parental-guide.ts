@@ -298,7 +298,8 @@ export async function searchImdbIdByTitle(title: string, year?: number): Promise
         const clean = encodeURIComponent(rawClean);
         const firstChar = rawClean[0]?.toLowerCase() || "x";
         const res = await fetch(`https://v3.sg.media-imdb.com/suggestion/${firstChar}/${clean}.json`, {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+            signal: AbortSignal.timeout(15000)
         });
         if (!res.ok) return null;
         const data = await res.json();
@@ -350,7 +351,8 @@ export async function fetchImdbParentalGuideDirect(imdbId?: string): Promise<Imd
                 "User-Agent": "IMDb/3.9.1 (iPhone; iOS 16.5; Scale/3.00)",
                 "x-imdb-client-name": "imdb-ios-app"
             },
-            body: JSON.stringify({ query, variables: { id: imdbId } })
+            body: JSON.stringify({ query, variables: { id: imdbId } }),
+            signal: AbortSignal.timeout(15000)
         });
         if (!res.ok) return null;
         const data = await res.json();
@@ -468,7 +470,8 @@ Example output:
                                 system_instruction: { parts: [{ text: systemPrompt }] },
                                 contents: [{ parts: [{ text: JSON.stringify(payload) }] }],
                                 generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                            })
+                            }),
+                            signal: AbortSignal.timeout(15000)
                         });
                         // If 503 (model overloaded), retry once with exponential backoff and jitter
                         if (res.status === 503) {
@@ -481,7 +484,8 @@ Example output:
                                     system_instruction: { parts: [{ text: systemPrompt }] },
                                     contents: [{ parts: [{ text: JSON.stringify(payload) }] }],
                                     generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                                })
+                                }),
+                                signal: AbortSignal.timeout(15000)
                             });
                         }
                         if (res.ok) {
@@ -507,7 +511,8 @@ Example output:
                     ],
                     response_format: { type: "json_object" },
                     temperature: 0.1
-                })
+                }),
+                signal: AbortSignal.timeout(15000)
             });
             if (res.ok) {
                 const data = await res.json();
@@ -750,7 +755,8 @@ export async function applyParentalTagsToPlexItem(
             } else {
                 // 2. Query current item metadata to preserve non-parental labels/genres
                 const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&includeAdvanced=1&X-Plex-Token=${encodeURIComponent(token)}`, {
-                    headers: { "Accept": "application/json", "X-Plex-Token": token }
+                    headers: { "Accept": "application/json", "X-Plex-Token": token },
+                    signal: AbortSignal.timeout(15000)
                 });
 
                 if (metaRes.ok) {
@@ -887,7 +893,8 @@ export async function clearParentalTagsFromPlexItem(
     for (const cleanBase of urlsToTry) {
         try {
             const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&includeAdvanced=1&X-Plex-Token=${encodeURIComponent(token)}`, {
-                headers: { "Accept": "application/json", "X-Plex-Token": token }
+                headers: { "Accept": "application/json", "X-Plex-Token": token },
+                signal: AbortSignal.timeout(15000)
             });
 
             if (!metaRes.ok) {
@@ -1352,7 +1359,8 @@ export async function applyCustomTagRuleToLibrary(
         for (const cleanBase of urlsToTry) {
             try {
                 const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
-                    headers: { "Accept": "application/json", "X-Plex-Token": serverToken }
+                    headers: { "Accept": "application/json", "X-Plex-Token": serverToken },
+                    signal: AbortSignal.timeout(15000)
                 });
 
                 let existingTags: string[] = [];
@@ -1463,7 +1471,8 @@ export async function clearCustomTagFromLibrary(
         for (const cleanBase of urlsToTry) {
             try {
                 const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
-                    headers: { "Accept": "application/json", "X-Plex-Token": serverToken }
+                    headers: { "Accept": "application/json", "X-Plex-Token": serverToken },
+                    signal: AbortSignal.timeout(15000)
                 });
 
                 if (!metaRes.ok) continue;

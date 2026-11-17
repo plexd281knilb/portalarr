@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
     getSentEmailLogsAction, 
     resendSentEmailAction, 
@@ -51,13 +52,14 @@ export default function SentEmailAuditLog({ onCountChange }: SentEmailAuditLogPr
         try {
             setLoading(true);
             const targetPage = pageOverride ?? currentPage;
-            const res = await getSentEmailLogsAction({
+            const params = new URLSearchParams({
                 search: searchQuery,
                 mode: modeFilter,
                 status: statusFilter,
-                page: targetPage,
-                limit: 25
+                page: String(targetPage),
+                limit: "25",
             });
+            const res = await fetchJsonWithTimeout<any>(`/api/admin/sent-emails?${params.toString()}`, {}, 15000);
 
             if (res.success) {
                 setLogs(res.logs || []);
@@ -75,6 +77,10 @@ export default function SentEmailAuditLog({ onCountChange }: SentEmailAuditLogPr
                 console.error("Failed to load sent email logs:", res.error);
             }
         } catch (e) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("loadLogs error:", e);
         } finally {
             setLoading(false);

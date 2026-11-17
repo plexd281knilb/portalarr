@@ -21,6 +21,7 @@ import {
     toggleLinkedEmailCategoryAction,
     LinkedEmailRecord
 } from "@/app/linked-email-actions";
+import { withTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 
 const PRESET_LABELS = [
     { value: "Spouse / Partner", label: "💍 Spouse / Partner", icon: Heart },
@@ -63,7 +64,8 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
     const loadLinkedEmails = async () => {
         try {
             setLoading(true);
-            const res = await getUserLinkedEmailsAction(targetUserId);
+            setErrorMsg("");
+            const res = await withTimeout(getUserLinkedEmailsAction(targetUserId), 12000, "Linked emails");
             if (res.success && res.linkedEmails) {
                 setLinkedEmails(res.linkedEmails);
                 if (res.primaryEmail) setPrimaryEmail(res.primaryEmail);
@@ -71,6 +73,10 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                 setErrorMsg(res.error);
             }
         } catch (e: any) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             setErrorMsg(e.message || "Failed to load linked inboxes");
         } finally {
             setLoading(false);
@@ -259,9 +265,14 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                     </div>
                 )}
                 {errorMsg && (
-                    <div className="text-xs text-rose-400 bg-rose-950/40 border border-rose-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
-                        <XCircle className="h-4 w-4 shrink-0" />
-                        <span>{errorMsg}</span>
+                    <div className="text-xs text-rose-400 bg-rose-950/40 border border-rose-800/40 p-3 rounded-lg flex items-center justify-between gap-2 animate-in fade-in">
+                        <div className="flex items-center gap-2">
+                            <XCircle className="h-4 w-4 shrink-0" />
+                            <span>{errorMsg}</span>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={loadLinkedEmails} className="h-7 text-[11px] shrink-0">
+                            Retry
+                        </Button>
                     </div>
                 )}
 

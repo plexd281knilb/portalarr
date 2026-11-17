@@ -81,6 +81,9 @@ import {
 } from "@/lib/telemetry/tautulli-backfill";
 import { getUserCache, setUserCache, clearUserCache } from "@/lib/prewarm";
 import { notifyAdminsOnPendingApproval } from "@/lib/admin-approvals";
+import { resolveContainedPath } from "@/lib/book-route-auth";
+import { sendOrQueueEmail, getLinkedEmailCategoryForTemplate, getNotificationCategoryForTemplate } from "@/lib/email-dispatcher";
+import { runAsServerInternal, isServerInternalActive } from "@/lib/internal-context";
 
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -122,6 +125,18 @@ async function verifyAdmin() {
         throw new Error("Unauthorized");
     }
     return user;
+}
+
+async function isDirectExternalServerActionCall(): Promise<boolean> {
+    if (isServerInternalActive()) return false;
+    if (process.env.NODE_ENV !== "production" && (process.env.PORTALARR_TEST === "true" || process.env.PORTALARR_TEST_AUTH === "true")) return false;
+    try {
+        const { headers } = await import("next/headers");
+        const h = await headers();
+        return Boolean(h.get("next-action"));
+    } catch {
+        return false;
+    }
 }
 
 function cleanUrl(url: string): string {
@@ -3075,6 +3090,9 @@ export async function testTautulliConnectionAction(id: string) {
 }
 
 export async function fetchGlancesHardwareStats(rawUrl: string, timeoutMs = 4000): Promise<{ online: boolean; cpu: number; ram: number }> {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     if (!rawUrl) return { online: false, cpu: 0, ram: 0 };
 
     let clean = cleanUrl(rawUrl.trim());
@@ -3341,7 +3359,8 @@ export async function validateDownloadsPathAction(pathStr: string) {
     }
 }
 
-import { sendUserApprovalEmail, createSession } from "@/app/auth-actions";
+import { sendUserApprovalEmail } from "@/app/auth-actions";
+import { createSession } from "@/lib/session-cookie";
 
 /**
  * Revokes all Plex library shares and terminates active streaming sessions for a specific user.
@@ -3351,6 +3370,9 @@ export async function revokePlexAccessForUserInternal(
     reason = "Account trial/access expired or revoked.",
     options?: { bypassApproval?: boolean }
 ) {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     if (!user) return { success: false, error: "No user provided." };
     try {
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
@@ -3600,6 +3622,9 @@ export async function notifyAdminUserRoleOrAccessChange(params: {
  * Note: Admins (role === 'ADMIN') and users with manual Permanent Access (subscriptionEndsAt === null && trialEndsAt === null) are strictly preserved.
  */
 export async function expireDueTrialsAndSubscriptionsInternal() {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     try {
         await ensureSchemaColumns();
 
@@ -4886,475 +4911,6 @@ export async function updateUserPlexLibraries(
     }
 }
 
-function getNotificationCategoryForTemplate(templateId?: string): {
-    field: "emailRequestApproved" | "emailMediaReady" | "emailSubscriptionReminders" | "emailAnnouncements" | "emailSupportTickets" | "emailReferralRewards";
-    label: string;
-} | null {
-    if (!templateId) return null;
-
-    // 1. Media Request Approvals & Status Updates
-    if (
-        templateId === "seerr_request_approved" ||
-        templateId === "seerr_request_auto_approved" ||
-        templateId === "seerr_request_declined" ||
-        templateId === "seerr_request_failed" ||
-        templateId === "media_request_approved" ||
-        templateId === "request_approved" ||
-        templateId === "book_request_approved"
-    ) {
-        return { field: "emailRequestApproved", label: "Media Request Approvals" };
-    }
-
-    // 2. Media Available & Ready to Stream
-    if (
-        templateId === "seerr_request_available" ||
-        templateId === "media_ready" ||
-        templateId === "book_ready"
-    ) {
-        return { field: "emailMediaReady", label: "Media Available & Ready to Stream" };
-    }
-
-    // 3. Subscription & Renewal Reminders
-    if (
-        templateId.startsWith("subscription_renewal_reminder") ||
-        templateId === "trial_expiring_soon" ||
-        templateId === "trial_expired" ||
-        templateId === "subscription_expired" ||
-        templateId === "subscription_activated" ||
-        templateId === "payment_received" ||
-        templateId === "payment_underpayment" ||
-        templateId === "payment_reminder"
-    ) {
-        return { field: "emailSubscriptionReminders", label: "Subscription & Renewal Reminders" };
-    }
-
-    // 4. Server Announcements & Maintenance
-    if (
-        templateId === "broadcast" ||
-        templateId === "new_site_launch" ||
-        templateId === "maintenance_announcement" ||
-        templateId === "server_update"
-    ) {
-        return { field: "emailAnnouncements", label: "Server Announcements & Maintenance" };
-    }
-
-    // 5. Support Ticket Updates
-    if (
-        templateId === "ticket_update" ||
-        templateId === "ticket_reply" ||
-        templateId === "support_ticket_update"
-    ) {
-        return { field: "emailSupportTickets", label: "Support Ticket Responses" };
-    }
-
-    // 6. Referral Rewards & Credits
-    if (
-        templateId === "referral_reward_credited" ||
-        templateId === "referral_bonus" ||
-        templateId === "referral_invite"
-    ) {
-        return { field: "emailReferralRewards", label: "Referral Rewards & Community Credits" };
-    }
-
-    return null;
-}
-
-export async function getLinkedEmailCategoryForTemplate(templateId?: string): Promise<string | null> {
-    if (!templateId) return null;
-    const t = templateId.toLowerCase();
-
-    // 1. Subscription & Payment Reminders
-    if (
-        t.startsWith("subscription_renewal_reminder") ||
-        t.includes("payment_reminder") ||
-        t.includes("payment_confirmed") ||
-        t.includes("payment_received") ||
-        t.includes("payment_underpayment") ||
-        t.includes("subscription_activated") ||
-        t.includes("trial_expiring") ||
-        t.includes("trial_expired") ||
-        t.includes("subscription_expired") ||
-        t.includes("payment_receipt")
-    ) {
-        return "receiveSubscriptionReminders";
-    }
-
-    // 2. Announcements
-    if (
-        t === "broadcast" ||
-        t === "new_site_launch" ||
-        t === "maintenance_announcement" ||
-        t === "server_update" ||
-        t === "announcement"
-    ) {
-        return "receiveAnnouncements";
-    }
-
-    // 3. Media Ready
-    if (
-        t === "media_ready" || 
-        t === "book_ready" || 
-        t === "seerr_request_available"
-    ) {
-        return "receiveMediaReady";
-    }
-
-    // 4. Request Approved / Status Updates
-    if (
-        t === "seerr_request_approved" || 
-        t === "seerr_request_auto_approved" || 
-        t === "seerr_request_declined" ||
-        t === "seerr_request_failed" ||
-        t === "request_approved"
-    ) {
-        return "receiveRequestApproved";
-    }
-
-    // 5. New Content
-    if (t.includes("new_content") || t.includes("weekly_digest")) {
-        return "receiveNewContent";
-    }
-
-    // 6. Support Tickets
-    if (t.includes("ticket")) {
-        return "receiveSupportTickets";
-    }
-
-    return null;
-}
-
-export async function sendOrQueueEmail(options: {
-    to: string | string[];
-    subject: string;
-    html: string;
-    text?: string;
-    templateId?: string;
-    from?: string;
-    targetUser?: string;
-    userId?: string;
-    bypassApproval?: boolean;
-    skipAdminAlert?: boolean;
-    attachments?: Array<{ filename: string; path: string; contentType?: string }>;
-    sendMode?: "AUTOMATIC" | "APPROVED_AND_SENT";
-    approvalId?: string;
-    approvedBy?: string;
-    approvedAt?: Date;
-    isLinkedInboxDispatch?: boolean;
-}): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string; logId?: string }> {
-    try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
-        const isExplicitAdminDispatch =
-            options.templateId === "broadcast" ||
-            options.templateId === "new_site_launch" ||
-            options.templateId === "manual_email";
-
-        // Identify whether this email is addressed strictly to the Administrator(s)
-        const adminUsers = await prisma.user.findMany({
-            where: { role: "ADMIN" },
-            select: { email: true }
-        });
-        const adminEmailSet = new Set<string>(
-            adminUsers.map(u => (u.email || "").trim().toLowerCase()).filter(Boolean)
-        );
-        if (settings?.smtpUser) {
-            adminEmailSet.add(settings.smtpUser.trim().toLowerCase());
-        }
-        const ADMIN_ALERT_TEMPLATES = new Set([
-            "admin_new_user",
-            "admin_user_access_revoked",
-            "admin_payment_received",
-            "admin_approval",
-            "media_request_admin",
-            "seerr_request_new_admin",
-            "ticket_error_alert",
-            "library_access_request"
-        ]);
-        const recipientList = (Array.isArray(options.to) ? options.to : [options.to])
-            .map(e => (e || "").trim().toLowerCase())
-            .filter(Boolean);
-        const isToAdminOnly =
-            (recipientList.length > 0 && recipientList.every(e => adminEmailSet.has(e))) ||
-            (options.templateId ? ADMIN_ALERT_TEMPLATES.has(options.templateId) : false);
-
-        // Resolve targeted user record and associated linked emails
-        let targetUserRecord: any = null;
-        if (options.userId) {
-            targetUserRecord = await prisma.user.findUnique({
-                where: { id: options.userId },
-                include: { notificationPreference: true, linkedEmails: true }
-            }).catch(() => null);
-        }
-        if (!targetUserRecord && options.targetUser) {
-            targetUserRecord = await prisma.user.findFirst({
-                where: { username: options.targetUser },
-                include: { notificationPreference: true, linkedEmails: true }
-            }).catch(() => null);
-        }
-        if (!targetUserRecord && options.to) {
-            const toEmail = Array.isArray(options.to) ? options.to[0] : options.to;
-            if (toEmail && typeof toEmail === "string") {
-                targetUserRecord = await prisma.user.findFirst({
-                    where: {
-                        OR: [
-                            { email: toEmail.trim().toLowerCase() },
-                            { plexEmail: toEmail.trim().toLowerCase() }
-                        ]
-                    },
-                    include: { notificationPreference: true, linkedEmails: true }
-                }).catch(() => null);
-            }
-        }
-
-        // If automated email notifications are globally disabled, skip automated background emails
-        // (but never silently drop explicit admin-initiated broadcasts/manual emails or admin-targeted alerts!)
-        if (settings?.emailNotificationsEnabled === false && !options.bypassApproval && !isExplicitAdminDispatch && !isToAdminOnly) {
-            logger.addLog("INFO", "EMAIL", `Email notifications globally disabled in settings. Skipping email "${options.subject}" to ${recipientStr}`);
-            console.log(`[EMAIL-GATE] Email notifications globally disabled. Skipping email: "${options.subject}"`);
-            return { success: true, sent: false, queued: false };
-        }
-
-        // ==========================================
-        // SECOND GATE: User-Level Notification Preferences
-        // ==========================================
-        // Evaluates whether the targeted recipient user has opted out of this specific notification category.
-        // Note: Primary inbox opt-out skips the primary send, while still allowing opted-in linked inboxes to receive fan-out.
-        let skipPrimaryOptOut = false;
-        if (!options.isLinkedInboxDispatch && !isToAdminOnly && options.templateId && options.templateId !== "manual_email") {
-            const notifCategory = getNotificationCategoryForTemplate(options.templateId);
-            if (notifCategory && targetUserRecord?.notificationPreference) {
-                const isPrefEnabled = (targetUserRecord.notificationPreference as any)[notifCategory.field];
-                if (isPrefEnabled === false) {
-                    skipPrimaryOptOut = true;
-                    logger.addLog(
-                        "INFO",
-                        "EMAIL",
-                        `[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label} emails for primary inbox. Evaluating linked inboxes before skipping "${options.subject}".`
-                    );
-                }
-            }
-        }
-
-        const dispatchLinkedInboxes = async () => {
-            if (!options.isLinkedInboxDispatch && !isToAdminOnly && options.templateId && targetUserRecord?.id) {
-                const linkedCategory = await getLinkedEmailCategoryForTemplate(options.templateId);
-                if (linkedCategory) {
-                    try {
-                        const linkedInboxes = (targetUserRecord.linkedEmails && targetUserRecord.linkedEmails.length > 0)
-                            ? targetUserRecord.linkedEmails.filter((l: any) => Boolean(l[linkedCategory]) && (!l.verificationToken || l.isVerified))
-                            : await prisma.userLinkedEmail.findMany({
-                                where: {
-                                    userId: targetUserRecord.id,
-                                    [linkedCategory]: true,
-                                    OR: [{ verificationToken: null }, { isVerified: true }]
-                                }
-                            });
-
-                        for (const linked of linkedInboxes) {
-                            const cleanLinkedEmail = (linked.email || "").trim().toLowerCase();
-                            if (cleanLinkedEmail && !recipientList.includes(cleanLinkedEmail)) {
-                                const linkedNote = `<div style="margin-bottom:14px;padding:8px 12px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;font-size:12px;color:#94a3b8;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">📬 Delivered to linked inbox <strong>${cleanLinkedEmail}</strong>${linked.label ? ` (${linked.label})` : ""} for <strong>${targetUserRecord.name || targetUserRecord.username}</strong></div>`;
-                                const linkedHtml = options.html ? (linkedNote + options.html) : options.html;
-
-                                await sendOrQueueEmail({
-                                    ...options,
-                                    to: cleanLinkedEmail,
-                                    html: linkedHtml,
-                                    isLinkedInboxDispatch: true,
-                                    skipAdminAlert: true
-                                }).catch(err => {
-                                    console.warn(`[LINKED-INBOX-DISPATCH-ERROR] Failed to dispatch to linked inbox ${cleanLinkedEmail}:`, err?.message || err);
-                                });
-                            }
-                        }
-                    } catch (linkedErr: any) {
-                        console.warn("[LINKED-INBOX-FANOUT-ERROR]:", linkedErr?.message || linkedErr);
-                    }
-                }
-            }
-        };
-
-        if (skipPrimaryOptOut) {
-            await dispatchLinkedInboxes();
-            return { success: true, sent: false, queued: false };
-        }
-
-        // Evaluate whether this email requires approval:
-        // - Emails sent TO the Admin (isToAdminOnly) are NEVER gate-checked (sent immediately to Admin).
-        // - All emails sent to regular users ARE gate-checked when requireApprovalForEmails is enabled (unless approved from the queue via bypassApproval).
-        let requireApproval = false;
-        if (!options.bypassApproval && !isToAdminOnly) {
-            const globalEmailApproval = settings?.requireApprovalForEmails ?? true;
-            if (globalEmailApproval) {
-                let policy: Record<string, boolean> = {};
-                try {
-                    if (settings?.emailApprovalPolicy) {
-                        policy = JSON.parse(settings.emailApprovalPolicy);
-                    }
-                } catch {}
-
-                // If explicit policy setting configured for this templateId, use it; otherwise default to true (require approval)
-                if (options.templateId && policy[options.templateId] !== undefined) {
-                    requireApproval = Boolean(policy[options.templateId]);
-                } else {
-                    requireApproval = true;
-                }
-            }
-        }
-
-        const emailConfig = resolveEmailProviderConfig(settings);
-        const host = emailConfig.host;
-        const port = emailConfig.port;
-        const secure = emailConfig.secure;
-        const user = emailConfig.user;
-        const pass = emailConfig.pass;
-        const defaultFrom = emailConfig.from;
-
-        const resolvedSender = options.from
-            ? { formatted: options.from, email: options.from, displayName: "DomsHomeLab" }
-            : resolveSenderAddress(options.templateId, defaultFrom);
-        const senderEmail = resolvedSender.formatted;
-
-        if (requireApproval) {
-            const attachmentNote = options.attachments && options.attachments.length > 0 ? ` [${options.attachments.length} attachment(s)]` : "";
-            const approval = await prisma.adminApproval.create({
-                data: {
-                    type: "EMAIL",
-                    status: "PENDING",
-                    title: `Email: ${options.subject}`,
-                    description: `To: ${recipientStr}${attachmentNote}`,
-                    targetUser: options.targetUser || null,
-                    targetEmail: Array.isArray(options.to) ? options.to[0] : options.to,
-                    userId: options.userId || null,
-                    payload: JSON.stringify({
-                        to: options.to,
-                        from: senderEmail,
-                        subject: options.subject,
-                        html: options.html,
-                        text: options.text,
-                        templateId: options.templateId,
-                        targetUser: options.targetUser,
-                        attachments: options.attachments
-                    })
-                }
-            });
-            logger.addLog("INFO", "APPROVAL", `Email "${options.subject}" to ${recipientStr} queued for admin approval (ID: ${approval.id}).`);
-            logger.addLog("INFO", "EMAIL", `Email "${options.subject}" to ${recipientStr} staged in Admin Approval Queue (ID: ${approval.id}).`);
-            if (!options.skipAdminAlert) {
-                notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
-            }
-            return { success: true, queued: true, approvalId: approval.id };
-        }
-
-        // Send email immediately via SMTP / Resend
-        if (!host || !user || !pass) {
-            logger.addLog("WARN", "EMAIL", `Failed to dispatch email "${options.subject}" to ${recipientStr}: SMTP / Resend delivery settings not configured`);
-            return { success: false, error: "Email delivery provider settings not configured" };
-        }
-
-        const transporter = nodemailer.createTransport({
-            host,
-            port,
-            secure,
-            auth: {
-                user,
-                pass
-            }
-        });
-
-        await transporter.sendMail({
-            from: senderEmail,
-            to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
-            subject: options.subject,
-            html: options.html,
-            text: options.text,
-            attachments: options.attachments
-        });
-
-        const effectiveMode = options.sendMode || (options.bypassApproval && options.approvalId ? "APPROVED_AND_SENT" : "AUTOMATIC");
-        let bodyPreview = options.text;
-        if (!bodyPreview && options.html) {
-            bodyPreview = options.html
-                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
-                .replace(/<[^>]+>/g, " ")
-                .replace(/\s+/g, " ")
-                .trim();
-        }
-        if (bodyPreview && bodyPreview.length > 300) {
-            bodyPreview = bodyPreview.slice(0, 300) + "...";
-        }
-
-        let createdLog: any = null;
-        try {
-            createdLog = await prisma.sentEmailLog.create({
-                data: {
-                    recipient: recipientStr,
-                    recipientName: options.targetUser || null,
-                    userId: options.userId || null,
-                    subject: options.subject,
-                    bodyPreview: bodyPreview || null,
-                    html: options.html,
-                    templateId: options.templateId || "general",
-                    sendMode: effectiveMode,
-                    status: "SENT",
-                    approvalId: options.approvalId || null,
-                    approvedBy: options.approvedBy || null,
-                    approvedAt: options.approvedAt || null,
-                    sentAt: new Date()
-                }
-            });
-        } catch (logErr: any) {
-            console.warn("[SENT-EMAIL-LOG-ERROR]:", logErr.message || logErr);
-        }
-
-        logger.addLog("INFO", "EMAIL", `Dispatched email "${options.subject}" to ${recipientStr} (${effectiveMode === "APPROVED_AND_SENT" ? "Approved by Admin" : "Automatic"})`);
-
-        // ==========================================
-        // FAN-OUT TO LINKED / FAMILY INBOXES
-        // ==========================================
-        await dispatchLinkedInboxes();
-
-        return { success: true, sent: true, logId: createdLog?.id };
-    } catch (e: any) {
-        const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
-        const effectiveMode = options.sendMode || (options.bypassApproval && options.approvalId ? "APPROVED_AND_SENT" : "AUTOMATIC");
-        try {
-            let bodyPreview = options.text;
-            if (!bodyPreview && options.html) {
-                bodyPreview = options.html
-                    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
-                    .replace(/<[^>]+>/g, " ")
-                    .replace(/\s+/g, " ")
-                    .trim();
-            }
-            if (bodyPreview && bodyPreview.length > 300) {
-                bodyPreview = bodyPreview.slice(0, 300) + "...";
-            }
-            await prisma.sentEmailLog.create({
-                data: {
-                    recipient: recipientStr,
-                    recipientName: options.targetUser || null,
-                    userId: options.userId || null,
-                    subject: options.subject,
-                    bodyPreview: bodyPreview || null,
-                    html: options.html,
-                    templateId: options.templateId || "general",
-                    sendMode: effectiveMode,
-                    status: "FAILED",
-                    error: e.message || String(e),
-                    approvalId: options.approvalId || null,
-                    approvedBy: options.approvedBy || null,
-                    approvedAt: options.approvedAt || null,
-                    sentAt: new Date()
-                }
-            });
-        } catch {}
-        logger.addLog("ERROR", "EMAIL", `Failed to dispatch email "${options.subject}" to ${recipientStr}: ${e.message || e}`);
-        console.error("[EMAIL-GATE-ERROR]:", e.message || e);
-        return { success: false, error: e.message || "Failed to send or queue email" };
-    }
-}
-
 export async function getAdminApprovalsAction(params?: {
     status?: string;
     type?: string;
@@ -5929,6 +5485,9 @@ export async function setUserTrialOrSubscriptionInternal(
     type: "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM", 
     customDateOrDays?: string | number
 ) {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     try {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return { success: false, error: "User not found" };
@@ -6241,6 +5800,9 @@ export async function syncUserPlexShareInternal(
     knownServers?: any[],
     knownShares?: any[]
 ): Promise<{ success: boolean; error?: string }> {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     try {
         if (!adminToken) return { success: false, error: "No Plex token" };
 
@@ -6648,12 +6210,18 @@ export async function getReferralStats() {
 
             const count = u._count?.referrals || 0;
             if (count > 0) {
+                const referredByU = users.filter(x => x.referredByUserId === u.id);
+                const convCount = referredByU.filter(x => x.status === "APPROVED" || x.convertedAt).length;
+                const trialCount = referredByU.filter(x => x.status === "TRIAL").length;
                 userMap.set(u.id, {
                     id: u.id,
                     username: u.username,
                     referralCode: u.referralCode,
                     totalReferred: count,
-                    convertedCount: users.filter(x => x.referredByUserId === u.id && (x.status === "APPROVED" || x.convertedAt)).length
+                    totalReferrals: count,
+                    trials: trialCount,
+                    convertedCount: convCount,
+                    conversions: convCount
                 });
             }
         }
@@ -6666,8 +6234,10 @@ export async function getReferralStats() {
             success: true,
             stats: {
                 totalUsers: users.length,
+                totalReferred: users.length,
                 totalTrials,
                 totalConverted,
+                totalConversions: totalConverted,
                 leaderboard
             }
         };
@@ -6899,6 +6469,10 @@ export async function unlinkUserReferralAction(referredUserId: string) {
  */
 export async function getUserRenewalSummaryAction(userId: string) {
     try {
+        const caller: any = await verifyUser();
+        if (caller.role !== "ADMIN" && caller.id !== userId && caller.userId !== userId) {
+            return { success: false, error: "Forbidden" };
+        }
         await ensureSchemaColumns();
         const user = await prisma.user.findUnique({
             where: { id: userId },
@@ -7193,6 +6767,7 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
 
 export async function getPaymentAndTrialSettings() {
     try {
+        await verifyUser();
         await ensureSchemaColumns();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const defaultTrialDays = settings?.defaultTrialDays ?? 14;
@@ -9596,6 +9171,9 @@ export async function submitPageFixSuggestionAction(payload: PageFixSuggestionPa
 
 export async function getActiveDownloads() {
     try {
+        if (await isDirectExternalServerActionCall()) {
+            await verifyUser();
+        }
         await ensureSchemaColumns();
         const apps = await prisma.mediaApp.findMany({
             where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent", "qbittorrent", "SABnzbd", "NZBGet"] } }
@@ -9723,7 +9301,7 @@ export async function getActiveDownloads() {
  * falling back gracefully to base web server responses.
  * Treats any HTTP 200..499 status (including redirects and auth challenges) as reachable.
  */
-export async function checkMediaAppReachability(app: { name: string; type?: string | null; url?: string | null; apiKey?: string | null }, timeoutMs = 4500): Promise<boolean> {
+async function checkMediaAppReachability(app: { name: string; type?: string | null; url?: string | null; apiKey?: string | null }, timeoutMs = 4500): Promise<boolean> {
     if (!app || !app.url) return false;
 
     let clean = cleanUrl(app.url.trim());
@@ -9847,6 +9425,9 @@ export async function checkMediaAppReachability(app: { name: string; type?: stri
 
 export async function getLandingStats(options?: { skipCache?: boolean }) {
     try {
+        if (await isDirectExternalServerActionCall()) {
+            await verifyUser();
+        }
         if (!options?.skipCache) {
             const cached = getUserCache<any>("system_landing_stats");
             if (cached) return cached;
@@ -10053,11 +9634,11 @@ export async function getRoadmapText(): Promise<string> {
         raw.replace(/Active Beta Notice \(`v[^`]+`\)/g, `Active Beta Notice (\`v${activeVersion}\`)`);
 
     try {
-        const roadmapPath = path.join(process.cwd(), "roadmap.md");
+        const roadmapPath = path.join(/*turbopackIgnore: true*/ process.cwd(), "roadmap.md");
         if (fs.existsSync(roadmapPath)) {
             return syncVersionInRoadmap(fs.readFileSync(roadmapPath, "utf-8"));
         }
-        const upperRoadmapPath = path.join(process.cwd(), "ROADMAP.md");
+        const upperRoadmapPath = path.join(/*turbopackIgnore: true*/ process.cwd(), "ROADMAP.md");
         if (fs.existsSync(upperRoadmapPath)) {
             return syncVersionInRoadmap(fs.readFileSync(upperRoadmapPath, "utf-8"));
         }
@@ -10079,7 +9660,7 @@ export async function updateRoadmapText(formData: FormData) {
     await verifyAdmin();
     const text = (formData.get("text") as string) || "";
     try {
-        const roadmapPath = path.join(process.cwd(), "roadmap.md");
+        const roadmapPath = path.join(/*turbopackIgnore: true*/ process.cwd(), "roadmap.md");
         fs.writeFileSync(roadmapPath, text, "utf-8");
     } catch (e: any) {
         console.error("Failed to write roadmap.md:", e);
@@ -10102,11 +9683,11 @@ export async function updateRoadmapText(formData: FormData) {
 export async function getDevRoadmapText(): Promise<string> {
     await verifyAdmin();
     try {
-        const devPath = path.join(process.cwd(), "docs", "DEV_ROADMAP.md");
+        const devPath = path.join(/*turbopackIgnore: true*/ process.cwd(), "docs", "DEV_ROADMAP.md");
         if (fs.existsSync(devPath)) {
             return fs.readFileSync(devPath, "utf-8");
         }
-        const altDevPath = path.join(process.cwd(), "DEV_ROADMAP.md");
+        const altDevPath = path.join(/*turbopackIgnore: true*/ process.cwd(), "DEV_ROADMAP.md");
         if (fs.existsSync(altDevPath)) {
             return fs.readFileSync(altDevPath, "utf-8");
         }
@@ -10120,7 +9701,7 @@ export async function updateDevRoadmapText(formData: FormData) {
     await verifyAdmin();
     const text = (formData.get("text") as string) || "";
     try {
-        const devPath = path.join(process.cwd(), "docs", "DEV_ROADMAP.md");
+        const devPath = path.join(/*turbopackIgnore: true*/ process.cwd(), "docs", "DEV_ROADMAP.md");
         const dir = path.dirname(devPath);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
@@ -10332,11 +9913,11 @@ export async function deleteFeatureSuggestion(suggestionId: string) {
 
 export async function getEbooksUserGuide(): Promise<string> {
     try {
-        const guidePath = path.join(process.cwd(), "user_guide_ebooks.md");
+        const guidePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "user_guide_ebooks.md");
         if (fs.existsSync(guidePath)) {
             return fs.readFileSync(guidePath, "utf-8");
         }
-        const rootGuidePath = path.join(process.cwd(), "USER_GUIDE.md");
+        const rootGuidePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "USER_GUIDE.md");
         if (fs.existsSync(rootGuidePath)) {
             return fs.readFileSync(rootGuidePath, "utf-8");
         }
@@ -10349,7 +9930,7 @@ export async function getEbooksUserGuide(): Promise<string> {
 export async function saveEbooksUserGuide(content: string) {
     await verifyAdmin();
     try {
-        const guidePath = path.join(process.cwd(), "user_guide_ebooks.md");
+        const guidePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "user_guide_ebooks.md");
         fs.writeFileSync(guidePath, content, "utf-8");
         revalidatePath("/library");
         return { success: true };
@@ -10362,7 +9943,7 @@ export async function saveEbooksUserGuide(content: string) {
 export async function getFullUserGuideAction(): Promise<string> {
     await verifyAdmin();
     try {
-        const rootGuidePath = path.join(process.cwd(), "USER_GUIDE.md");
+        const rootGuidePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "USER_GUIDE.md");
         if (fs.existsSync(rootGuidePath)) {
             return fs.readFileSync(rootGuidePath, "utf-8");
         }
@@ -10375,7 +9956,7 @@ export async function getFullUserGuideAction(): Promise<string> {
 export async function saveFullUserGuideAction(content: string) {
     await verifyAdmin();
     try {
-        const guidePath = path.join(process.cwd(), "USER_GUIDE.md");
+        const guidePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "USER_GUIDE.md");
         fs.writeFileSync(guidePath, content, "utf-8");
         revalidatePath("/guides");
         return { success: true };
@@ -10626,7 +10207,7 @@ async function verifyUser() {
                 };
             }
         }
-        const existingAdmin = await prisma.user.findFirst({ where: { role: "ADMIN" } }) || await prisma.user.findFirst();
+        const existingAdmin = await prisma.user.findFirst({ where: { role: "ADMIN" } });
         if (existingAdmin) {
             return {
                 ...existingAdmin,
@@ -10724,11 +10305,11 @@ async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: s
 }
 
 export async function getLibraries() {
-    let session: any = null;
-    try {
-        session = await verifyUser();
-    } catch (e) {
-        // Unauthenticated session
+    const session: any = await verifyUser();
+    const role = String(session?.role || "").toUpperCase();
+    const status = String(session?.status || "").toUpperCase();
+    if (role !== "ADMIN" && status === "TRIAL") {
+        throw new Error("Forbidden: Book library access is not available for trial accounts.");
     }
     
     let libraries: any[] = [];
@@ -10769,7 +10350,6 @@ export async function getLibraries() {
 
     const username = (session?.username || "") as string;
     const email = (session?.email || "") as string;
-    const role = (session?.role || "").toUpperCase();
 
     if (role === "ADMIN") {
         return libraries;
@@ -11047,6 +10627,9 @@ export async function updateUserKidsLibraryAccessAction(enable: boolean) {
  * Grants or revokes access to any Plex sections matching Audiobooks.
  */
 export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, enable: boolean) {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     const dbUser = await prisma.user.findUnique({ where: { id: userId } });
     if (!dbUser) return { success: false, error: "User not found" };
 
@@ -11468,11 +11051,11 @@ export async function approveBookRequestAction(requestId: string) {
 }
 
 export async function getLibraryBooks(libraryId?: string) {
-    let session: any = null;
-    try {
-        session = await verifyUser();
-    } catch (e) {}
+    const session: any = await verifyUser();
     if (!session) throw new Error("Unauthorized");
+    if (String(session.role || "").toUpperCase() !== "ADMIN" && String(session.status || "").toUpperCase() === "TRIAL") {
+        throw new Error("Forbidden: Trial accounts cannot access the Book Library.");
+    }
     
     // Strictly filter by libraries accessible to the logged-in user
     const accessibleLibs = await getLibraries();
@@ -11620,6 +11203,9 @@ export async function updateBook(id: string, title: string, author: string, cove
 }
 
 export async function renameBookFileOnDisk(bookId: string): Promise<string> {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     try {
         const book = await prisma.book.findUnique({ 
             where: { id: bookId },
@@ -11748,7 +11334,10 @@ export async function getBookRequests() {
         });
         
         if (pendingReqs.length > 0 || downloadedReqs.length > 0) {
-            const allBooks = await prisma.book.findMany();
+            const allBooks = await prisma.book.findMany({
+                where: { fileType: { not: "missing" } },
+                select: { id: true, title: true, mediaType: true, libraryId: true, fileType: true }
+            });
             
             for (const req of pendingReqs) {
                 const normReq = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -12121,16 +11710,18 @@ export async function createBookRequest(formData: FormData) {
                     }
                 });
 
-                sendRequestNotificationToAdmins({
-                    title: `${finalTitle} (${mediaType === "audiobook" ? "Audiobook" : "Book"} Series)`,
-                    author: finalAuthor,
-                    requestedBy: targetUser,
-                    type: "series",
-                    mediaType,
-                    publishYear: finalYear || null
-                }).catch(err => {
-                    console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
-                });
+                if (!isApproved) {
+                    sendRequestNotificationToAdmins({
+                        title: `${finalTitle} (${mediaType === "audiobook" ? "Audiobook" : "Book"} Series)`,
+                        author: finalAuthor,
+                        requestedBy: targetUser,
+                        type: "series",
+                        mediaType,
+                        publishYear: finalYear || null
+                    }).catch(err => {
+                        console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
+                    });
+                }
                 revalidatePath("/library");
                 return { 
                     success: true, 
@@ -12197,21 +11788,23 @@ export async function createBookRequest(formData: FormData) {
         }
         
         if (type === "book" && isApproved && !disableAutoDownload) {
-            autoDownloadBookRequest(request.id, finalTitle, finalAuthor).catch(err => {
+            runAsServerInternal(() => autoDownloadBookRequest(request.id, finalTitle, finalAuthor)).catch(err => {
                 console.error(`[AUTO-DOWNLOAD-BG] Failed for request "${finalTitle}":`, err);
             });
         }
 
-        sendRequestNotificationToAdmins({
-            title,
-            author,
-            requestedBy: targetUser,
-            type,
-            mediaType,
-            publishYear
-        }).catch(err => {
-            console.error(`[SMTP-NOTIFICATION] Email notification failed for request "${title}":`, err);
-        });
+        if (!isApproved) {
+            sendRequestNotificationToAdmins({
+                title,
+                author,
+                requestedBy: targetUser,
+                type,
+                mediaType,
+                publishYear
+            }).catch(err => {
+                console.error(`[SMTP-NOTIFICATION] Email notification failed for request "${title}":`, err);
+            });
+        }
 
         revalidatePath("/library");
         return { 
@@ -12325,7 +11918,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
             });
             
             if (isApproved) {
-                autoDownloadBookRequest(req.id, book.title, book.author).catch(err => {
+                runAsServerInternal(() => autoDownloadBookRequest(req.id, book.title, book.author)).catch(err => {
                     console.error(`[AUTO-DOWNLOAD] Background process failed for series book:`, err);
                 });
             }
@@ -12338,13 +11931,13 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
     }
 }
 
-export async function processEpubForKindle(filePath: string): Promise<string> {
+async function processEpubForKindle(filePath: string): Promise<string> {
     return validateEpubForKindle(filePath);
 }
 
 export async function scanLibrary(libraryId?: string): Promise<{ success: boolean, error?: string, message?: string, count?: number }> {
     try {
-        await verifyUser();
+        await verifyAdmin();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const enableAi = !!settings?.aiAutoResolve;
 
@@ -12369,7 +11962,7 @@ export async function scanLibrary(libraryId?: string): Promise<{ success: boolea
 
 export async function runAiLibraryScanAction(libraryId: string): Promise<{ success: boolean, error?: string, message?: string }> {
     try {
-        await verifyUser();
+        await verifyAdmin();
         const lib = await prisma.library.findUnique({ where: { id: libraryId } });
         if (!lib) return { success: false, error: "Library not found" };
 
@@ -12807,7 +12400,7 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
 function purgeEmptyDirectories(dir: string, protectedFolderSet?: Set<string>) {
     if (!fs.existsSync(dir)) return;
     try {
-        const dirNorm = path.resolve(dir).toLowerCase();
+        const dirNorm = path.resolve(/*turbopackIgnore: true*/ dir).toLowerCase();
         if (protectedFolderSet && protectedFolderSet.has(dirNorm)) {
             // Explicitly protected directory (belongs to an active book or request in DB)
             return;
@@ -12817,8 +12410,8 @@ function purgeEmptyDirectories(dir: string, protectedFolderSet?: Set<string>) {
         let isEmpty = true;
         
         for (const file of files) {
-            const fullPath = path.join(dir, file);
-            const fullPathNorm = path.resolve(fullPath).toLowerCase();
+            const fullPath = path.join(/*turbopackIgnore: true*/ dir, file);
+            const fullPathNorm = path.resolve(/*turbopackIgnore: true*/ fullPath).toLowerCase();
             const stat = fs.statSync(fullPath);
             
             if (stat.isDirectory()) {
@@ -12863,6 +12456,9 @@ function purgeEmptyDirectories(dir: string, protectedFolderSet?: Set<string>) {
 const activeLibraryScans = new Map<string, Promise<any>>();
 
 export async function scanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     const inFlight = activeLibraryScans.get(libraryId);
     if (inFlight) {
         return inFlight;
@@ -14207,7 +13803,7 @@ async function runScanLibraryInternal(libraryId: string, options?: { enableAi?: 
             try {
                 // Build set of protected directory paths from SQLite
                 const protectedFolderSet = new Set<string>();
-                protectedFolderSet.add(path.resolve(scanPath).toLowerCase());
+                protectedFolderSet.add(path.resolve(/*turbopackIgnore: true*/ scanPath).toLowerCase());
 
                 const currentDbBooks = await prisma.book.findMany({
                     where: { libraryId },
@@ -14216,7 +13812,7 @@ async function runScanLibraryInternal(libraryId: string, options?: { enableAi?: 
                 for (const b of currentDbBooks) {
                     if (b.filePath) {
                         try {
-                            const resolved = path.resolve(b.filePath).toLowerCase();
+                            const resolved = path.resolve(/*turbopackIgnore: true*/ b.filePath).toLowerCase();
                             protectedFolderSet.add(resolved);
                             protectedFolderSet.add(path.dirname(resolved));
                             protectedFolderSet.add(path.dirname(path.dirname(resolved)));
@@ -14598,6 +14194,9 @@ export async function filterReleasesForMediaType(results: any[], mediaType: stri
 }
 
 export async function autoDownloadBookRequest(requestId: string, title: string, author: string) {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     console.log(`[AUTO-DOWNLOAD] Starting auto-download check for: ${title} by ${author}`);
     
     try {
@@ -14765,7 +14364,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         // ------------------------------------------------------------------------------------------
         // PORTALARR-RADARR HYBRID: Create "Missing" Book Stub in Library immediately upon approval
         // ------------------------------------------------------------------------------------------
-        if (targetLib && resolvedLibId && targetLib.path && fs.existsSync(targetLib.path) && path.resolve(targetLib.path) !== path.resolve(process.cwd())) {
+        if (targetLib && resolvedLibId && targetLib.path && fs.existsSync(targetLib.path) && path.resolve(/*turbopackIgnore: true*/ targetLib.path) !== path.resolve(/*turbopackIgnore: true*/ process.cwd())) {
             try {
                 const sanitize = (str: string) => str.replace(/[<>:"/\|?*\x00-\x1F]/g, "").trim();
                 const seriesTag = req?.series ? `[${sanitize(req.series)}${req.volumeNumber ? ' ' + String(req.volumeNumber).padStart(2, '0') : ''}] ` : "";
@@ -15103,7 +14702,7 @@ export async function searchProwlarrIndexers(
     expectedTitle?: string,
     expectedAuthor?: string
 ) {
-    await verifyUser();
+    await verifyAdmin();
     
     const prowlarrApp = await prisma.mediaApp.findFirst({
         where: { type: "prowlarr" }
@@ -15695,7 +15294,7 @@ async function copyFolderRecursiveAsync(source: string, target: string) {
     }
 }
 
-export async function monitorAndRetryDownload(
+async function monitorAndRetryDownload(
     requestId: string,
     releases: any[],
     attemptIndex: number,
@@ -16458,7 +16057,7 @@ export async function runAiBatchMetadataScanner() {
     }
 }
 
-export async function validateAndSanitizeKindleEbook(filePath: string, title?: string, author?: string) {
+async function validateAndSanitizeKindleEbook(filePath: string, title?: string, author?: string) {
     if (!fs.existsSync(filePath)) {
         return { valid: false, error: "Ebook file not found on disk. Try re-scanning your library.", fileSize: 0, fileSizeMb: "0" };
     }
@@ -16733,7 +16332,10 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
 export async function sendBookToPersonalEmail(bookId: string, targetUsername?: string) {
     try {
         const session = await verifyUser();
-        const isAdmin = session.role === "ADMIN";
+        const isAdmin = String(session.role || "").toUpperCase() === "ADMIN";
+        if (!isAdmin && String(session.status || "").toUpperCase() === "TRIAL") {
+            return { success: false, error: "Forbidden: Book delivery is not available for trial accounts." };
+        }
         
         let username = session.username as string;
         if (isAdmin && targetUsername) {
@@ -16745,14 +16347,30 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
         });
         
         if (!user) return { success: false, error: "User account not found." };
+        if (!isAdmin && String(user.status || "").toUpperCase() !== "APPROVED") {
+            return { success: false, error: "Forbidden: Account is not active." };
+        }
         if (!user.email) {
             return { success: false, error: "No personal email address associated with your user account." };
         }
 
         const book = await prisma.book.findUnique({
-            where: { id: bookId }
+            where: { id: bookId },
+            include: { library: true }
         });
         if (!book) return { success: false, error: "File not found in database." };
+        if (!isAdmin && book.library) {
+            const hasAccess = await checkLibraryAccess(
+                book.library.allowedUsers,
+                book.library.restrictedUsers || "",
+                user.username,
+                user.email || "",
+                user.role || ""
+            );
+            if (!hasAccess) {
+                return { success: false, error: "Unauthorized access to this library book" };
+            }
+        }
         if (!fs.existsSync(book.filePath)) {
             return { success: false, error: "Media file not found on disk. Try scanning the library again." };
         }
@@ -16812,7 +16430,7 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
     }
 }
 
-export async function sendBookToUserKindleInternal(bookId: string, username: string) {
+async function sendBookToUserKindleInternal(bookId: string, username: string) {
     const user = await prisma.user.findFirst({
         where: { username }
     });
@@ -17073,7 +16691,7 @@ export async function clearKindleDeliveryLogs() {
 
 export async function scanKindleBouncesAction(lookbackHours: number = 24) {
     try {
-        const session = await verifyUser();
+        await verifyAdmin();
         const { scanKindleBouncesInternal } = await import("@/lib/kindle-email-scanner");
         const res = await scanKindleBouncesInternal({
             lookbackMinutes: lookbackHours * 60,
@@ -17189,7 +16807,7 @@ export async function diagnoseKindleHealth(bookId?: string) {
     }
 }
 
-export async function recordFailedRelease(
+async function recordFailedRelease(
     releaseTitle: string,
     downloadUrl?: string,
     guid?: string,
@@ -17426,8 +17044,8 @@ export async function toggleSelfSuperUserAction() {
             return { success: false, error: "User not found." };
         }
 
-        if (user.status === "TRIAL") {
-            return { success: false, error: "Trial accounts cannot enable Super User access. Please upgrade to a full account." };
+        if (String(user.status || "").toUpperCase() !== "APPROVED" && user.role !== "ADMIN") {
+            return { success: false, error: "Super User access requires an active approved membership." };
         }
 
         if (user.role === "ADMIN") {
@@ -17440,7 +17058,6 @@ export async function toggleSelfSuperUserAction() {
             data: { role: newRole }
         });
 
-        const { createSession } = await import("./auth-actions");
         await createSession(user.id, user.username, newRole, user.status, user.trialEndsAt, user.subscriptionEndsAt);
 
         revalidatePath("/");
@@ -18602,6 +18219,9 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
 // ============================================================================
 
 export async function syncPlexFriendsInternal() {
+    if (await isDirectExternalServerActionCall()) {
+        await verifyAdmin();
+    }
     console.log("[PLEX-SYNC] Starting Plex friends scanning and user account sync...");
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
@@ -19069,7 +18689,7 @@ export async function syncPlexFriendsAction() {
 }
 
 export async function refreshBookCover(bookId: string) {
-    await verifyUser();
+    await verifyAdmin();
     const book = await prisma.book.findUnique({ where: { id: bookId } });
     if (!book) return { success: false, error: "Book not found" };
 
@@ -19130,7 +18750,7 @@ export async function refreshBookCover(bookId: string) {
 }
 
 export async function importCompletedDownload(requestId: string) {
-    await verifyUser();
+    await verifyAdmin();
     const currentReq = await prisma.bookRequest.findUnique({ where: { id: requestId } });
     if (!currentReq) return { success: false, error: "Request not found" };
 
@@ -19333,7 +18953,11 @@ export async function importCompletedDownload(requestId: string) {
 
 export async function getAudiobookChapters(bookId: string) {
     try {
-        await verifyUser();
+        const session = await verifyUser();
+        const isAdmin = String(session.role || "").toUpperCase() === "ADMIN";
+        if (!isAdmin && String(session.status || "").toUpperCase() === "TRIAL") {
+            return { success: false, error: "Forbidden: Audiobook streaming is not available for trial accounts.", chapters: [] };
+        }
 
         const book = await prisma.book.findUnique({
             where: { id: bookId },
@@ -19341,6 +18965,18 @@ export async function getAudiobookChapters(bookId: string) {
         });
 
         if (!book) return { success: false, error: "Audiobook entry not found in database", chapters: [] };
+        if (!isAdmin && book.library) {
+            const hasAccess = await checkLibraryAccess(
+                book.library.allowedUsers,
+                book.library.restrictedUsers || "",
+                String(session.username || ""),
+                String(session.email || ""),
+                String(session.role || "")
+            );
+            if (!hasAccess) {
+                return { success: false, error: "Unauthorized access to this library audiobook", chapters: [] };
+            }
+        }
 
         if (!fs.existsSync(book.filePath)) {
             if (book.library?.path && fs.existsSync(book.library.path)) {
@@ -19382,7 +19018,7 @@ export async function getAudiobookChapters(bookId: string) {
         }
 
         const stat = fs.statSync(book.filePath);
-        const libraryPath = book.library?.path ? path.resolve(book.library.path).toLowerCase() : "";
+        const libraryPath = book.library?.path ? path.resolve(/*turbopackIgnore: true*/ book.library.path).toLowerCase() : "";
 
         let isSingleFileBook = false;
         let targetDir = "";
@@ -19393,7 +19029,7 @@ export async function getAudiobookChapters(bookId: string) {
             targetDir = book.filePath;
         } else {
             const parentDir = path.dirname(book.filePath);
-            const parentResolved = path.resolve(parentDir).toLowerCase();
+            const parentResolved = path.resolve(/*turbopackIgnore: true*/ parentDir).toLowerCase();
             
             let parentAudioCount = 0;
             try {
@@ -19414,7 +19050,7 @@ export async function getAudiobookChapters(bookId: string) {
                 const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Disk|Track)\s*\d+$/i;
                 if (discPattern.test(parentName)) {
                     const grandParentDir = path.dirname(parentDir);
-                    const grandResolved = path.resolve(grandParentDir).toLowerCase();
+                    const grandResolved = path.resolve(/*turbopackIgnore: true*/ grandParentDir).toLowerCase();
                     if (libraryPath && grandResolved === libraryPath) {
                         targetDir = parentDir;
                     } else {
@@ -19618,7 +19254,7 @@ export async function getAudiobookChapters(bookId: string) {
 
 export async function reorderAudiobookChapters(bookId: string, updatedChapters: { relativePath: string; newTrackNumber: number }[]) {
     try {
-        await verifyUser();
+        await verifyAdmin();
 
         const book = await prisma.book.findUnique({
             where: { id: bookId }
@@ -19638,8 +19274,8 @@ export async function reorderAudiobookChapters(bookId: string, updatedChapters: 
         const tempMappings: { tempPath: string; finalPath: string }[] = [];
 
         for (const item of sortedItems) {
-            const fullOldPath = path.join(targetDir, item.relativePath);
-            if (fs.existsSync(fullOldPath)) {
+            const fullOldPath = resolveContainedPath(targetDir, item.relativePath);
+            if (fullOldPath && fs.existsSync(fullOldPath)) {
                 const dir = path.dirname(fullOldPath);
                 const ext = path.extname(fullOldPath);
                 const baseName = path.basename(fullOldPath, ext);
@@ -19697,7 +19333,7 @@ export async function reorderAudiobookChapters(bookId: string, updatedChapters: 
 
 export async function analyzeAudiobookChaptersAction(bookId: string) {
     try {
-        await verifyUser();
+        await verifyAdmin();
         const book = await prisma.book.findUnique({
             where: { id: bookId }
         });
@@ -19754,8 +19390,9 @@ export async function analyzeAudiobookChaptersAction(bookId: string) {
                 const res = aiResults[i];
                 const originalPath = fileList[i]?.fullPath;
                 if (originalPath && fs.existsSync(originalPath) && res.suggestedFileName) {
-                    const newPath = path.join(targetDir, res.suggestedFileName);
-                    if (originalPath !== newPath && !fs.existsSync(newPath)) {
+                    const safeSuggestedName = path.basename(res.suggestedFileName.trim());
+                    const newPath = safeSuggestedName ? resolveContainedPath(targetDir, safeSuggestedName) : null;
+                    if (newPath && originalPath !== newPath && !fs.existsSync(newPath)) {
                         try {
                             fs.renameSync(originalPath, newPath);
                         } catch (e) {}
@@ -19908,6 +19545,7 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
 
 export async function getSystemLogsAction(limit = 5000, sinceId?: string) {
     try {
+        await verifyAdmin();
         return logger.getLogs(limit, sinceId);
     } catch (e: any) {
         console.error("Error retrieving system logs:", e);
@@ -19932,7 +19570,7 @@ export async function dumpEntireDatabaseAction() {
 
         const dbUrl = process.env.DATABASE_URL || "";
         const rawPath = dbUrl.replace("file:", "").trim();
-        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(/*turbopackIgnore: true*/ process.cwd(), rawPath);
         const targetExists = fs.existsSync(targetPath);
         const targetSize = targetExists ? fs.statSync(targetPath).size : 0;
 
@@ -20084,7 +19722,7 @@ export async function restoreDatabaseBackupAction(backupFileName: string) {
         await verifyAdmin();
         const dbUrl = process.env.DATABASE_URL || "";
         const rawPath = dbUrl.replace("file:", "").trim();
-        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(/*turbopackIgnore: true*/ process.cwd(), rawPath);
         const backupDir = path.join(path.dirname(targetPath), "backups");
         const safeName = path.basename(backupFileName);
         const backupFile = path.join(backupDir, safeName);
@@ -21913,12 +21551,7 @@ export async function getPlexSetupGuides() {
 
 export async function getUserAiDiagnosticSnapshotAction() {
     try {
-        let user: any = null;
-        try {
-            user = await verifyUser();
-        } catch (e) {
-            user = { username: "Guest User", role: "USER" };
-        }
+        const user: any = await verifyUser();
 
         const safeUsername = String(user?.username || "guest").toLowerCase();
         const { getUserCache, setUserCache } = await import("@/lib/prewarm");
@@ -21949,12 +21582,7 @@ export async function askAiServerMasterAction(
             return { success: false, error: "Question cannot be empty" };
         }
 
-        let user: any = null;
-        try {
-            user = await verifyUser();
-        } catch (e) {
-            user = { username: "Plex User", role: "USER" };
-        }
+        const user: any = await verifyUser();
 
         const { askAiServerMaster } = await import("@/lib/ai-server-assistant");
         const response = await askAiServerMaster(question.trim(), history, user);
@@ -21967,6 +21595,7 @@ export async function askAiServerMasterAction(
 
 export async function verifyPlexPlaybackHealthAction() {
     try {
+        await verifyAdmin();
         const { runDeepPlexPlaybackHealthCheck } = await import("@/lib/plex-playback-probe");
         return await runDeepPlexPlaybackHealthCheck();
     } catch (e: any) {
@@ -22225,7 +21854,10 @@ export async function prewarmAllCachesAction() {
  * Runs all account profile queries in parallel and caches in memory (SWR).
  * Slashing profile settings load times from seconds down to <50ms.
  */
-export async function getUserProfileBootstrapAction(bypassCache = false): Promise<{
+export async function getUserProfileBootstrapAction(
+    bypassCache = false,
+    options?: { skipLiveMediaServers?: boolean }
+): Promise<{
     success: boolean;
     data?: {
         user: any;
@@ -22246,6 +21878,7 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
         hasAudiobooksAccess: boolean;
         audiobookLibraries: any[];
         mediaServersData?: any;
+        liveMediaDeferred?: boolean;
     };
     error?: string;
 }> {
@@ -22253,11 +21886,12 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
         await ensureSchemaColumns();
         const session: any = await verifyUser();
         const userId = session.id;
+        const skipLiveMediaServers = Boolean(options?.skipLiveMediaServers);
 
         const cacheKey = `user_profile_bootstrap:${userId}`;
         if (!bypassCache) {
             const cached = getUserCache<any>(cacheKey);
-            if (cached) {
+            if (cached && (!cached.liveMediaDeferred || skipLiveMediaServers)) {
                 return { success: true, data: cached };
             }
         }
@@ -22297,13 +21931,17 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
             getPublicJoinConfig(),
             getUserNotificationPreferencesAction(),
             getUserContentPreferencesAction(),
-            getUserAllowedPlexLibrariesAction(),
+            skipLiveMediaServers
+                ? Promise.resolve({ success: true, allowedKeys: [], selectedKeys: [], servers: [] } as any)
+                : getUserAllowedPlexLibrariesAction(),
             getUserSubAccountsAction(),
             getAvailableAddonsAction(),
             getUserKidsLibraryAccessAction(),
             getUserAudiobooksLibraryAccessAction(),
             getDiscordServerInviteUrlAction(),
-            getUserMediaServersAndLibrariesAction(bypassCache)
+            skipLiveMediaServers
+                ? Promise.resolve(null as any)
+                : getUserMediaServersAndLibrariesAction(bypassCache)
         ]);
 
         const dbUser = userLookupRes.status === "fulfilled" ? userLookupRes.value : session;
@@ -22376,10 +22014,13 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
             kidsLibraries,
             hasAudiobooksAccess,
             audiobookLibraries,
-            mediaServersData
+            mediaServersData,
+            liveMediaDeferred: skipLiveMediaServers
         };
 
-        setUserCache(cacheKey, payload, 3 * 60 * 1000);
+        if (!skipLiveMediaServers) {
+            setUserCache(cacheKey, payload, 3 * 60 * 1000);
+        }
         return { success: true, data: payload };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to bootstrap user profile" };

@@ -765,7 +765,7 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
                     plexHomeUserId: item.plexUserId || matchedPortalUser.plexHomeUserId,
                     hasPlexLiveTvAccess: liveTvGranted,
                     hasPlexDvrAccess: dvrGranted,
-                    canAccessIptv: isOwner
+                    canAccessIptv: Boolean(matchedPortalUser.canAccessIptv || isOwner)
                 }
             }).catch(() => {});
         }

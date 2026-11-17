@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
-import { arrApiGet, arrApiPost, arrApiPut, getEnabledArrInstancesInternal } from "@/app/arr-actions";
+import { arrApiGet, arrApiPost, arrApiPut, getEnabledArrInstancesInternal } from "@/lib/arr-client";
 import { logger } from "@/lib/logger";
 
 export interface DispatchResult {
@@ -499,7 +499,8 @@ async function dispatchDual1080pCompanion(req: any, settings: any) {
             where: {
                 tmdbId: req.tmdbId,
                 mediaType: req.mediaType,
-                is4k: false
+                is4k: false,
+                isKids: req.isKids ?? false
             }
         });
 

@@ -35,6 +35,7 @@ import {
     Code, Eye, Check, Zap, DollarSign, CalendarClock,
     FolderCheck, AlertTriangle, SlidersHorizontal
 } from "lucide-react";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { triggerSubscriptionRenewalCheckAction } from "@/app/payment-actions";
 
 interface BroadcastUser {
@@ -176,31 +177,36 @@ export default function EmailManagement() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [uRes, tRes, sRes, aRes] = await Promise.all([
-                getBroadcastUsersAction(),
-                getEmailTemplatesAction(),
-                getEmailNotificationSettings(),
-                getApprovalSettingsAction()
-            ]);
+            const payload = await fetchJsonWithTimeout<{
+                users?: any;
+                templates?: any;
+                emailSettings?: any;
+                approvalSettings?: any;
+            }>("/api/admin/email-management", {}, 15000);
 
-            if (uRes.success && uRes.users) {
+            const uRes = payload?.users;
+            const tRes = payload?.templates;
+            const sRes = payload?.emailSettings;
+            const aRes = payload?.approvalSettings;
+
+            if (uRes?.success && uRes.users) {
                 setUsers(uRes.users);
                 // Default select all approved users with valid email
                 const defaultApproved = uRes.users
-                    .filter(u => u.status === "APPROVED" && u.email && u.email.includes("@"))
-                    .map(u => u.id);
+                    .filter((u: BroadcastUser) => u.status === "APPROVED" && u.email && u.email.includes("@"))
+                    .map((u: BroadcastUser) => u.id);
                 setSelectedUserIds(defaultApproved);
             }
 
-            if (tRes.success && tRes.templates) {
+            if (tRes?.success && tRes.templates) {
                 setTemplates(tRes.templates as EmailTemplate[]);
-                const initial = tRes.templates.find(t => t.id === "user_approval") || tRes.templates[0];
+                const initial = tRes.templates.find((t: any) => t.id === "user_approval") || tRes.templates[0];
                 if (initial) {
                     setSelectedTemplateId(initial.id);
                     setTemplateSubject(initial.subject);
                     setTemplateBody(initial.body);
                 }
-                const launchTpl = tRes.templates.find(t => t.id === "new_site_launch");
+                const launchTpl = tRes.templates.find((t: any) => t.id === "new_site_launch");
                 if (launchTpl && !broadcastSubject && !broadcastBody) {
                     setBroadcastSubject(launchTpl.subject);
                     setBroadcastBody(launchTpl.body);
@@ -208,7 +214,7 @@ export default function EmailManagement() {
                 }
             }
 
-            if (sRes.success && sRes.settings) {
+            if (sRes?.success && sRes.settings) {
                 setEmailSettings(sRes.settings);
             }
 
@@ -219,6 +225,10 @@ export default function EmailManagement() {
                 });
             }
         } catch (e) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load email management data:", e);
         } finally {
             setLoading(false);

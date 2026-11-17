@@ -373,28 +373,43 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const loadEmailTemplates = async () => {
         setLoadingEmailTemplates(true);
         try {
-            const res = await getEmailTemplatesAction();
+            const payload = await fetchJsonWithTimeout<{ templates?: { success?: boolean; templates?: any[] } }>(
+                "/api/admin/approvals?status=PENDING&type=ALL&page=1&pageSize=1&includeTemplates=1",
+                {},
+                15000
+            );
+            const res = payload?.templates;
             if (res && res.success && res.templates) {
                 setEmailTemplatesList(res.templates);
             } else {
                 setEmailTemplatesList([]);
             }
         } catch (e) {
+            if (isStaleDeploymentError(e)) triggerDeploymentRecoveryReload();
             console.error("loadEmailTemplates error:", e);
         } finally {
             setLoadingEmailTemplates(false);
         }
     };
 
-    const loadApprovals = async () => {
+    const loadApprovals = async (includeTemplates = false) => {
         setLoadingApprovals(true);
+        if (includeTemplates) setLoadingEmailTemplates(true);
         try {
-            const res = await getAdminApprovalsAction({
+            const params = new URLSearchParams({
                 status: approvalFilterStatus,
                 type: approvalFilterType,
-                page: 1,
-                pageSize: 50
+                page: "1",
+                pageSize: "50",
+                includeTemplates: includeTemplates ? "1" : "0",
             });
+            const payload = await fetchJsonWithTimeout<{
+                approvals?: any;
+                approvalSettings?: any;
+                templates?: { success?: boolean; templates?: any[] } | null;
+            }>(`/api/admin/approvals?${params.toString()}`, {}, 15000);
+
+            const res = payload?.approvals;
             if (res && res.success && res.approvals) {
                 setApprovals(res.approvals);
                 setApprovalCounts({
@@ -404,7 +419,8 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                     totalCount: res.totalCount || 0
                 });
             }
-            const settingsRes = await getApprovalSettingsAction();
+
+            const settingsRes = payload?.approvalSettings;
             if (settingsRes && settingsRes.success) {
                 setApprovalSettings({
                     requireApprovalForPlexChanges: settingsRes.requireApprovalForPlexChanges ?? true,
@@ -415,10 +431,21 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                     adminApprovalEmailNotify: settingsRes.adminApprovalEmailNotify ?? true
                 });
             }
+
+            if (includeTemplates) {
+                const tplRes = payload?.templates;
+                if (tplRes && tplRes.success && tplRes.templates) {
+                    setEmailTemplatesList(tplRes.templates);
+                } else {
+                    setEmailTemplatesList([]);
+                }
+            }
         } catch (e: any) {
+            if (isStaleDeploymentError(e)) triggerDeploymentRecoveryReload();
             console.error("loadApprovals error:", e);
         } finally {
             setLoadingApprovals(false);
+            if (includeTemplates) setLoadingEmailTemplates(false);
         }
     };
 
@@ -479,14 +506,15 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
         }
     };
 
-    const handleBulkApprove = async () => {
-        if (selectedApprovalIds.length === 0) return;
+    const handleBulkApprove = async (overrideIds?: string[]) => {
+        const targetIds = Array.isArray(overrideIds) ? overrideIds : selectedApprovalIds;
+        if (targetIds.length === 0) return;
         setLoadingApprovals(true);
         try {
-            const res = await bulkApproveAdminApprovalsAction(selectedApprovalIds);
+            const res = await bulkApproveAdminApprovalsAction(targetIds);
             if (res.success) {
                 setApprovalSuccessMsg(res.message || "Selected items approved.");
-                setSelectedApprovalIds([]);
+                setSelectedApprovalIds(prev => prev.filter(id => !targetIds.includes(id)));
                 loadApprovals();
                 loadUsers();
             } else {
@@ -499,14 +527,15 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
         }
     };
 
-    const handleBulkReject = async () => {
-        if (selectedApprovalIds.length === 0) return;
+    const handleBulkReject = async (overrideIds?: string[]) => {
+        const targetIds = Array.isArray(overrideIds) ? overrideIds : selectedApprovalIds;
+        if (targetIds.length === 0) return;
         setLoadingApprovals(true);
         try {
-            const res = await bulkRejectAdminApprovalsAction(selectedApprovalIds);
+            const res = await bulkRejectAdminApprovalsAction(targetIds);
             if (res.success) {
                 setApprovalSuccessMsg(res.message || "Selected items rejected.");
-                setSelectedApprovalIds([]);
+                setSelectedApprovalIds(prev => prev.filter(id => !targetIds.includes(id)));
                 loadApprovals();
             } else {
                 setApprovalErrMsg(res.error || "Bulk rejection failed.");
@@ -653,7 +682,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const loadLibraries = async () => {
         setLoadingLibraries(true);
         try {
-            const res = await withTimeout(fetchPlexServerLibraries(), 15000, "Plex library scan");
+            const res = await fetchJsonWithTimeout<{ success?: boolean; servers?: any[] }>("/api/admin/plex-libraries", {}, 20000);
             if (res && res.success && res.servers) {
                 setServerLibraries(res.servers);
             }
@@ -864,12 +893,65 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
         }
     };
 
+    const loadAccessBootstrap = async () => {
+        try {
+            const payload = await fetchJsonWithTimeout<{
+                referrals?: any;
+                paymentSettings?: any;
+                addons?: any;
+                approvalCounts?: { success?: boolean; pendingCount: number; totalCount: number };
+            }>("/api/admin/access-bootstrap", {}, 15000);
+
+            if (payload?.referrals?.success && payload.referrals.stats) {
+                setReferralStats(payload.referrals.stats);
+            }
+
+            const pRes = payload?.paymentSettings;
+            if (pRes && pRes.success && pRes.settings) {
+                setPaymentSettings(pRes.settings);
+                const loadedKeys = pRes.settings.defaultPlexLibraries
+                    ? pRes.settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean)
+                    : [];
+                setDefaultSelectedKeys(loadedKeys);
+
+                const loadedTrialKeys = pRes.settings.defaultTrialPlexLibraries
+                    ? pRes.settings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean)
+                    : [];
+                setDefaultTrialSelectedKeys(loadedTrialKeys);
+
+                const loadedKidsKeys = pRes.settings.defaultKidsPlexLibraries
+                    ? pRes.settings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean)
+                    : [];
+                setDefaultKidsSelectedKeys(loadedKidsKeys);
+
+                initialPaymentSettingsRef.current = {
+                    paymentSettings: { ...pRes.settings },
+                    defaultSelectedKeys: loadedKeys,
+                    defaultTrialSelectedKeys: loadedTrialKeys,
+                    defaultKidsSelectedKeys: loadedKidsKeys
+                };
+            }
+
+            if (payload?.addons?.success && payload.addons.catalog) {
+                setAdminAddonsCatalog(payload.addons.catalog);
+            }
+            if (payload?.approvalCounts?.success) {
+                const counts = payload.approvalCounts;
+                setApprovalCounts(prev => ({ ...prev, pendingCount: counts.pendingCount, totalCount: counts.totalCount }));
+            }
+        } catch (e) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
+            console.error("loadAccessBootstrap error:", e);
+        }
+    };
+
     useEffect(() => {
         loadUsers();
+        loadAccessBootstrap();
         loadLibraries();
-        loadReferrals();
-        loadPaymentSettings();
-        loadApprovalCounts();
 
         if (typeof window !== "undefined") {
             const params = new URLSearchParams(window.location.search);
@@ -917,8 +999,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
     useEffect(() => {
         if (activeTab === "approvals") {
-            loadApprovals();
-            loadEmailTemplates();
+            loadApprovals(true);
         }
     }, [activeTab, approvalFilterStatus, approvalFilterType]);
 
@@ -4539,7 +4620,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={loadApprovals}
+                                onClick={() => loadApprovals(true)}
                                 disabled={loadingApprovals}
                                 className="h-9 gap-1.5 text-xs font-semibold"
                             >
@@ -4919,7 +5000,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => {
                                         const pendingIds = approvals.filter(a => a.status === "PENDING").map(a => a.id);
                                         setSelectedApprovalIds(pendingIds);
-                                        handleBulkApprove();
+                                        handleBulkApprove(pendingIds);
                                     }}
                                     className="h-7 px-2.5 text-[11px] font-semibold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
                                 >
@@ -4934,7 +5015,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => {
                                         const pendingIds = approvals.filter(a => a.status === "PENDING").map(a => a.id);
                                         setSelectedApprovalIds(pendingIds);
-                                        handleBulkReject();
+                                        handleBulkReject(pendingIds);
                                     }}
                                     className="h-7 px-2.5 text-[11px] font-semibold border-rose-500/40 text-rose-400 hover:bg-rose-500/10 gap-1.5"
                                 >
