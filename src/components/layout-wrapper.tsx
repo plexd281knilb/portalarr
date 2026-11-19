@@ -255,7 +255,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         {/* Desktop Sidebar (Admins / Authenticated) */}
         <div className="w-56 lg:w-64 flex-none hidden md:block h-full min-h-0">
           <Suspense fallback={<div className="w-full h-full bg-sidebar" />}>
-            <Sidebar />
+            <Sidebar initialRole={userRole} initialIsTrial={isTrial} />
           </Suspense>
         </div>
         
@@ -263,10 +263,10 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           
           {/* Mobile Header */}
-          <div className="md:hidden border-b border-border bg-background/95 backdrop-blur px-3 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-2 shrink-0">
+          <div className="md:hidden border-b border-border bg-background px-3 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-2 shrink-0">
              <div className="flex items-center gap-2 min-w-0">
                 <Suspense fallback={<div className="w-9 h-9" />}>
-                  <MobileSidebar />
+                  <MobileSidebar initialRole={userRole} initialIsTrial={isTrial} />
                 </Suspense>
                 <img
                   src={getBuildTelemetry().iconSvgPath}

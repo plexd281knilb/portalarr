@@ -1704,6 +1704,29 @@ async function runTestSuite() {
         if (!uptime.currentStreak.includes("Up for")) {
             throw new Error(`Expected streak 'Up for', got '${uptime.currentStreak}'`);
         }
+
+        // 3. Phone Cluster Config Parser & Fail-Closed Auth Gate
+        const { parsePhoneClusterConfig } = await import("../src/lib/monitoring/phone-cluster");
+        const defaultNodes = parsePhoneClusterConfig("");
+        if (defaultNodes.length !== 3) {
+            throw new Error(`Expected 3 default phone cluster nodes, got ${defaultNodes.length}`);
+        }
+        const customNodes = parsePhoneClusterConfig("s22a|192.168.10.66|master,s9|http://192.168.10.65:9100|worker");
+        if (customNodes.length !== 2 || customNodes[0].url !== "http://192.168.10.66:9100" || customNodes[0].role !== "master") {
+            throw new Error(`Unexpected parsed phone cluster config: ${JSON.stringify(customNodes)}`);
+        }
+        const { GET: getPhoneCluster } = await import("../src/app/api/admin/phone-cluster/route");
+        const prevTestAuth = process.env.PORTALARR_TEST_AUTH;
+        process.env.PORTALARR_TEST_AUTH = "false";
+        try {
+            const unauthPhoneRes = await getPhoneCluster();
+            if (unauthPhoneRes.status !== 401 && unauthPhoneRes.status !== 403) {
+                throw new Error(`Expected GET /api/admin/phone-cluster unauthenticated to return 401/403, got ${unauthPhoneRes.status}`);
+            }
+        } finally {
+            if (prevTestAuth !== undefined) process.env.PORTALARR_TEST_AUTH = prevTestAuth;
+            else delete process.env.PORTALARR_TEST_AUTH;
+        }
     });
 
     // =========================================================================
@@ -4330,6 +4353,16 @@ async function runTestSuite() {
         if (!recoverySrc.includes("portalarr_stale_reload_ts") || !layoutSrc.includes("unhandledrejection") || !layoutSrc.includes("triggerDeploymentRecoveryReload")) {
             throw new Error("LayoutWrapper must register cooldown-protected global stale deployment auto-recovery");
         }
+        const sidebarSrc = fs.readFileSync(path.join(process.cwd(), "src/components/sidebar.tsx"), "utf8");
+        if (!sidebarSrc.includes("createPortal") || !sidebarSrc.includes("document.body")) {
+            throw new Error("MobileSidebar must portal its fixed drawer overlay to document.body so parent header styles cannot clip or trap it");
+        }
+        if (sidebarSrc.includes("w-72 max-w-[calc(100vw-2rem)] flex-1")) {
+            throw new Error("MobileSidebar drawer panel must use shrink-0 instead of flex-1 so the backdrop stays tappable beside the drawer");
+        }
+        if (layoutSrc.includes("md:hidden border-b border-border bg-background/95 backdrop-blur")) {
+            throw new Error("Mobile header must not apply backdrop-blur containing block over MobileSidebar");
+        }
         if (!accessSrc.includes('"/api/users"') || !accessSrc.includes("usersError") || !accessSrc.includes("safetyUnlock")) {
             throw new Error("AccessSettingsPage must load via /api/users with timeout safetyUnlock and explicit error/retry UI");
         }
@@ -4609,6 +4642,7 @@ async function runTestSuite() {
             "src/components/kindle-setup-guide-modal.tsx",
             "src/components/system-logs-viewer.tsx",
             "src/components/suggest-fix-modal.tsx",
+            "src/components/phone-cluster-panel.tsx",
         ]) {
             const uiSrc = fs.readFileSync(path.join(process.cwd(), relUiFile), "utf8");
             if (unprefixedDarkSurfaceRe.test(uiSrc)) {
