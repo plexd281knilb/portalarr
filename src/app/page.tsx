@@ -35,6 +35,7 @@ import WhatsNewModal from "@/components/whats-new-modal";
 import AdminUserSwitcher from "@/components/admin-user-switcher";
 import AdminDetailedStreams from "@/components/admin-detailed-streams";
 import AdminSystemHealthGrid from "@/components/admin-system-health-grid";
+import PhoneClusterPanel from "@/components/phone-cluster-panel";
 import StreamQualityDoctorBanner from "@/components/stream-quality-doctor-banner";
 import TrialDashboardView from "@/components/trial-dashboard-view";
 import SuperUserCard from "@/components/super-user-card";
@@ -416,6 +417,9 @@ export default async function UserLandingPage() {
                     <div className="space-y-6">
                         {/* COMPREHENSIVE INFRASTRUCTURE HEALTH & MONITORING COCKPIT */}
                         <AdminSystemHealthGrid />
+
+                        {/* ANDROID K3S PHONE CLUSTER TELEMETRY */}
+                        <PhoneClusterPanel compact />
 
                         {/* INTRICATE ADMIN SYSTEM STATUS & STREAM TELEMETRY TABLE */}
                         <AdminDetailedStreams devRoadmapText={devRoadmapText} roadmapText={roadmapText} />

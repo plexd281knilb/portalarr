@@ -4,6 +4,7 @@ import { BuildBadge } from "@/components/build-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getBuildTelemetry } from "@/lib/version";
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,13 @@ import {
 
 interface SidebarNavContentProps {
   onItemClick?: () => void;
+  initialRole?: string;
+  initialIsTrial?: boolean;
+}
+
+interface SidebarRoleProps {
+  initialRole?: string;
+  initialIsTrial?: boolean;
 }
 
 interface NavItemProps {
@@ -75,17 +83,25 @@ function NavItem({
   );
 }
 
-function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
+function SidebarNavContent({ onItemClick, initialRole, initialIsTrial }: SidebarNavContentProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentTab = searchParams?.get("tab");
   const isLogsActive = pathname === "/settings" && (currentTab === "logs" || searchParams?.get("subtab") === "logs");
   const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive;
 
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isSuperUser, setIsSuperUser] = useState(false);
-  const [isTrial, setIsTrial] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(initialRole === "ADMIN");
+  const [isSuperUser, setIsSuperUser] = useState(initialRole === "SUPER_USER" || initialRole === "ADMIN");
+  const [isTrial, setIsTrial] = useState(Boolean(initialIsTrial) && initialRole !== "ADMIN");
   const lastSessionCheckRef = useRef<{ ts: number; hasSession: boolean }>({ ts: 0, hasSession: false });
+
+  useEffect(() => {
+    if (initialRole) {
+      setIsAdmin(initialRole === "ADMIN");
+      setIsSuperUser(initialRole === "SUPER_USER" || initialRole === "ADMIN");
+      setIsTrial(Boolean(initialIsTrial) && initialRole !== "ADMIN");
+    }
+  }, [initialRole, initialIsTrial]);
 
   useEffect(() => {
     const isAuthBoundary = pathname === "/login" || pathname === "/pending" || pathname.startsWith("/join");
@@ -415,11 +431,15 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
   );
 }
 
-export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
+export function Sidebar({
+  className,
+  initialRole,
+  initialIsTrial,
+}: React.HTMLAttributes<HTMLDivElement> & SidebarRoleProps) {
   return (
     <div className={cn("h-full border-r bg-sidebar text-sidebar-foreground border-border/60 flex flex-col justify-between select-none min-h-0", className)}>
       <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0 overscroll-y-contain scrollbar-thin">
-        <SidebarNavContent />
+        <SidebarNavContent initialRole={initialRole} initialIsTrial={initialIsTrial} />
       </div>
 
       <div className="px-3 py-3 border-t border-border/50 mt-auto space-y-1">
@@ -437,77 +457,107 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   );
 }
 
-export function MobileSidebar() {
+export function MobileSidebar({ initialRole, initialIsTrial }: SidebarRoleProps = {}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchKey = searchParams?.toString() ?? "";
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setIsOpen(false);
-  }, [pathname]);
+  }, [pathname, searchKey]);
 
   useEffect(() => {
     if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setIsOpen(false);
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isOpen]);
+
+  const drawer = isOpen ? (
+    <div
+      id="mobile-sidebar-drawer"
+      className="fixed inset-0 z-[100] flex animate-in fade-in duration-150"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Mobile Navigation"
+    >
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        aria-hidden="true"
+        onClick={() => setIsOpen(false)}
+      />
+      <div className="relative z-10 flex h-full w-72 max-w-[calc(100vw-3rem)] shrink-0 flex-col bg-sidebar text-sidebar-foreground pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl border-r border-border animate-in slide-in-from-left duration-200">
+        <div className="flex items-center justify-end px-3 pb-1 shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsOpen(false)}
+            aria-label="Close navigation menu"
+            className="h-9 w-9 hover:bg-accent rounded-full text-muted-foreground hover:text-foreground touch-manipulation"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+
+        <div className="flex-1 px-3 pb-2 flex flex-col justify-between min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto pr-1 min-h-0 overscroll-y-contain scrollbar-thin">
+            <SidebarNavContent
+              initialRole={initialRole}
+              initialIsTrial={initialIsTrial}
+              onItemClick={() => setIsOpen(false)}
+            />
+          </div>
+
+          <div className="mt-auto border-t border-border/50 pt-3 space-y-1 shrink-0">
+            <ThemeToggle variant="sidebar" />
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full justify-start text-xs font-semibold h-9 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-200 hover:bg-red-500/10 transition-colors rounded-lg group select-none"
+              onClick={() => {
+                setIsOpen(false);
+                logout();
+              }}
+            >
+              <LogOut className="mr-2.5 h-4 w-4 text-red-600 dark:text-red-400 group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors" />
+              <span>Log Out</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
       <Button
+        type="button"
         variant="ghost"
         size="icon"
         onClick={() => setIsOpen(true)}
         aria-label="Open navigation menu"
-        className="md:hidden hover:bg-accent rounded-lg text-muted-foreground hover:text-foreground touch-manipulation"
+        aria-expanded={isOpen}
+        aria-controls="mobile-sidebar-drawer"
+        className="md:hidden shrink-0 hover:bg-accent rounded-lg text-muted-foreground hover:text-foreground touch-manipulation"
       >
         <Menu className="h-6 w-6" />
       </Button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-label="Mobile Navigation">
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="relative flex w-72 max-w-[calc(100vw-2rem)] flex-1 flex-col bg-sidebar text-sidebar-foreground pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl transition-all duration-300 ease-in-out border-r border-border">
-            <div className="flex items-center justify-end px-3 pb-1 shrink-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsOpen(false)}
-                aria-label="Close navigation menu"
-                className="h-9 w-9 hover:bg-accent rounded-full text-muted-foreground hover:text-foreground touch-manipulation"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-
-            <div className="flex-1 px-3 pb-2 flex flex-col justify-between min-h-0 overflow-hidden">
-              <div className="flex-1 overflow-y-auto pr-1 min-h-0 overscroll-y-contain scrollbar-thin">
-                <SidebarNavContent onItemClick={() => setIsOpen(false)} />
-              </div>
-
-              <div className="mt-auto border-t border-border/50 pt-3 space-y-1">
-                <ThemeToggle variant="sidebar" />
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-xs font-semibold h-9 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-200 hover:bg-red-500/10 transition-colors rounded-lg group select-none"
-                  onClick={() => {
-                    setIsOpen(false);
-                    logout();
-                  }}
-                >
-                  <LogOut className="mr-2.5 h-4 w-4 text-red-600 dark:text-red-400 group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors" />
-                  <span>Log Out</span>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {mounted && drawer ? createPortal(drawer, document.body) : null}
     </>
   );
 }
