@@ -182,16 +182,38 @@
 }
 
 /* In-app Email Live Preview: match Light/Dark theme + mobile table stacking */
+.dark .email-preview-prose h1, .dark .email-preview-prose h2, .dark .email-preview-prose h3, .dark .email-preview-prose h4,
 .dark .email-heading { color: #f8fafc !important; border-color: #334155 !important; }
+.dark .email-preview-prose p, .dark .email-preview-prose li, .dark .email-preview-prose td, .dark .email-preview-prose th,
 .dark .email-text { color: #cbd5e1 !important; }
 .dark .email-muted { color: #94a3b8 !important; }
 .dark .email-link { color: #60a5fa !important; }
-.dark .email-box-neutral { background-color: #1c1f2e !important; border-color: #334155 !important; color: #e2e8f0 !important; }
-.dark .email-box-green { background-color: #0f291e !important; border-color: #166534 !important; border-left-color: #22c55e !important; color: #e2e8f0 !important; }
+.dark .email-preview-prose [style*="background-color: #f8fafc"],
+.dark .email-preview-prose [style*="background-color: #f1f5f9"],
+.dark .email-preview-prose [style*="background-color: #ffffff"],
+.dark .email-preview-prose [style*="background-color: #f5f3ff"],
+.dark .email-preview-prose [style*="background: linear-gradient(135deg, #eef2ff"],
+.dark .email-box-neutral { background: #1c1f2e !important; background-color: #1c1f2e !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+.dark .email-preview-prose [style*="background-color: #f0fdf4"],
+.dark .email-box-green { background-color: #0f291e !important; border-color: #166534 !important; border-left-color: #22c55e !important; color: #dcfce7 !important; }
+.dark .email-preview-prose [style*="background-color: #fef2f2"] { background-color: #2c1418 !important; border-color: #7f1d1d !important; color: #fee2e2 !important; }
+.dark .email-preview-prose [style*="background-color: #fffbeb"],
+.dark .email-preview-prose [style*="background-color: #fefce8"] { background-color: #291e0b !important; border-color: #78350f !important; color: #fef3c7 !important; }
+.dark .email-preview-prose [style*="background-color: #eff6ff"] { background-color: #132238 !important; border-color: #1e40af !important; color: #dbeafe !important; }
+.dark .email-preview-prose a[style*="background-color:"],
+.dark .email-preview-prose a[style*="background:"] { color: #ffffff !important; }
+.dark .email-preview-prose a[style*="#e5a00d"] { color: #0f172a !important; }
+.dark .email-preview-prose [style*="color: #166534"],
+.dark .email-preview-prose [style*="color: #15803d"],
 .dark .email-box-green-title,
 .dark .email-green-text { color: #4ade80 !important; }
-.dark .email-red-text { color: #f87171 !important; }
-.dark .email-code { background-color: #14532d !important; color: #dcfce7 !important; }
+.dark .email-preview-prose [style*="color: #991b1b"],
+.dark .email-preview-prose [style*="color: #dc2626"],
+.dark .email-red-text { color: #fca5a5 !important; }
+.dark .email-preview-prose [style*="color: #92400e"],
+.dark .email-preview-prose [style*="color: #b45309"] { color: #fcd34d !important; }
+.dark .email-preview-prose code,
+.dark .email-code { background-color: #1e293b !important; color: #e2e8f0 !important; }
 .dark .email-table { border-color: #334155 !important; }
 .dark .email-table-head { background-color: #1e293b !important; color: #f8fafc !important; }
 .dark .email-table-cell { border-color: #334155 !important; color: #e2e8f0 !important; }

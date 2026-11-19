@@ -172,6 +172,68 @@ async function runTests() {
     const e2eKillBlocked = await askAiServerMaster("Stop streams for user Bob", [], regularUser);
     assert("askAiServerMaster blocks terminating another user's stream", Boolean(!e2eKillBlocked.success && e2eKillBlocked.answer?.includes("Access Control")));
 
+    // TEST 15: Autonomy guardrails enforce Level 1 & Level 2 blocks on mutating tools
+    const { executeAiAssistantTool } = await import("../src/lib/ai-assistant-tools");
+    const { getOllamaCandidateUrls, normalizeOllamaModelName } = await import("../src/lib/ai-ollama");
+    const mockSnap = {
+        username: "dave",
+        role: "USER",
+        serversOnlineCount: 1,
+        activeStreamsCount: 0,
+        activeStreams: [],
+        recentHistory: [],
+        pendingRequests: [],
+        recentDownloads: [],
+    } as any;
+
+    const advReplace = await executeAiAssistantTool(
+        "search_and_replace_media",
+        { title: "The Sandlot", media_type: "movie" },
+        {
+            user: regularUser,
+            snapshot: mockSnap,
+            autonomyLevel: "advisory",
+            actionsTaken: [],
+            mediaInspectionHolder: { current: null },
+            playbackProbeHolder: { current: null },
+        }
+    );
+    assert("Advisory mode blocks search_and_replace_media", Boolean(advReplace.success && advReplace.result?.advisory === true));
+
+    const astReplace = await executeAiAssistantTool(
+        "search_and_replace_media",
+        { title: "The Sandlot", media_type: "movie" },
+        {
+            user: regularUser,
+            snapshot: mockSnap,
+            autonomyLevel: "assisted",
+            actionsTaken: [],
+            mediaInspectionHolder: { current: null },
+            playbackProbeHolder: { current: null },
+        }
+    );
+    assert("Assisted mode blocks unconfirmed search_and_replace_media", Boolean(astReplace.success && astReplace.result?.assisted === true));
+
+    const advBook = await executeAiAssistantTool(
+        "redownload_book",
+        { title: "Dune" },
+        {
+            user: regularUser,
+            snapshot: mockSnap,
+            autonomyLevel: "assisted",
+            actionsTaken: [],
+            mediaInspectionHolder: { current: null },
+            playbackProbeHolder: { current: null },
+        }
+    );
+    assert("Assisted mode blocks unconfirmed redownload_book", Boolean(advBook.success && advBook.result?.assisted === true));
+
+    // TEST 16: Ollama URL resolution & fine-tuned model normalization
+    const urls = getOllamaCandidateUrls();
+    assert("getOllamaCandidateUrls puts localhost 127.0.0.1:11434 first", urls[0] === "http://127.0.0.1:11434");
+    assert("normalizeOllamaModelName defaults to portalarr-plex-master", normalizeOllamaModelName("gemini-3.5-flash-lite") === "portalarr-plex-master");
+    assert("normalizeOllamaModelName preserves explicit Ollama models", normalizeOllamaModelName("qwen2.5:7b-instruct") === "qwen2.5:7b-instruct");
+
     console.log("==================================================");
     console.log(`TEST RESULTS: ${passed} PASSED, ${failed} FAILED`);
     console.log("==================================================");

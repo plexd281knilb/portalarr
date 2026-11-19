@@ -22,7 +22,7 @@ import {
 import { logAgentEvent, validateUserCrossBoundaryQuery } from "@/lib/ai-agent-guardrails";
 import { runDeepPlexPlaybackHealthCheck, PlexPlaybackDiagnosticReport } from "@/lib/plex-playback-probe";
 import { normalizeGeminiModel, getGeminiCandidateModels, getAvailableGeminiModels } from "@/lib/ai-agent";
-import { callOllamaChat } from "@/lib/ai-ollama";
+import { callOllamaChat, normalizeOllamaModelName } from "@/lib/ai-ollama";
 import { 
     GEMINI_TOOL_DECLARATIONS, 
     OPENAI_TOOL_DEFINITIONS, 
@@ -1289,80 +1289,106 @@ INSTRUCTIONS:
             (!process.env.PORTALARR_TEST && (provider === "default" || Boolean(rawKey) || Boolean(process.env.GEMINI_API_KEY)));
         if (!shouldTry) return null;
         try {
-            const ollamaModel =
-                settings?.aiModel &&
-                !settings.aiModel.toLowerCase().includes("gemini") &&
-                !settings.aiModel.toLowerCase().startsWith("gpt")
-                    ? settings.aiModel
-                    : "qwen2.5:3b";
+            const ollamaModel = normalizeOllamaModelName(settings?.aiModel);
             const messages: any[] = [{ role: "system", content: systemPrompt }];
             for (const h of history.slice(-4)) {
                 messages.push({ role: h.role, content: h.content });
             }
             messages.push({ role: "user", content: question });
 
-            const chatRes = await callOllamaChat({
-                messages,
-                model: ollamaModel,
-                tools: activeOpenAiTools,
-            });
-            const message = chatRes?.message;
-            if (message?.tool_calls && message.tool_calls.length > 0) {
-                const toolCall = message.tool_calls[0];
-                const fnName = toolCall.function.name;
-                let fnArgs: any = {};
-                try {
-                    fnArgs =
-                        typeof toolCall.function.arguments === "string"
-                            ? JSON.parse(toolCall.function.arguments || "{}")
-                            : toolCall.function.arguments || {};
-                } catch (_) {}
+            const invokedTools: string[] = [];
+            const seenCalls = new Set<string>();
+            let lastToolSummary = "";
+            let resolvedModel = ollamaModel;
 
-                logAgentEvent("INFO", `RTX 3080 Ollama (${chatRes!.model}) invoked tool "${fnName}"`, fnArgs);
-                const toolResult = await executeAiAssistantTool(fnName, fnArgs, toolCtx);
-                if (toolCtx.mediaInspectionHolder.current) mediaInspection = toolCtx.mediaInspectionHolder.current;
-                if (toolCtx.playbackProbeHolder.current) playbackProbe = toolCtx.playbackProbeHolder.current;
+            for (let step = 0; step < 3; step++) {
+                const chatRes = await callOllamaChat({
+                    messages,
+                    model: ollamaModel,
+                    tools: activeOpenAiTools,
+                });
+                const message = chatRes?.message;
+                if (!message) break;
+                resolvedModel = chatRes.model || ollamaModel;
 
-                const synth = await callOllamaChat({
-                    messages: [
-                        ...messages,
-                        message,
-                        {
+                if (message.tool_calls && message.tool_calls.length > 0) {
+                    messages.push(message);
+                    let executedAnyInStep = false;
+
+                    for (const toolCall of message.tool_calls) {
+                        const fnName = toolCall?.function?.name;
+                        if (!fnName) continue;
+
+                        let fnArgs: any = {};
+                        try {
+                            fnArgs =
+                                typeof toolCall.function.arguments === "string"
+                                    ? JSON.parse(toolCall.function.arguments || "{}")
+                                    : toolCall.function.arguments || {};
+                        } catch (_) {}
+
+                        const callSig = `${fnName}:${JSON.stringify(fnArgs)}`;
+                        if (seenCalls.has(callSig)) continue;
+                        seenCalls.add(callSig);
+                        executedAnyInStep = true;
+                        invokedTools.push(fnName);
+
+                        logAgentEvent("INFO", `Ollama (${resolvedModel}) invoked tool "${fnName}" (step ${step + 1})`, fnArgs);
+                        const toolResult = await executeAiAssistantTool(fnName, fnArgs, toolCtx);
+                        lastToolSummary = toolResult.summary || lastToolSummary;
+                        if (toolCtx.mediaInspectionHolder.current) mediaInspection = toolCtx.mediaInspectionHolder.current;
+                        if (toolCtx.playbackProbeHolder.current) playbackProbe = toolCtx.playbackProbeHolder.current;
+
+                        messages.push({
                             role: "tool",
+                            tool_name: fnName,
                             tool_call_id: toolCall.id || fnName,
                             content: JSON.stringify(toolResult.result),
-                        },
-                    ],
+                        });
+                    }
+
+                    if (!executedAnyInStep) break;
+                    continue;
+                }
+
+                if (message.content && message.content.trim().length > 10) {
+                    const toolSuffix = invokedTools.length > 0 ? ` [Tools: ${invokedTools.join(" -> ")}]` : "";
+                    logAgentEvent("INFO", `Ollama (${resolvedModel}) answered for "${snapshot.username}"${toolSuffix}`);
+                    return {
+                        success: true,
+                        answer: message.content.trim(),
+                        diagnostics: snapshot,
+                        providerUsed: `Ollama (${resolvedModel})${toolSuffix}`,
+                        actionsTaken,
+                        mediaInspection,
+                        playbackProbe,
+                    };
+                }
+                break;
+            }
+
+            if (invokedTools.length > 0) {
+                const synth = await callOllamaChat({
+                    messages,
                     model: ollamaModel,
                 }).catch(() => null);
                 const synthText = synth?.message?.content;
+                const toolSuffix = ` [Tools: ${invokedTools.join(" -> ")}]`;
                 return {
                     success: true,
                     answer:
                         synthText && synthText.trim().length > 10
                             ? synthText.trim()
-                            : toolResult.summary || "Action completed.",
+                            : lastToolSummary || "Diagnostic checks completed.",
                     diagnostics: snapshot,
-                    providerUsed: `RTX 3080 Ollama (${chatRes!.model}) [Tool: ${fnName}]`,
-                    actionsTaken,
-                    mediaInspection,
-                    playbackProbe,
-                };
-            }
-            if (message?.content && message.content.trim().length > 10) {
-                logAgentEvent("INFO", `RTX 3080 Ollama (${chatRes!.model}) answered for "${snapshot.username}"`);
-                return {
-                    success: true,
-                    answer: message.content.trim(),
-                    diagnostics: snapshot,
-                    providerUsed: `RTX 3080 Ollama (${chatRes!.model})`,
+                    providerUsed: `Ollama (${resolvedModel})${toolSuffix}`,
                     actionsTaken,
                     mediaInspection,
                     playbackProbe,
                 };
             }
         } catch (e: any) {
-            logAgentEvent("WARN", `RTX 3080 Ollama skipped: ${e.message}`);
+            logAgentEvent("WARN", `Ollama assistant skipped: ${e.message}`);
         }
         return null;
     };

@@ -468,9 +468,9 @@ export default function StreamIntelligencePage() {
                             <Radio className="h-6 w-6 animate-pulse" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-black tracking-tight text-foreground dark:text-white flex items-center gap-2">
+                            <h1 className="text-2xl font-black tracking-tight text-foreground dark:text-white flex flex-wrap items-center gap-2">
                                 Stream Intelligence
-                                <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-widest bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30">
+                                <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-widest bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30 shrink-0">
                                     Multi-Server Cockpit
                                 </Badge>
                             </h1>

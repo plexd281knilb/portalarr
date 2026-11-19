@@ -2196,7 +2196,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     <CardTitle className="text-xl font-bold">Existing Users & Access Directory</CardTitle>
                                     <CardDescription>Manage user permissions, Plex library shares, trial expiration timers, and Kindle emails.</CardDescription>
                                 </div>
-                                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                                <div className="flex items-center gap-2 flex-wrap min-w-0">
                                     <Button 
                                         variant="outline" 
                                         size="sm" 

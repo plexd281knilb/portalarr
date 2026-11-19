@@ -107,6 +107,16 @@ const nextConfig: NextConfig = {
   
   // Tells Next.js to stop blocking your local network IP
   allowedDevOrigins: rawIps,
+
+  async redirects() {
+    return [
+      {
+        source: "/curation",
+        destination: "/curation/kometa",
+        permanent: false,
+      },
+    ];
+  },
   
   experimental: {
     cpus: availableCores,

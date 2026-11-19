@@ -1,5 +1,5 @@
-const DEFAULT_OLLAMA_MODELS = ["qwen2.5:3b", "qwen2.5:7b-instruct"];
-const DEFAULT_OLLAMA_URLS = ["http://192.168.1.68:11434", "http://192.168.10.78:11434"];
+const DEFAULT_OLLAMA_MODELS = ["portalarr-plex-master", "qwen2.5:7b-instruct", "qwen2.5:3b"];
+const DEFAULT_OLLAMA_URLS = ["http://127.0.0.1:11434", "http://192.168.10.78:11434", "http://192.168.1.68:11434"];
 
 let cachedEndpoint: { url: string | null; models: string[]; checkedAt: number } = {
     url: null,
@@ -46,7 +46,7 @@ export function normalizeOllamaModelName(preferredModel?: string | null): string
         lower.startsWith("o1") ||
         lower.startsWith("o3")
     ) {
-        return (process.env.PORTALARR_OLLAMA_MODEL || "qwen2.5:3b").trim() || "qwen2.5:3b";
+        return (process.env.PORTALARR_OLLAMA_MODEL || "portalarr-plex-master").trim() || "portalarr-plex-master";
     }
     return trimmed;
 }
@@ -102,9 +102,18 @@ export async function resolveActiveOllamaEndpoint(
 async function resolveTargetOllamaModel(preferredModel?: string | null, overrideUrl?: string | null): Promise<string> {
     const normalized = normalizeOllamaModelName(preferredModel);
     if (!overrideUrl && cachedEndpoint.models.length > 0) {
-        if (cachedEndpoint.models.includes(normalized)) return normalized;
+        const findInstalled = (candidate: string): string | null => {
+            if (cachedEndpoint.models.includes(candidate)) return candidate;
+            if (!candidate.includes(":") && cachedEndpoint.models.includes(`${candidate}:latest`)) {
+                return `${candidate}:latest`;
+            }
+            return null;
+        };
+        const directMatch = findInstalled(normalized);
+        if (directMatch) return directMatch;
         for (const fallback of DEFAULT_OLLAMA_MODELS) {
-            if (cachedEndpoint.models.includes(fallback)) return fallback;
+            const fallbackMatch = findInstalled(fallback);
+            if (fallbackMatch) return fallbackMatch;
         }
         return cachedEndpoint.models[0];
     }
@@ -144,25 +153,29 @@ export async function callOllamaJsonCompletion(opts: {
     if (!endpoint) return null;
 
     const model = await resolveTargetOllamaModel(opts.model, opts.overrideUrl);
-    const res = await fetch(`${endpoint}/v1/chat/completions`, {
+    const res = await fetch(`${endpoint}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             model,
-            temperature: 0.1,
-            response_format: { type: "json_object" },
+            stream: false,
+            format: "json",
+            options: {
+                num_ctx: 4096,
+                temperature: 0.1,
+            },
             messages: [
                 { role: "system", content: opts.systemPrompt },
                 { role: "user", content: opts.userPrompt },
             ],
         }),
-        signal: AbortSignal.timeout(opts.timeoutMs || 20000),
+        signal: AbortSignal.timeout(opts.timeoutMs || 25000),
         cache: "no-store",
     });
 
     if (!res.ok) return null;
     const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
+    const content = data?.message?.content || data?.choices?.[0]?.message?.content;
     if (!content) return null;
     return { content: String(content), model, endpoint };
 }
@@ -182,8 +195,12 @@ export async function callOllamaChat(opts: {
         const payload: Record<string, any> = {
             model,
             messages: opts.messages,
-            temperature: 0.2,
-            max_tokens: 1000,
+            stream: false,
+            options: {
+                num_ctx: 8192,
+                temperature: 0.15,
+                num_predict: 1200,
+            },
         };
         if (includeTools && opts.tools && opts.tools.length > 0) {
             payload.tools = opts.tools;
@@ -192,11 +209,11 @@ export async function callOllamaChat(opts: {
     };
 
     const sendChat = (includeTools: boolean) =>
-        fetch(`${endpoint}/v1/chat/completions`, {
+        fetch(`${endpoint}/api/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(buildPayload(includeTools)),
-            signal: AbortSignal.timeout(opts.timeoutMs || 25000),
+            signal: AbortSignal.timeout(opts.timeoutMs || 45000),
             cache: "no-store",
         });
 
@@ -207,7 +224,7 @@ export async function callOllamaChat(opts: {
 
     if (!res.ok) return null;
     const data = await res.json();
-    const message = data?.choices?.[0]?.message;
+    const message = data?.message || data?.choices?.[0]?.message;
     if (!message) return null;
     return { message, model, endpoint };
 }

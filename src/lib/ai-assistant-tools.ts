@@ -369,6 +369,28 @@ export async function executeAiAssistantTool(
 
         // --- 5. SEARCH AND REPLACE MEDIA ---
         case "search_and_replace_media": {
+            if (ctx.autonomyLevel === "advisory") {
+                return {
+                    success: true,
+                    result: {
+                        advisory: true,
+                        message: "Advisory Mode: Automated Radarr/Sonarr release searches and downloads are disabled in Level 1. Please open a Support Ticket or ask an administrator for assistance."
+                    },
+                    summary: "Advisory Mode: Manual request or admin ticket required for media replacement."
+                };
+            }
+            if (ctx.autonomyLevel !== "autonomous") {
+                return {
+                    success: true,
+                    result: {
+                        assisted: true,
+                        requiresConfirmation: true,
+                        message: `Assisted Mode: Found defect target "${args.title}". Automatic media downloads require Level 3 (Full Autonomous) mode or administrator confirmation.`
+                    },
+                    summary: `Assisted Mode: Media replacement for "${args.title}" paused pending confirmation.`
+                };
+            }
+
             try {
                 const isTv = args.media_type === "tv" || args.season !== undefined || args.episode !== undefined;
                 const grabResult = isTv 
@@ -416,6 +438,28 @@ export async function executeAiAssistantTool(
 
         // --- 6. REDOWNLOAD BOOK ---
         case "redownload_book": {
+            if (ctx.autonomyLevel === "advisory") {
+                return {
+                    success: true,
+                    result: {
+                        advisory: true,
+                        message: "Advisory Mode: Automated book replacement downloads are disabled in Level 1."
+                    },
+                    summary: "Advisory Mode: Manual request required for book replacement."
+                };
+            }
+            if (ctx.autonomyLevel !== "autonomous") {
+                return {
+                    success: true,
+                    result: {
+                        assisted: true,
+                        requiresConfirmation: true,
+                        message: `Assisted Mode: Book redownload for "${args.title}" requires Level 3 (Full Autonomous) mode or admin confirmation.`
+                    },
+                    summary: `Assisted Mode: Book redownload for "${args.title}" paused pending confirmation.`
+                };
+            }
+
             try {
                 const bookRes = await redownloadBookWithDiagnostics(args.title, undefined, ctx.user);
                 if (bookRes.success) {

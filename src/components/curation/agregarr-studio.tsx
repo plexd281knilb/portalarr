@@ -2879,7 +2879,7 @@ export function AgregarrStudio() {
                                     <div className="flex items-center gap-2.5 flex-wrap">
                                         <Clock className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                         <CardTitle className="text-base sm:text-lg font-bold text-foreground dark:text-white">Collections &amp; Smart Hubs Automation Schedule</CardTitle>
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30' : 'border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-muted/40 dark:bg-slate-800/40'}`}>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 whitespace-normal text-left max-w-full ${curationSyncCollections ? 'border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30' : 'border-border dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-muted/40 dark:bg-slate-800/40'}`}>
                                             {curationSyncCollections ? `Active (${formatScheduleLabel(curationSyncSchedule)})` : 'Paused'}
                                         </Badge>
                                         {curationSyncCollections && (
@@ -2918,13 +2918,13 @@ export function AgregarrStudio() {
                                 {/* Pillar 1: Dynamic Smart Collections & Home Screen Ranking */}
                                 <div className="bg-muted/60 dark:bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
                                     <div className="space-y-2">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                                            <div className="flex items-center gap-2 min-w-0">
                                                 <Trophy className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                                                 <span className="font-bold text-foreground dark:text-slate-100 text-sm">🌟 Dynamic Collections &amp; Home Hubs</span>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30' : 'border-border dark:border-slate-700 text-slate-500 bg-muted/70 dark:bg-slate-900/40'}`}>
+                                            <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 whitespace-normal text-left max-w-full ${curationSyncCollections ? 'border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30' : 'border-border dark:border-slate-700 text-slate-500 bg-muted/70 dark:bg-slate-900/40'}`}>
                                                     {curationSyncCollections ? formatScheduleLabel(curationSyncSchedule) : 'Disabled'}
                                                 </Badge>
                                                 <Switch 
@@ -3025,12 +3025,12 @@ export function AgregarrStudio() {
                                 {/* Pillar 2: Seasonal Schedules & Coming Soon Placeholders */}
                                 <div className="bg-muted/60 dark:bg-slate-950/60 border border-sky-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
                                     <div className="space-y-2">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                                            <div className="flex items-center gap-2 min-w-0">
                                                 <Calendar className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                                                 <span className="font-bold text-foreground dark:text-slate-100 text-sm">🗓️ Seasonal Dates &amp; Release Placeholders</span>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex flex-wrap items-center gap-2 min-w-0">
                                                 <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncReleases ? 'border-sky-500/40 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/30' : 'border-border dark:border-slate-700 text-slate-500 bg-muted/70 dark:bg-slate-900/40'}`}>
                                                     {curationSyncReleases ? 'Active' : 'Disabled'}
                                                 </Badge>
@@ -3110,11 +3110,11 @@ export function AgregarrStudio() {
             )}
 
             {/* Agregarr Top Navigation Sub-Tabs */}
-            <div className="flex items-center gap-2 p-1.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-md backdrop-blur-md">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 bg-card/95 dark:bg-slate-900/90 rounded-2xl border border-border dark:border-slate-800 shadow-md backdrop-blur-md">
                 <button
                     type="button"
                     onClick={() => setSubTab("collections")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0 ${
                         subTab === "collections"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
@@ -3130,7 +3130,7 @@ export function AgregarrStudio() {
                 <button
                     type="button"
                     onClick={() => setSubTab("presets")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0 ${
                         subTab === "presets"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"
@@ -3146,7 +3146,7 @@ export function AgregarrStudio() {
                 <button
                     type="button"
                     onClick={() => setSubTab("coming_soon")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0 ${
                         subTab === "coming_soon"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-600 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-accent dark:hover:bg-slate-800/60"

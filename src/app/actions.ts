@@ -15872,12 +15872,23 @@ export async function getAiAgentSettings() {
     await verifyAdmin();
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
     const { normalizeGeminiModel } = await import("@/lib/ai-agent");
-    const rawModel = settings?.aiModel || "gemini-3.5-flash-lite";
+    const rawModel = settings?.aiModel || "portalarr-plex-master";
     const provider = settings?.aiProvider || "default";
+    const isOllamaOrCustomModel =
+        rawModel.includes(":") ||
+        rawModel === "portalarr-plex-master" ||
+        rawModel.toLowerCase().includes("qwen") ||
+        rawModel.toLowerCase().includes("llama");
+    const resolvedModel =
+        provider === "ollama" || (provider === "default" && isOllamaOrCustomModel)
+            ? rawModel
+            : (provider === "gemini" || provider === "google" || provider === "default")
+            ? normalizeGeminiModel(rawModel)
+            : rawModel;
     return {
         aiProvider: provider,
         aiApiKey: settings?.aiApiKey ? decryptData(settings.aiApiKey) : "",
-        aiModel: (provider === "gemini" || provider === "google" || provider === "default") ? normalizeGeminiModel(rawModel) : rawModel,
+        aiModel: resolvedModel,
         aiAutoResolve: settings?.aiAutoResolve ?? true,
         aiAutonomyLevel: settings?.aiAutonomyLevel || "autonomous",
         aiMaxDailyGrabs: settings?.aiMaxDailyGrabs ?? 3
@@ -15890,9 +15901,19 @@ export async function saveAiAgentSettings(formData: FormData) {
         const { normalizeGeminiModel } = await import("@/lib/ai-agent");
         const aiProvider = (formData.get("aiProvider") as string) || "default";
         const aiApiKeyRaw = (formData.get("aiApiKey") as string) || "";
-        const defaultModelForProvider = aiProvider === "ollama" ? "qwen2.5:3b" : "gemini-3.5-flash-lite";
+        const defaultModelForProvider = aiProvider === "ollama" ? "portalarr-plex-master" : "gemini-3.5-flash-lite";
         const rawModel = (formData.get("aiModel") as string) || defaultModelForProvider;
-        const aiModel = (aiProvider === "gemini" || aiProvider === "google" || aiProvider === "default") ? normalizeGeminiModel(rawModel) : rawModel;
+        const isOllamaOrCustomModel =
+            rawModel.includes(":") ||
+            rawModel === "portalarr-plex-master" ||
+            rawModel.toLowerCase().includes("qwen") ||
+            rawModel.toLowerCase().includes("llama");
+        const aiModel =
+            aiProvider === "ollama" || (aiProvider === "default" && isOllamaOrCustomModel)
+                ? rawModel
+                : (aiProvider === "gemini" || aiProvider === "google" || aiProvider === "default")
+                ? normalizeGeminiModel(rawModel)
+                : rawModel;
         const aiAutoResolve = formData.get("aiAutoResolve") === "true";
         const aiAutonomyLevel = (formData.get("aiAutonomyLevel") as string) || "autonomous";
         const aiMaxDailyGrabs = parseInt(formData.get("aiMaxDailyGrabs") as string, 10) || 3;
