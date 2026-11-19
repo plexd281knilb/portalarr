@@ -12,7 +12,8 @@ import {
     getEmailNotificationSettings,
     saveEmailNotificationSettingsAction,
     getApprovalSettingsAction,
-    saveApprovalSettingsAction
+    saveApprovalSettingsAction,
+    triggerAnnualThanksgivingRecapAction
 } from "@/app/actions";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -128,11 +129,16 @@ export default function EmailManagement() {
         notifyTrialExpired: false,
         notifySubscriptionActive: false,
         notifySubscriptionRenewal: true,
+        notifyAnnualThanksgivingRecap: true,
         notifyReferralReward: false,
         notifySupportTickets: false,
         notifySendToKindle: false,
         autoSuspendExpiredAccounts: false
     });
+    const [annualRecapVars, setAnnualRecapVars] = useState<Record<string, string>>({});
+    const [annualNextDate, setAnnualNextDate] = useState<string>("");
+    const [runningAnnualRecap, setRunningAnnualRecap] = useState(false);
+    const [annualRecapResult, setAnnualRecapResult] = useState<string | null>(null);
     const [savingEmailSettings, setSavingEmailSettings] = useState(false);
     const [emailSettingsMsg, setEmailSettingsMsg] = useState("");
     const [runningRenewalCheck, setRunningRenewalCheck] = useState(false);
@@ -174,6 +180,23 @@ export default function EmailManagement() {
         }
     };
 
+    const handleRunAnnualRecap = async () => {
+        setRunningAnnualRecap(true);
+        setAnnualRecapResult(null);
+        try {
+            const res = await triggerAnnualThanksgivingRecapAction();
+            if (res.success) {
+                setAnnualRecapResult(res.message || "Annual Thanksgiving Recap processed.");
+            } else {
+                setAnnualRecapResult(`Error: ${res.error || "Failed to run Annual Thanksgiving Recap."}`);
+            }
+        } catch (e: any) {
+            setAnnualRecapResult(`Error: ${e.message || "Failed to run Annual Thanksgiving Recap."}`);
+        } finally {
+            setRunningAnnualRecap(false);
+        }
+    };
+
     const loadData = async () => {
         setLoading(true);
         try {
@@ -182,12 +205,14 @@ export default function EmailManagement() {
                 templates?: any;
                 emailSettings?: any;
                 approvalSettings?: any;
+                annualRecap?: any;
             }>("/api/admin/email-management", {}, 15000);
 
             const uRes = payload?.users;
             const tRes = payload?.templates;
             const sRes = payload?.emailSettings;
             const aRes = payload?.approvalSettings;
+            const arRes = payload?.annualRecap;
 
             if (uRes?.success && uRes.users) {
                 setUsers(uRes.users);
@@ -215,7 +240,12 @@ export default function EmailManagement() {
             }
 
             if (sRes?.success && sRes.settings) {
-                setEmailSettings(sRes.settings);
+                setEmailSettings(prev => ({ ...prev, ...sRes.settings }));
+            }
+
+            if (arRes?.success) {
+                if (arRes.vars) setAnnualRecapVars(arRes.vars);
+                if (arRes.nextScheduledDate) setAnnualNextDate(arRes.nextScheduledDate);
             }
 
             if (aRes && aRes.success) {
@@ -314,41 +344,42 @@ export default function EmailManagement() {
         };
     }, [users, selectedUserIds, previewUserIdx]);
 
-    const renderedBroadcastSubjectPreview = useMemo(() => {
-        let text = broadcastSubject || "Broadcast Subject Preview";
-        const map: Record<string, string> = {
+    const broadcastPreviewMap = useMemo(() => {
+        const origin = typeof window !== "undefined" ? window.location.origin : "https://home.domshomelab.com";
+        const base: Record<string, string> = {};
+        for (const [k, v] of Object.entries(annualRecapVars || {})) {
+            base[`{${k}}`] = v;
+        }
+        return {
+            ...base,
             "{username}": sampleUser.username,
             "{email}": sampleUser.email || "user@example.com",
             "{kindleEmail}": sampleUser.kindleEmail || "user@kindle.com",
             "{role}": sampleUser.role,
             "{status}": sampleUser.status,
-            "{appUrl}": typeof window !== "undefined" ? window.location.origin : "https://home.domshomelab.com",
-            "{loginUrl}": typeof window !== "undefined" ? `${window.location.origin}/login` : "https://home.domshomelab.com/login",
+            "{paymentMemo}": sampleUser.username,
+            "{appUrl}": origin,
+            "{loginUrl}": `${origin}/login`,
+            "{billingUrl}": `${origin}/profile`,
             "{portalName}": "DomsHomeLab"
         };
-        for (const [k, v] of Object.entries(map)) {
+    }, [annualRecapVars, sampleUser]);
+
+    const renderedBroadcastSubjectPreview = useMemo(() => {
+        let text = broadcastSubject || "Broadcast Subject Preview";
+        for (const [k, v] of Object.entries(broadcastPreviewMap)) {
             text = text.replaceAll(k, v);
         }
         return text;
-    }, [broadcastSubject, sampleUser]);
+    }, [broadcastSubject, broadcastPreviewMap]);
 
     const renderedBroadcastBodyPreview = useMemo(() => {
         let text = broadcastBody || "<p>Hello <strong>{username}</strong>,</p><p>This is a broadcast announcement from your server administrator.</p>";
-        const map: Record<string, string> = {
-            "{username}": sampleUser.username,
-            "{email}": sampleUser.email || "user@example.com",
-            "{kindleEmail}": sampleUser.kindleEmail || "user@kindle.com",
-            "{role}": sampleUser.role,
-            "{status}": sampleUser.status,
-            "{appUrl}": typeof window !== "undefined" ? window.location.origin : "https://home.domshomelab.com",
-            "{loginUrl}": typeof window !== "undefined" ? `${window.location.origin}/login` : "https://home.domshomelab.com/login",
-            "{portalName}": "DomsHomeLab"
-        };
-        for (const [k, v] of Object.entries(map)) {
+        for (const [k, v] of Object.entries(broadcastPreviewMap)) {
             text = text.replaceAll(k, v);
         }
         return text;
-    }, [broadcastBody, sampleUser]);
+    }, [broadcastBody, broadcastPreviewMap]);
 
     // Send Test Broadcast to Admin
     const handleSendTestBroadcast = async () => {
@@ -546,6 +577,11 @@ export default function EmailManagement() {
     const renderedTemplateSubjectPreview = useMemo(() => {
         if (!currentTemplate) return "";
         let text = templateSubject || currentTemplate.defaultSubject;
+        if (currentTemplate.id === "annual_thanksgiving_recap") {
+            for (const [k, v] of Object.entries(annualRecapVars || {})) {
+                text = text.replaceAll(`{${k}}`, v);
+            }
+        }
         for (const v of currentTemplate.variables) {
             text = text.replaceAll(v.key, v.sampleValue);
         }
@@ -553,11 +589,16 @@ export default function EmailManagement() {
         text = text.replaceAll("{loginUrl}", typeof window !== "undefined" ? `${window.location.origin}/login` : "https://home.domshomelab.com/login");
         text = text.replaceAll("{portalName}", "DomsHomeLab");
         return text;
-    }, [currentTemplate, templateSubject]);
+    }, [currentTemplate, templateSubject, annualRecapVars]);
 
     const renderedTemplateBodyPreview = useMemo(() => {
         if (!currentTemplate) return "";
         let text = templateBody || currentTemplate.defaultBody;
+        if (currentTemplate.id === "annual_thanksgiving_recap") {
+            for (const [k, v] of Object.entries(annualRecapVars || {})) {
+                text = text.replaceAll(`{${k}}`, v);
+            }
+        }
         for (const v of currentTemplate.variables) {
             text = text.replaceAll(v.key, v.sampleValue);
         }
@@ -565,7 +606,7 @@ export default function EmailManagement() {
         text = text.replaceAll("{loginUrl}", typeof window !== "undefined" ? `${window.location.origin}/login` : "https://home.domshomelab.com/login");
         text = text.replaceAll("{portalName}", "DomsHomeLab");
         return text;
-    }, [currentTemplate, templateBody]);
+    }, [currentTemplate, templateBody, annualRecapVars]);
 
     // Handle dispatch settings toggle
     const handleToggleEmailSetting = async (key: string, value: boolean) => {
@@ -1024,6 +1065,22 @@ export default function EmailManagement() {
                                         <span className="text-[10px] text-muted-foreground">Click to load into Subject &amp; Body</span>
                                     </div>
                                     <div className="flex flex-wrap gap-2 pt-1">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="secondary"
+                                            className="h-7 text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-200 border border-amber-500/40 gap-1.5"
+                                            onClick={() => {
+                                                const annualTpl = templates.find(t => t.id === "annual_thanksgiving_recap");
+                                                if (annualTpl) {
+                                                    setBroadcastSubject(annualTpl.subject);
+                                                    setBroadcastBody(annualTpl.body);
+                                                    setBroadcastIsHtml(false);
+                                                }
+                                            }}
+                                        >
+                                            Annual Thanksgiving Recap
+                                        </Button>
                                         <Button
                                             type="button"
                                             size="sm"
@@ -2577,10 +2634,56 @@ export default function EmailManagement() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* 13. Annual Thanksgiving Recap Broadcast */}
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Megaphone className="h-4 w-4 text-amber-500" /> Annual Thanksgiving Recap
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Automatically sends once a year on the Saturday before Thanksgiving ({annualNextDate || "Sat before Thanksgiving"}) with pricing at a glance, due date, payment links, library counts, streaming comparisons, new features, and roadmap.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={emailSettings.notifyAnnualThanksgivingRecap}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyAnnualThanksgivingRecap", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
+                                </div>
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["annual_thanksgiving_recap"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                                                Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
+                                                Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-annual_thanksgiving_recap" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["annual_thanksgiving_recap"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-annual_thanksgiving_recap"
+                                            checked={isCategoryApprovalRequired(["annual_thanksgiving_recap"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["annual_thanksgiving_recap"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* RENEWAL ENGINE SWEEP TRIGGER */}
-                        <div className="mt-6 pt-6 border-t border-border/40">
+                        <div className="mt-6 pt-6 border-t border-border/40 space-y-4">
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-sm">
                                 <div className="space-y-1">
                                     <div className="font-bold text-sm text-foreground flex items-center gap-2">
@@ -2625,6 +2728,56 @@ export default function EmailManagement() {
                                             <>
                                                 <Zap className="h-3.5 w-3.5" />
                                                 Run Renewal Sweep Now
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border border-sky-500/20 bg-sky-500/5 backdrop-blur-sm">
+                                <div className="space-y-1">
+                                    <div className="font-bold text-sm text-foreground flex flex-wrap items-center gap-2">
+                                        <Megaphone className="h-4 w-4 text-sky-500" />
+                                        <span>Annual Thanksgiving Recap Broadcast</span>
+                                        <Badge variant="outline" className="text-[10px] border-sky-500/30 text-sky-700 dark:text-sky-400 bg-sky-500/10">
+                                            Next Run: {annualNextDate || "Saturday Before Thanksgiving"}
+                                        </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+                                        Runs automatically every year on the Saturday before Thanksgiving (at 9:00 AM local time) with live movie/show totals, current pricing, due dates, payment instructions, streaming competitor comparisons, and new feature highlights. Deduplicated once per year.
+                                    </p>
+                                    {annualRecapResult && (
+                                        <div className={`mt-2 text-xs font-semibold flex items-center gap-1.5 p-2 rounded-lg ${
+                                            annualRecapResult.startsWith("Error")
+                                                ? "bg-red-500/10 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-500/40 dark:border-red-800/40"
+                                                : "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 dark:border-emerald-800/40"
+                                        }`}>
+                                            {annualRecapResult.startsWith("Error") ? (
+                                                <XCircle className="h-4 w-4 shrink-0" />
+                                            ) : (
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                            )}
+                                            <span>{annualRecapResult}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="shrink-0">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={runningAnnualRecap}
+                                        onClick={handleRunAnnualRecap}
+                                        className="gap-2 text-xs font-bold border-sky-500/40 text-sky-700 dark:text-sky-400 hover:bg-sky-500/10 hover:text-sky-800 dark:hover:text-sky-300 w-full sm:w-auto"
+                                    >
+                                        {runningAnnualRecap ? (
+                                            <>
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                Processing Annual Recap...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Send className="h-3.5 w-3.5" />
+                                                Run Annual Recap Now
                                             </>
                                         )}
                                     </Button>

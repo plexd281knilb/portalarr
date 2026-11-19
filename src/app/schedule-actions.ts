@@ -276,6 +276,34 @@ export async function getSystemSchedulesStatusAction(): Promise<{
             isConfigurable: false
         });
 
+        // 4b. Annual Thanksgiving Recap Broadcast (Saturday before Thanksgiving)
+        const { getNextAnnualRecapDate } = await import("@/lib/annual-recap");
+        const annualRecapEnabled = Boolean(settings?.emailNotificationsEnabled) && (settings?.notifyAnnualThanksgivingRecap ?? true);
+        const lastAnnualYear = settings?.lastAnnualRecapYear ?? null;
+        const nextAnnualDate = getNextAnnualRecapDate(now, lastAnnualYear);
+        const nextAnnualFormatted = nextAnnualDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        const diffDaysAnnual = Math.max(0, Math.ceil((nextAnnualDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+        tasks.push({
+            id: "annual_thanksgiving_recap",
+            name: "Annual Thanksgiving Recap Broadcast",
+            category: "billing",
+            categoryLabel: "Billing & Subscriptions",
+            description: "Sends the yearly recap (pricing at a glance, due date, payment methods, library totals, streaming comparisons, new features, and roadmap) on the Saturday before Thanksgiving.",
+            cadence: "annual_thanksgiving_saturday",
+            cadenceLabel: "Yearly (Sat before Thanksgiving)",
+            enabled: annualRecapEnabled,
+            lastRunAt: lastAnnualYear ? `${lastAnnualYear}-11-01T09:00:00.000Z` : null,
+            lastRunDisplay: lastAnnualYear ? `Sent for ${lastAnnualYear}` : "Not sent yet",
+            nextRunAt: nextAnnualDate.toISOString(),
+            nextRunRelative: annualRecapEnabled
+                ? (diffDaysAnnual === 0 ? "Scheduled Today" : `in ${diffDaysAnnual}d (${nextAnnualFormatted})`)
+                : "Email notifications disabled",
+            isDue: false,
+            status: !annualRecapEnabled ? "disabled" : "idle",
+            actionKey: "annual_thanksgiving_recap",
+            isConfigurable: false
+        });
+
         // 5. Payment Email Scraper
         const paymentCurrentVal = paymentAutoScan ? `${paymentInterval}m` : "disabled";
         const paymentNext = calculateNextRunTime(`${paymentInterval}m`, lastPaymentScan, now);
@@ -522,6 +550,16 @@ export async function triggerManualScheduleRunAction(actionKey: string): Promise
                 await sendSubscriptionRenewalRemindersInternal();
                 (global as any).__PORTALARR_LAST_RENEWAL_REMINDER_TIME = now.getTime();
                 return { success: true, message: "Subscription renewal notices checked and sent where due." };
+            }
+            case "annual_thanksgiving_recap": {
+                const { sendAnnualThanksgivingRecapInternal } = await import("@/lib/annual-recap");
+                const res = await sendAnnualThanksgivingRecapInternal({ force: true, now });
+                return {
+                    success: res.success,
+                    message: res.queued > 0
+                        ? `Annual Thanksgiving Recap staged in Approval Queue for ${res.queued} member(s).`
+                        : `Annual Thanksgiving Recap sent to ${res.sent} member(s) (${res.failed} failed).`
+                };
             }
             case "scan_payments": {
                 const { scanPaymentEmailsInternal } = await import("@/lib/payment-email-scraper");

@@ -5,6 +5,7 @@ import {
     getEmailTemplatesAction,
     getEmailNotificationSettings,
     getApprovalSettingsAction,
+    getAnnualRecapVarsAction,
 } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +21,12 @@ export async function GET() {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        const [usersRes, templatesRes, emailSettingsRes, approvalSettingsRes] = await Promise.all([
+        const [usersRes, templatesRes, emailSettingsRes, approvalSettingsRes, annualRecapRes] = await Promise.all([
             getBroadcastUsersAction().catch((err) => ({ success: false, users: [], error: err?.message })),
             getEmailTemplatesAction().catch((err) => ({ success: false, templates: [], error: err?.message })),
             getEmailNotificationSettings().catch(() => ({ success: false, settings: null })),
             getApprovalSettingsAction().catch(() => ({ success: false })),
+            getAnnualRecapVarsAction().catch(() => ({ success: false, vars: {} })),
         ]);
 
         return NextResponse.json(
@@ -33,6 +35,7 @@ export async function GET() {
                 templates: templatesRes,
                 emailSettings: emailSettingsRes,
                 approvalSettings: approvalSettingsRes,
+                annualRecap: annualRecapRes,
             },
             {
                 headers: { "Cache-Control": "no-store, max-age=0" },

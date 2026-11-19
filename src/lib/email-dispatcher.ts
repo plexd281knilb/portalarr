@@ -49,6 +49,7 @@ export function getNotificationCategoryForTemplate(templateId?: string): {
     if (
         templateId === "broadcast" ||
         templateId === "new_site_launch" ||
+        templateId === "annual_thanksgiving_recap" ||
         templateId === "maintenance_announcement" ||
         templateId === "server_update"
     ) {
@@ -96,6 +97,7 @@ export async function getLinkedEmailCategoryForTemplate(templateId?: string): Pr
     if (
         t === "broadcast" ||
         t === "new_site_launch" ||
+        t === "annual_thanksgiving_recap" ||
         t === "maintenance_announcement" ||
         t === "server_update" ||
         t === "announcement"
@@ -190,6 +192,7 @@ export async function sendOrQueueEmail(options: {
         const isExplicitAdminDispatch =
             options.templateId === "broadcast" ||
             options.templateId === "new_site_launch" ||
+            options.templateId === "annual_thanksgiving_recap" ||
             options.templateId === "manual_email";
 
         const adminUsers = await prisma.user.findMany({

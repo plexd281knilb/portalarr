@@ -641,6 +641,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["notifyTrialExpired", `ALTER TABLE "Settings" ADD COLUMN "notifyTrialExpired" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["notifySubscriptionActive", `ALTER TABLE "Settings" ADD COLUMN "notifySubscriptionActive" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["notifySubscriptionRenewal", `ALTER TABLE "Settings" ADD COLUMN "notifySubscriptionRenewal" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["notifyAnnualThanksgivingRecap", `ALTER TABLE "Settings" ADD COLUMN "notifyAnnualThanksgivingRecap" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["lastAnnualRecapYear", `ALTER TABLE "Settings" ADD COLUMN "lastAnnualRecapYear" INTEGER;`],
                 ["notifyReferralReward", `ALTER TABLE "Settings" ADD COLUMN "notifyReferralReward" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["agregarrSyncEnabled", `ALTER TABLE "Settings" ADD COLUMN "agregarrSyncEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["agregarrSyncSchedule", `ALTER TABLE "Settings" ADD COLUMN "agregarrSyncSchedule" TEXT DEFAULT 'every_6_hours';`],
@@ -2637,6 +2639,25 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               console.warn("[BACKGROUND-SCHEDULER] Renewal reminders runner error:", remErr.message || remErr);
             } finally {
               (global as any).__PORTALARR_RENEWAL_REMINDERS_RUNNING = false;
+            }
+          })();
+        }
+      }
+
+      // 1c. Annual Thanksgiving Recap Broadcast (Saturday before Thanksgiving, once per year)
+      if (!(global as any).__PORTALARR_ANNUAL_RECAP_RUNNING) {
+        const lastAnnualCheck = (global as any).__PORTALARR_LAST_ANNUAL_RECAP_CHECK || 0;
+        if (now.getTime() - lastAnnualCheck >= 60 * 60 * 1000) {
+          (global as any).__PORTALARR_LAST_ANNUAL_RECAP_CHECK = now.getTime();
+          (global as any).__PORTALARR_ANNUAL_RECAP_RUNNING = true;
+          (async () => {
+            try {
+              const { sendAnnualThanksgivingRecapInternal } = await import("./annual-recap");
+              await sendAnnualThanksgivingRecapInternal({ now });
+            } catch (annualErr: any) {
+              console.warn("[BACKGROUND-SCHEDULER] Annual Thanksgiving recap runner error:", annualErr.message || annualErr);
+            } finally {
+              (global as any).__PORTALARR_ANNUAL_RECAP_RUNNING = false;
             }
           })();
         }

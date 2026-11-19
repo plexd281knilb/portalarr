@@ -1590,6 +1590,139 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
+        id: "annual_thanksgiving_recap",
+        name: "Annual Thanksgiving Recap & Renewal Guide",
+        description: "Yearly broadcast sent automatically on the Saturday before Thanksgiving with pricing at a glance, due date, payment instructions, library totals, streaming competitor price comparisons, new features, and what's coming next.",
+        triggerEvent: "Sent automatically once per year on the Saturday before Thanksgiving (or manually from Broadcasts / System Schedules), staged in the Admin Approval Queue when enabled.",
+        category: "BROADCAST",
+        defaultSubject: "{portalName} {currentYear} Year in Review — Same Price, {nextYear} Renewal & What's New",
+        defaultBody: `<h2 style="margin-top: 0; color: #0f172a;">Happy Thanksgiving Week, {username}!</h2>
+<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 16px;">
+    Thank you for being part of <strong>{portalName}</strong> this year! Before the holidays get busy, here are the quick answers everyone asks first—followed by a concise recap of what was added in {currentYear}, how our pricing compares, and what's coming next.
+</p>
+
+<!-- TOP QUICK ANSWERS -->
+<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #16a34a; padding: 18px 20px; border-radius: 10px; margin: 18px 0 22px 0;">
+    <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;">Quick Answers: {nextYear} Renewal &amp; Pricing</p>
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #1e293b;">
+        <tr>
+            <td style="padding: 6px 8px 6px 0; font-weight: 700; width: 155px; color: #475569; vertical-align: top;">Did the price go up?</td>
+            <td style="padding: 6px 0; color: #15803d; font-weight: 800;">No &mdash; $0 increase! Same rates as last year.</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 8px 6px 0; font-weight: 700; color: #475569; vertical-align: top;">When is it due?</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 700;">{renewalDate} <span style="font-weight: 400; color: #475569;">(for Annual plans; Monthly renews on the 1st of each month)</span></td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 8px 6px 0; font-weight: 700; color: #475569; vertical-align: top;">How much is it?</td>
+            <td style="padding: 6px 0; color: #0f172a;">
+                <strong>Annual Pass: {yearlyPrice}/year</strong> <span style="color: #475569;">({annualMonthlyRate}/mo &mdash; saves {annualSavings}/yr)</span><br />
+                <strong>Monthly Plan: {monthlyPrice}/month</strong> <span style="color: #475569;">(flexible month-to-month)</span>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 8px 6px 0; font-weight: 700; color: #475569; vertical-align: top;">How do I pay?</td>
+            <td style="padding: 6px 0; color: #0f172a;">
+                Send via <strong>{paymentMethodsText}</strong> (zero fees) and put <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px; font-weight: 700; color: #14532d;">{paymentMemo}</code> in the payment note/memo for automatic matching.
+            </td>
+        </tr>
+    </table>
+    <div style="text-align: center; margin-top: 16px;">
+        <a href="{billingUrl}" style="background-color: #16a34a; color: #ffffff !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 11px 24px; border-radius: 8px; display: inline-block;">View Payment QR, Links &amp; Your Due Date &rarr;</a>
+    </div>
+</div>
+
+<!-- LIBRARY SNAPSHOT -->
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; margin-bottom: 22px;">
+    <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.4px;">What's on the Server Right Now</p>
+    <p style="margin: 0; font-size: 14.5px; color: #334155; line-height: 1.55;">
+        You currently have instant, ad-free access to <strong>{movieCount} movies</strong> and <strong>{showCount} TV shows</strong> (including 4K HDR &amp; Dolby Vision), plus <strong>e-books, audiobooks, and Live TV</strong> &mdash; all in one place with 1-click requests if anything is missing.
+    </p>
+</div>
+
+<!-- COMPETITOR COMPARISON -->
+<h3 style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">How We Compare ({currentYear} Streaming Price Hikes)</h3>
+<p style="color: #475569; font-size: 13.5px; line-height: 1.55; margin: 0 0 12px 0;">
+    Almost every major streaming service raised prices again in {currentYear}. Here's what ad-free plans cost right now vs. {portalName}:
+</p>
+<table style="width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+    <thead>
+        <tr style="background-color: #f1f5f9; color: #0f172a; text-align: left;">
+            <th style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">Service</th>
+            <th style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">Current Ad-Free Price</th>
+            <th style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">{currentYear} Change</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">Netflix</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">$19.99/mo ($26.99/mo for 4K)</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">Went up (+$2/mo)</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">Disney+</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">$21.49/mo ($214.99/yr)</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">Went up (+$2.50/mo)</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">Hulu</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">$21.49/mo</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">Went up (+$2.50/mo)</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">Max (HBO)</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">$18.49/mo ($22.99/mo for 4K)</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #475569;">$184.99&ndash;$229.99/yr</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td style="padding: 9px 10px; font-weight: 800; color: #166534;">{portalName}</td>
+            <td style="padding: 9px 10px; font-weight: 800; color: #15803d;">{yearlyPrice}/yr ({annualMonthlyRate}/mo) or {monthlyPrice}/mo</td>
+            <td style="padding: 9px 10px; font-weight: 800; color: #15803d;">No increase!</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- WHAT WAS ADDED THIS YEAR -->
+<h3 style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">New Things Added in {currentYear}</h3>
+<ul style="color: #334155; font-size: 13.5px; line-height: 1.6; padding-left: 18px; margin: 0 0 18px 0;">
+    <li style="margin-bottom: 6px;"><strong>New {portalName} Portal (<a href="{appUrl}" style="color: #2563eb; text-decoration: none;">{appUrl}</a>):</strong> One clean hub with 1-click Plex sign-in, trending discovery, movie/TV requests with live download status, and mobile-friendly Light &amp; Dark themes.</li>
+    <li style="margin-bottom: 6px;"><strong>E-Books, Comics &amp; Audiobooks + Send-to-Kindle:</strong> Built-in browser reader, wireless 1-click Kindle delivery, automatic series tracking, and audiobook streaming in Plex.</li>
+    <li style="margin-bottom: 6px;"><strong>Live TV Channels:</strong> Stream curated live sports, news, and broadcast channels right inside your Plex or Jellyfin app.</li>
+    <li style="margin-bottom: 6px;"><strong>24/7 AI Assistant &amp; Stream Diagnostics:</strong> Instant buffering checks, built-in speed test, device setup guides, and automatic audio/file replacement when something won't play cleanly.</li>
+    <li style="margin-bottom: 6px;"><strong>Flexible Billing &amp; Linked Family Inboxes:</strong> Switch between Monthly and Yearly anytime, track your paid-through date, and route renewal or request alerts to a spouse or secondary inbox.</li>
+</ul>
+
+<!-- THINGS TO COME -->
+<h3 style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">What's Coming Next</h3>
+<ul style="color: #334155; font-size: 13.5px; line-height: 1.6; padding-left: 18px; margin: 0 0 20px 0;">
+    <li style="margin-bottom: 5px;"><strong>In-Browser Audiobook Player:</strong> Floating audio player with sleep timers and speed controls across pages.</li>
+    <li style="margin-bottom: 5px;"><strong>Member Referral Rewards:</strong> Earn free months and renewal discounts when friends join.</li>
+    <li style="margin-bottom: 5px;"><strong>Family &amp; Kids Sub-Profiles:</strong> Age-filtered shelves and optional PIN protection for shared TVs.</li>
+    <li style="margin-bottom: 5px;"><strong>1-Click Subtitle Sync, Personal Year-in-Review &amp; Mobile Alerts:</strong> Fix out-of-sync subtitles on the fly, view your yearly watch recap, and get instant alerts when requests finish.</li>
+</ul>
+
+<p style="font-size: 13.5px; color: #475569; text-align: center; margin-top: 20px;">
+    Questions or feedback? Hit the <strong>Suggest Fix</strong> button on <a href="{appUrl}" style="color: #2563eb; text-decoration: none; font-weight: 600;">{appUrl}</a> or open a support ticket anytime. Happy Thanksgiving!
+</p>`,
+        variables: [
+            { key: "{username}", description: "Recipient's username", sampleValue: "alex_stream" },
+            { key: "{portalName}", description: "Portal brand name", sampleValue: "DomsHomeLab" },
+            { key: "{currentYear}", description: "Current calendar year", sampleValue: "2026" },
+            { key: "{nextYear}", description: "Upcoming renewal year", sampleValue: "2027" },
+            { key: "{renewalDate}", description: "Annual renewal due date", sampleValue: "January 1, 2027" },
+            { key: "{yearlyPrice}", description: "Annual plan rate", sampleValue: "$180" },
+            { key: "{monthlyPrice}", description: "Monthly plan rate", sampleValue: "$17.50" },
+            { key: "{annualMonthlyRate}", description: "Effective monthly cost on annual plan", sampleValue: "$15" },
+            { key: "{annualSavings}", description: "Annual savings vs monthly billing", sampleValue: "$30" },
+            { key: "{movieCount}", description: "Total movies on Plex", sampleValue: "thousands of" },
+            { key: "{showCount}", description: "Total TV shows on Plex", sampleValue: "hundreds of" },
+            { key: "{paymentMethodsText}", description: "Accepted payment methods & handles", sampleValue: "Venmo, PayPal, or Zelle" },
+            { key: "{paymentMemo}", description: "Payment reconciliation memo (username)", sampleValue: "alex_stream" },
+            { key: "{billingUrl}", description: "Direct link to profile billing & QR codes", sampleValue: "https://home.domshomelab.com/profile" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://home.domshomelab.com" }
+        ]
+    },
+    {
         id: "broadcast",
         name: "Server Announcement & Broadcast Email",
         description: "Sent to all active members or filtered user groups when an administrator dispatches an announcement broadcast.",

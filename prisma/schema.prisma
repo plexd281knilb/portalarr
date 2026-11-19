@@ -97,6 +97,8 @@ model Settings {
   notifySubscriptionActive    Boolean   @default(false)
   notifyPaymentUnderpayment   Boolean   @default(true)
   notifySubscriptionRenewal   Boolean   @default(true)
+  notifyAnnualThanksgivingRecap Boolean @default(true)
+  lastAnnualRecapYear         Int?
   yearlyRenewalReminderDays   String?   @default("60,30,14,3,1") // Advance days for annual subscription renewal notices
   monthlyRenewalReminderDays  String?   @default("7,3,1")        // Advance days for monthly subscription renewal notices
   notifyReferralReward        Boolean   @default(false)
