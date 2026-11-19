@@ -2778,9 +2778,9 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 <SuperUserCard initialRole={user?.role} />
             )}
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 min-w-0">
                 {/* ACCOUNT INFORMATION CARD */}
-                <Card id="details" className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
+                <Card id="details" className="min-w-0 overflow-hidden border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
                     <CardHeader>
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <ShieldCheck className="h-5 w-5 text-primary" /> Account Details
@@ -2842,27 +2842,27 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </div>
                         </div>
 
-                        <div className="space-y-1 pt-2 border-t border-border/40">
+                        <div className="space-y-1 pt-2 border-t border-border/40 min-w-0">
                             <Label className="text-xs text-muted-foreground font-semibold">Account Access Status</Label>
-                            <div className="flex items-center gap-2 pt-0.5">
+                            <div className="flex flex-wrap items-center gap-2 pt-0.5 min-w-0">
                                 {isTrial ? (
-                                    <Badge variant="outline" className="bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/40 gap-1.5 text-xs font-bold">
-                                        <Timer className="h-3.5 w-3.5" /> {paymentConfig?.defaultTrialDays || 14}-Day Free Trial ({daysLeft ?? 0} days remaining)
+                                    <Badge variant="outline" className="bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/40 gap-1.5 text-xs font-bold whitespace-normal text-left max-w-full">
+                                        <Timer className="h-3.5 w-3.5 shrink-0" /> <span>{paymentConfig?.defaultTrialDays || 14}-Day Free Trial ({daysLeft ?? 0} days remaining)</span>
                                     </Badge>
                                 ) : user?.role === "ADMIN" ? (
-                                    <Badge variant="outline" className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40 gap-1.5 text-xs font-bold">
-                                        <ShieldCheck className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Platform Administrator (Permanent Access)
+                                    <Badge variant="outline" className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40 gap-1.5 text-xs font-bold whitespace-normal text-left max-w-full">
+                                        <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-sky-700 dark:text-sky-400" /> <span>Platform Administrator (Permanent Access)</span>
                                     </Badge>
                                 ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
-                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
-                                        <CheckCircle2 className="h-3.5 w-3.5" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} (Expires {safeFormatDate(user.subscriptionEndsAt, "MMM d, yyyy", "Active")})
+                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold whitespace-normal text-left max-w-full">
+                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> <span>{user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} (Expires {safeFormatDate(user.subscriptionEndsAt, "MMM d, yyyy", "Active")})</span>
                                     </Badge>
                                 ) : user?.status === "APPROVED" ? (
-                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
-                                        <CheckCircle2 className="h-3.5 w-3.5" /> Permanent Access
+                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold whitespace-normal text-left max-w-full">
+                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> <span>Permanent Access</span>
                                     </Badge>
                                 ) : (
-                                    <Badge variant="outline" className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1.5 text-xs font-semibold">
+                                    <Badge variant="outline" className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1.5 text-xs font-semibold whitespace-normal text-left max-w-full">
                                         {user?.status || "Pending"}
                                     </Badge>
                                 )}
@@ -2872,7 +2872,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 </Card>
 
                 {/* CHANGE PASSWORD CARD */}
-                <Card id="password" className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
+                <Card id="password" className="min-w-0 overflow-hidden border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
                     <CardHeader>
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <KeyRound className="h-5 w-5 text-primary" /> Change Password

@@ -659,7 +659,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
                     <Button
                         onClick={handleSyncDispatcharr}
                         disabled={isPending}
@@ -1263,7 +1263,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                         {/* Anomaly Callout Banner (If Plex Home members lack Live TV) */}
                         {auditReport && (auditReport.plexHomeMissingLiveTvCount ?? 0) > 0 && (
                             <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-900 dark:text-rose-200">
-                                <div className="flex items-center gap-2.5">
+                                <div className="flex flex-wrap items-center gap-2.5">
                                     <AlertTriangle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />
                                     <span>
                                         <b>{auditReport.plexHomeMissingLiveTvCount} member(s) in Plex Home</b> are missing Live TV access!

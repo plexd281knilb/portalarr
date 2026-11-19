@@ -301,7 +301,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="text-align: center; margin: 28px 0;">
     <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Log in to DomsHomeLab</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">If you need any assistance getting started, feel free to submit a support ticket inside the dashboard.</p>`,
+<p style="font-size: 13px; color: #475569;">If you need any assistance getting started, feel free to submit a support ticket inside the dashboard.</p>`,
         variables: [
             { key: "{username}", description: "Username of the approved user", sampleValue: "alex_reader" },
             { key: "{email}", description: "Email address of the approved user", sampleValue: "alex@example.com" },
@@ -322,23 +322,23 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; width: 130px; color: #64748b;">Username:</td>
+            <td style="padding: 6px 0; font-weight: bold; width: 130px; color: #475569;">Username:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{username}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Email:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Email:</td>
             <td style="padding: 6px 0; color: #0f172a;">{email}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Status:</td>
-            <td style="padding: 6px 0; color: #d97706; font-weight: bold;">{status}</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Status:</td>
+            <td style="padding: 6px 0; color: #b45309; font-weight: bold;">{status}</td>
         </tr>
     </table>
 </div>
 
 <p>You can review, approve, or reject this user request directly in the dashboard.</p>
 <div style="text-align: center; margin: 24px 0;">
-    <a href="{accessUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Manage User Access</a>
+    <a href="{accessUrl}" style="background-color: #0369a1; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Manage User Access</a>
 </div>`,
         variables: [
             { key: "{username}", description: "Username of the applicant", sampleValue: "samuel_g" },
@@ -427,7 +427,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 6px 0 0 0; font-size: 14px; color: #334155;"><strong>Format:</strong> {format}</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+<p style="font-size: 13px; color: #475569; line-height: 1.5;">
     The media file is attached directly to this email so you can save or transfer it to your reading or audio player device.
 </p>`,
         variables: [
@@ -500,10 +500,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <div style="text-align: center; margin: 20px 0;">
-    <a href="{appUrl}/tickets" style="background-color: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">View Support Tickets</a>
+    <a href="{appUrl}/tickets" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">View Support Tickets</a>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">Thanks for using DomsHomeLab Support!</p>`,
+<p style="font-size: 13px; color: #475569;">Thanks for using DomsHomeLab Support!</p>`,
         variables: [
             { key: "{name}", description: "Name or username of user who opened the ticket", sampleValue: "David" },
             { key: "{email}", description: "Email of the ticket creator", sampleValue: "david@example.com" },
@@ -580,7 +580,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         <br />
         <code style="background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; display: inline-block; margin-top: 4px; color: #0f172a;">{senderEmail}</code>
         <br />
-        <span style="font-size: 12px; color: #64748b;">(Amazon.com &rarr; Preferences &rarr; Personal Document Settings &rarr; Approved Personal Document E-mail List)</span>
+        <span style="font-size: 12px; color: #475569;">(Amazon.com &rarr; Preferences &rarr; Personal Document Settings &rarr; Approved Personal Document E-mail List)</span>
     </li>
     <li style="margin-top: 8px;">
         <strong>File Size:</strong> Kindle has a 50MB email file size limit. Your book size is <code>{fileSizeMb} MB</code>.
@@ -615,7 +615,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; font-size: 14px; color: #475569;"><strong>File Size:</strong> {fileSizeMb} MB</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">It usually takes 1-5 minutes for Amazon Whispernet to sync the ebook to your Kindle device or Kindle app.</p>`,
+<p style="font-size: 13px; color: #475569;">It usually takes 1-5 minutes for Amazon Whispernet to sync the ebook to your Kindle device or Kindle app.</p>`,
         variables: [
             { key: "{username}", description: "Username of recipient", sampleValue: "alex_reader" },
             { key: "{title}", description: "Title of book sent", sampleValue: "The Way of Kings" },
@@ -638,15 +638,15 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #64748b;">Username:</td>
+            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #475569;">Username:</td>
             <td style="padding: 6px 0;"><code>{username}</code></td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Personal Email:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Personal Email:</td>
             <td style="padding: 6px 0;"><code>{email}</code></td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Send-to-Kindle:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Send-to-Kindle:</td>
             <td style="padding: 6px 0;"><code>{kindleEmail}</code></td>
         </tr>
     </table>
@@ -658,7 +658,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     Edit the library you want them to access and add <strong><code>{username}</code></strong> to the Allowed Users list.
 </p>
 <div style="text-align: center; margin: 24px 0;">
-    <a href="{accessUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Open Access Settings</a>
+    <a href="{accessUrl}" style="background-color: #0369a1; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Open Access Settings</a>
 </div>`,
         variables: [
             { key: "{username}", description: "Username requesting access", sampleValue: "clara_b" },
@@ -682,15 +682,15 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #64748b;">Username:</td>
+            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #475569;">Username:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{username}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Trial Duration:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Trial Duration:</td>
             <td style="padding: 6px 0; color: #4f46e5; font-weight: bold;">{trialDays} Days</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Expiration Date:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Expiration Date:</td>
             <td style="padding: 6px 0; color: #0f172a;">{expirationDate}</td>
         </tr>
     </table>
@@ -699,7 +699,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="text-align: center; margin: 28px 0;">
     <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Start Streaming Now</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">Need help or have questions during your trial? Submit a support ticket or request media directly from your dashboard.</p>`,
+<p style="font-size: 13px; color: #475569;">Need help or have questions during your trial? Submit a support ticket or request media directly from your dashboard.</p>`,
         variables: [
             { key: "{username}", description: "Username of the trial user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
@@ -727,9 +727,9 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{renewUrl}" style="background-color: #d97706; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Upgrade to Full Membership</a>
+    <a href="{renewUrl}" style="background-color: #b45309; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Upgrade to Full Membership</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">If you have any questions or need an extension, feel free to reach out to the server admin.</p>`,
+<p style="font-size: 13px; color: #475569;">If you have any questions or need an extension, feel free to reach out to the server admin.</p>`,
         variables: [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
@@ -755,7 +755,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="text-align: center; margin: 28px 0;">
     <a href="{renewUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Reactivate & Upgrade Account</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">Thank you for trying DomsHomeLab! If you have any feedback or questions, let me know.</p>`,
+<p style="font-size: 13px; color: #475569;">Thank you for trying DomsHomeLab! If you have any feedback or questions, let me know.</p>`,
         variables: [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
@@ -798,7 +798,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Media Hub</a>
+    <a href="{appUrl}" style="background-color: #15803d; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Media Hub</a>
 </div>`,
         variables: [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
@@ -843,7 +843,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         </tr>
         <tr>
             <td style="padding: 6px 0; font-weight: bold; color: #166534;">Transaction Ref:</td>
-            <td style="padding: 6px 0; color: #64748b; font-family: monospace; font-size: 12px;">{transactionId}</td>
+            <td style="padding: 6px 0; color: #475569; font-family: monospace; font-size: 12px;">{transactionId}</td>
         </tr>
     </table>
 </div>
@@ -858,9 +858,9 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open DomsHomeLab Dashboard</a>
+    <a href="{appUrl}" style="background-color: #15803d; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open DomsHomeLab Dashboard</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">If you have any questions regarding your membership or billing, reply to this email or submit a ticket in the dashboard.</p>`,
+<p style="font-size: 13px; color: #475569;">If you have any questions regarding your membership or billing, reply to this email or submit a ticket in the dashboard.</p>`,
         variables: [
             { key: "{username}", description: "Username of the payer", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
@@ -901,19 +901,19 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; width: 160px; color: #64748b;">Amount Received:</td>
+            <td style="padding: 6px 0; font-weight: bold; width: 160px; color: #475569;">Amount Received:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{amountPaid}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Payment Method:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Payment Method:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{provider}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Account Credit Balance:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Account Credit Balance:</td>
             <td style="padding: 6px 0; color: #047857; font-weight: 700; font-size: 15px;">{accountCredit}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Plan Target Price:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Plan Target Price:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{targetPrice}</td>
         </tr>
         <tr>
@@ -923,7 +923,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     </table>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">You can view your available account credit and payment handles anytime in your <a href="{profileUrl}" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a>.</p>`,
+<p style="font-size: 13px; color: #475569;">You can view your available account credit and payment handles anytime in your <a href="{profileUrl}" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a>.</p>`,
         variables: [
             { key: "{username}", description: "Username of the member", sampleValue: "alex_reader" },
             { key: "{amountPaid}", description: "Amount received in the latest transaction", sampleValue: "$15.00" },
@@ -951,34 +951,34 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #64748b;">Amount:</td>
+            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #475569;">Amount:</td>
             <td style="padding: 6px 0; color: #15803d; font-weight: 700; font-size: 16px;">{amount}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Provider:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Provider:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{provider}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Payer:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Payer:</td>
             <td style="padding: 6px 0; color: #0f172a;">{senderName} ({senderHandle})</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Matched User:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Matched User:</td>
             <td style="padding: 6px 0; color: #2563eb; font-weight: 600;">{matchedUser}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Period Granted:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Period Granted:</td>
             <td style="padding: 6px 0; color: #0f172a;">{periodGranted}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Memo / Note:</td>
-            <td style="padding: 6px 0; color: #64748b; font-family: monospace;">{note}</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Memo / Note:</td>
+            <td style="padding: 6px 0; color: #475569; font-family: monospace;">{note}</td>
         </tr>
     </table>
 </div>
 
 <div style="text-align: center; margin: 24px 0;">
-    <a href="{accessUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">View Payment Transactions</a>
+    <a href="{accessUrl}" style="background-color: #0369a1; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">View Payment Transactions</a>
 </div>`,
         variables: [
             { key: "{amount}", description: "Payment amount received", sampleValue: "40.16" },
@@ -1059,7 +1059,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; font-size: 13px; color: #475569;"><strong>Status:</strong> Approved & Searching for Release</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">You will receive another notification as soon as the media is ready to stream on Plex!</p>`,
+<p style="font-size: 13px; color: #475569;">You will receive another notification as soon as the media is ready to stream on Plex!</p>`,
         variables: [
             { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
             { key: "{title}", description: "Title of requested media", sampleValue: "Oppenheimer" },
@@ -1086,7 +1086,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; font-size: 13px; color: #2563eb;"><strong>Status:</strong> Approved & Downloading</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">I will email you once it's available to watch on Plex.</p>`,
+<p style="font-size: 13px; color: #475569;">I will email you once it's available to watch on Plex.</p>`,
         variables: [
             { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
             { key: "{title}", description: "Title of requested media", sampleValue: "House of the Dragon" },
@@ -1112,7 +1112,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; font-size: 14px; color: #7f1d1d;">{declineReason}</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">If you have any questions, feel free to submit a support ticket in the dashboard.</p>`,
+<p style="font-size: 13px; color: #475569;">If you have any questions, feel free to submit a support ticket in the dashboard.</p>`,
         variables: [
             { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
             { key: "{title}", description: "Title of requested media", sampleValue: "The Matrix Resurrections" },
@@ -1136,7 +1136,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
     <p style="margin: 0 0 6px 0; font-size: 16px; font-weight: bold; color: #0f172a;">{title} ({releaseYear})</p>
     <p style="margin: 0 0 6px 0; font-size: 14px; color: #475569;"><strong>Format:</strong> {mediaLabel} • {quality}</p>
-    <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 1.5;">{overview}</p>
+    <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;">{overview}</p>
 </div>
 
 <div style="text-align: center; margin: 28px 0;">
@@ -1171,7 +1171,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; font-size: 13px; color: #7f1d1d; font-family: monospace;">{errorMessage}</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">The system or administrator will retry this request automatically when new releases or sources become available.</p>`,
+<p style="font-size: 13px; color: #475569;">The system or administrator will retry this request automatically when new releases or sources become available.</p>`,
         variables: [
             { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
             { key: "{title}", description: "Title of requested media", sampleValue: "Fallout" },
@@ -1214,7 +1214,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <p>You can review this user's permissions, restore access, or edit account details in Access Control.</p>
 <div style="text-align: center; margin: 24px 0;">
-    <a href="{accessUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Open Access Control</a>
+    <a href="{accessUrl}" style="background-color: #0369a1; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Open Access Control</a>
 </div>`,
         variables: [
             { key: "{username}", description: "Username of the affected user", sampleValue: "jordan_reader" },
@@ -1262,10 +1262,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{approvalsUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Approval Queue &amp; Review</a>
+    <a href="{approvalsUrl}" style="background-color: #0369a1; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Approval Queue &amp; Review</a>
 </div>
 
-<p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">
+<p style="font-size: 12px; color: #475569; line-height: 1.4;">
     You are receiving this automated alert because Action Approval Notifications are enabled in Governance Settings.
 </p>`,
         variables: [
@@ -1320,7 +1320,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="text-align: center; margin: 28px 0;">
     <a href="{appUrl}/profile" style="background-color: #7c3aed; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Referral Rewards</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">Keep sharing your personal invite link! You can earn an unlimited number of free months for each friend you invite.</p>`,
+<p style="font-size: 13px; color: #475569;">Keep sharing your personal invite link! You can earn an unlimited number of free months for each friend you invite.</p>`,
         variables: [
             { key: "{username}", description: "Username of the referring member", sampleValue: "jordan_reader" },
             { key: "{friendUsername}", description: "Username of the friend who joined", sampleValue: "alex_cinephile" },
@@ -1345,27 +1345,27 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; width: 180px; color: #64748b;">Annual Membership Rate:</td>
+            <td style="padding: 6px 0; font-weight: bold; width: 180px; color: #475569;">Annual Membership Rate:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{basePrice}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Referral Rewards Earned:</td>
-            <td style="padding: 6px 0; color: #16a34a; font-weight: 700;">{referralDiscountText}</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Referral Rewards Earned:</td>
+            <td style="padding: 6px 0; color: #15803d; font-weight: 700;">{referralDiscountText}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Net Amount Due:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Net Amount Due:</td>
             <td style="padding: 6px 0; color: #15803d; font-weight: 800; font-size: 16px;">{amountDue}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Renewal Expiration Date:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Renewal Expiration Date:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{renewalDate}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Switch to Monthly:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Switch to Monthly:</td>
             <td style="padding: 6px 0; color: #4f46e5; font-weight: 600;">{monthlyAlternativeText}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Reconciliation Memo:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Reconciliation Memo:</td>
             <td style="padding: 6px 0; font-family: monospace; font-size: 13px; color: #0f172a; font-weight: bold;">{paymentMemo}</td>
         </tr>
     </table>
@@ -1380,9 +1380,9 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{billingUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment QR & Links</a>
+    <a href="{billingUrl}" style="background-color: #15803d; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment QR & Links</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
+<p style="font-size: 13px; color: #475569;">Thank you for being a valued member of DomsHomeLab!</p>`,
         variables: [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{daysRemaining}", description: "Days remaining until expiration", sampleValue: "30" },
@@ -1411,19 +1411,19 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; width: 180px; color: #64748b;">Monthly Membership Rate:</td>
+            <td style="padding: 6px 0; font-weight: bold; width: 180px; color: #475569;">Monthly Membership Rate:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{basePrice}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Amount Due:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Amount Due:</td>
             <td style="padding: 6px 0; color: #15803d; font-weight: 800; font-size: 16px;">{amountDue}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Renewal Date:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Renewal Date:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{renewalDate}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Reconciliation Memo:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Reconciliation Memo:</td>
             <td style="padding: 6px 0; font-family: monospace; font-size: 13px; color: #0f172a; font-weight: bold;">{paymentMemo}</td>
         </tr>
     </table>
@@ -1434,9 +1434,9 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{billingUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment QR & Links</a>
+    <a href="{billingUrl}" style="background-color: #15803d; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment QR & Links</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
+<p style="font-size: 13px; color: #475569;">Thank you for being a valued member of DomsHomeLab!</p>`,
         variables: [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{daysRemaining}", description: "Days remaining until expiration", sampleValue: "3" },
@@ -1462,19 +1462,19 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; width: 170px; color: #64748b;">Standard Annual Rate:</td>
+            <td style="padding: 6px 0; font-weight: bold; width: 170px; color: #475569;">Standard Annual Rate:</td>
             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{basePrice}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Referral Rewards:</td>
-            <td style="padding: 6px 0; color: #16a34a; font-weight: 700;">{referralDiscountText}</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Referral Rewards:</td>
+            <td style="padding: 6px 0; color: #15803d; font-weight: 700;">{referralDiscountText}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Annual Amount Due:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Annual Amount Due:</td>
             <td style="padding: 6px 0; color: #15803d; font-weight: 800; font-size: 16px;">{amountDue}</td>
         </tr>
         <tr>
-            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Monthly Alternative:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #475569;">Monthly Alternative:</td>
             <td style="padding: 6px 0; color: #4f46e5; font-weight: 600;">{monthlyAlternativeText}</td>
         </tr>
     </table>
@@ -1485,9 +1485,9 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}/profile" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
+    <a href="{appUrl}/profile" style="background-color: #15803d; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
+<p style="font-size: 13px; color: #475569;">Thank you for being a valued member of DomsHomeLab!</p>`,
         variables: [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{renewalDate}", description: "Expiration or renewal date", sampleValue: "January 1, 2027" },
@@ -1579,7 +1579,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Link your Discord account in your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">profile</a> for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">Support Tickets</a> if you ever need a hand.</p>
 </div>
 
-<p style="font-size: 13.5px; color: #64748b; text-align: center; margin-top: 24px;">Bookmark <strong><a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">{appUrl}</a></strong> on your phone and computer for quick access. Happy streaming &amp; reading!</p>`,
+<p style="font-size: 13.5px; color: #475569; text-align: center; margin-top: 24px;">Bookmark <strong><a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">{appUrl}</a></strong> on your phone and computer for quick access. Happy streaming &amp; reading!</p>`,
         variables: [
             { key: "{username}", description: "Recipient's username", sampleValue: "alex_stream" },
             { key: "{email}", description: "Recipient's email address", sampleValue: "alex@example.com" },
@@ -1628,7 +1628,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         </tr>
     </table>
     <div style="text-align: center; margin-top: 16px;">
-        <a href="{billingUrl}" class="email-cta-btn" style="background-color: #16a34a; color: #ffffff !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 11px 22px; border-radius: 8px; display: inline-block; max-width: 100%; box-sizing: border-box;">View Payment QR, Links &amp; Your Due Date &rarr;</a>
+        <a href="{billingUrl}" class="email-cta-btn" style="background-color: #15803d; color: #ffffff !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 11px 22px; border-radius: 8px; display: inline-block; max-width: 100%; box-sizing: border-box;">View Payment QR, Links &amp; Your Due Date &rarr;</a>
     </div>
 </div>
 
@@ -1781,6 +1781,29 @@ export function wrapInPortalarrEmailLayout(options: {
             body { background-color: #0b0c10 !important; color: #e2e8f0 !important; }
             .email-card { background-color: #13141f !important; border-color: #27273a !important; color: #e2e8f0 !important; }
             .email-body-content { color: #cbd5e1 !important; }
+            .email-card h1, .email-card h2, .email-card h3, .email-card h4 { color: #f8fafc !important; border-color: #334155 !important; }
+            .email-card p, .email-card li, .email-card td, .email-card th { color: #cbd5e1 !important; }
+            .email-card [style*="color: #0f172a"], .email-card [style*="color:#0f172a"],
+            .email-card [style*="color: #1e293b"], .email-card [style*="color:#1e293b"] { color: #f8fafc !important; }
+            .email-card [style*="color: #334155"], .email-card [style*="color:#334155"],
+            .email-card [style*="color: #475569"], .email-card [style*="color:#475569"] { color: #cbd5e1 !important; }
+            .email-card [style*="background-color: #f8fafc"], .email-card [style*="background-color:#f8fafc"],
+            .email-card [style*="background-color: #f1f5f9"], .email-card [style*="background-color:#f1f5f9"],
+            .email-card [style*="background-color: #ffffff"], .email-card [style*="background-color:#ffffff"],
+            .email-card [style*="background: linear-gradient(135deg, #eef2ff"] { background: #1c1f2e !important; background-color: #1c1f2e !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+            .email-card [style*="background-color: #f0fdf4"], .email-card [style*="background-color:#f0fdf4"] { background-color: #0f291e !important; border-color: #166534 !important; color: #dcfce7 !important; }
+            .email-card [style*="background-color: #fef2f2"], .email-card [style*="background-color:#fef2f2"] { background-color: #2c1418 !important; border-color: #7f1d1d !important; color: #fee2e2 !important; }
+            .email-card [style*="background-color: #fffbeb"], .email-card [style*="background-color:#fffbeb"],
+            .email-card [style*="background-color: #fefce8"], .email-card [style*="background-color:#fefce8"] { background-color: #291e0b !important; border-color: #78350f !important; color: #fef3c7 !important; }
+            .email-card [style*="background-color: #eff6ff"], .email-card [style*="background-color:#eff6ff"] { background-color: #132238 !important; border-color: #1e40af !important; color: #dbeafe !important; }
+            .email-card [style*="background-color: #f5f3ff"], .email-card [style*="background-color:#f5f3ff"] { background-color: #1c1f2e !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+            .email-card [style*="color: #166534"], .email-card [style*="color: #15803d"] { color: #4ade80 !important; }
+            .email-card [style*="color: #991b1b"], .email-card [style*="color: #dc2626"], .email-card [style*="color: #ef4444"] { color: #fca5a5 !important; }
+            .email-card [style*="color: #92400e"], .email-card [style*="color: #b45309"] { color: #fcd34d !important; }
+            .email-card [style*="color: #4338ca"], .email-card [style*="color: #4f46e5"], .email-card [style*="color: #2563eb"], .email-card [style*="color: #0284c7"], .email-card [style*="color: #0369a1"] { color: #93c5fd !important; }
+            .email-card a[style*="background-color:"], .email-card a[style*="background:"] { color: #ffffff !important; }
+            .email-card a[style*="#e5a00d"] { color: #0f172a !important; }
+            .email-card code { background-color: #1e293b !important; color: #e2e8f0 !important; }
             .email-heading { color: #f8fafc !important; border-color: #334155 !important; }
             .email-text { color: #cbd5e1 !important; }
             .email-muted { color: #94a3b8 !important; }
@@ -1796,13 +1819,23 @@ export function wrapInPortalarrEmailLayout(options: {
             .email-table-cell { border-color: #334155 !important; color: #e2e8f0 !important; }
             .email-table-highlight { background-color: #0f291e !important; }
             .email-divider { border-top-color: #27273a !important; }
-            .email-footer-text { color: #94a3b8 !important; }
-            .email-footer-copyright { color: #64748b !important; }
-            .open-dashboard-btn { background-color: #6366f1 !important; color: #ffffff !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; }
-            .safe-sender-box { background-color: #1a1c29 !important; border-color: #27273a !important; border-left-color: #6366f1 !important; color: #94a3b8 !important; }
+            .email-footer-text { color: #cbd5e1 !important; }
+            .email-footer-copyright { color: #94a3b8 !important; }
+            .open-dashboard-btn { background-color: #4f46e5 !important; color: #ffffff !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; }
+            .safe-sender-box { background-color: #1a1c29 !important; border-color: #27273a !important; border-left-color: #6366f1 !important; color: #cbd5e1 !important; }
             .safe-sender-title { color: #f1f5f9 !important; }
         }
         [data-ogsc] .email-card { background-color: #13141f !important; border-color: #27273a !important; color: #e2e8f0 !important; }
+        [data-ogsc] .email-card h1, [data-ogsc] .email-card h2, [data-ogsc] .email-card h3, [data-ogsc] .email-card h4 { color: #f8fafc !important; border-color: #334155 !important; }
+        [data-ogsc] .email-card p, [data-ogsc] .email-card li, [data-ogsc] .email-card td, [data-ogsc] .email-card th { color: #cbd5e1 !important; }
+        [data-ogsc] .email-card [style*="background-color: #f8fafc"], [data-ogsc] .email-card [style*="background-color: #f1f5f9"], [data-ogsc] .email-card [style*="background-color: #ffffff"] { background-color: #1c1f2e !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+        [data-ogsc] .email-card [style*="background-color: #f0fdf4"] { background-color: #0f291e !important; border-color: #166534 !important; color: #dcfce7 !important; }
+        [data-ogsc] .email-card [style*="background-color: #fef2f2"] { background-color: #2c1418 !important; border-color: #7f1d1d !important; color: #fee2e2 !important; }
+        [data-ogsc] .email-card [style*="background-color: #fffbeb"], [data-ogsc] .email-card [style*="background-color: #fefce8"] { background-color: #291e0b !important; border-color: #78350f !important; color: #fef3c7 !important; }
+        [data-ogsc] .email-card [style*="background-color: #eff6ff"] { background-color: #132238 !important; border-color: #1e40af !important; color: #dbeafe !important; }
+        [data-ogsc] .email-card [style*="background-color: #f5f3ff"] { background-color: #1c1f2e !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+        [data-ogsc] .email-card a[style*="background-color:"], [data-ogsc] .email-card a[style*="background:"] { color: #ffffff !important; }
+        [data-ogsc] .email-card a[style*="#e5a00d"] { color: #0f172a !important; }
         [data-ogsc] .email-heading { color: #f8fafc !important; border-color: #334155 !important; }
         [data-ogsc] .email-text { color: #cbd5e1 !important; }
         [data-ogsc] .email-muted { color: #94a3b8 !important; }
@@ -1821,7 +1854,7 @@ export function wrapInPortalarrEmailLayout(options: {
             body { background-color: #f1f5f9 !important; color: #1e293b !important; }
             .email-card { background-color: #ffffff !important; border-color: #e2e8f0 !important; color: #1e293b !important; }
             .email-footer-text { color: #475569 !important; }
-            .email-footer-copyright { color: #64748b !important; }
+            .email-footer-copyright { color: #475569 !important; }
             .open-dashboard-btn { background-color: #4f46e5 !important; color: #ffffff !important; }
         }
         @media only screen and (max-width: 600px) {
@@ -1887,7 +1920,7 @@ export function wrapInPortalarrEmailLayout(options: {
                     </a>
                 </div>
                 ` : ""}
-                <p class="email-footer-copyright" style="margin: 8px 0 0 0; font-size: 11px; color: #64748b;">
+                <p class="email-footer-copyright" style="margin: 8px 0 0 0; font-size: 11px; color: #475569;">
                     &copy; ${currentYear} ${portalName}. All rights reserved.
                 </p>
             </div>

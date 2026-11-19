@@ -1302,7 +1302,7 @@ export default function EmailManagement() {
                                                     <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedBroadcastSubjectPreview}</h4>
 
                                                     <div 
-                                                        className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-auto [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
+                                                        className="email-preview-prose prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-auto [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
                                                         dangerouslySetInnerHTML={{ __html: renderedBroadcastBodyPreview }}
                                                     />
 
@@ -1812,7 +1812,7 @@ export default function EmailManagement() {
                                                         <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedTemplateSubjectPreview}</h4>
 
                                                         <div 
-                                                            className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-auto [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
+                                                            className="email-preview-prose prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-auto [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
                                                             dangerouslySetInnerHTML={{ __html: renderedTemplateBodyPreview }}
                                                         />
 

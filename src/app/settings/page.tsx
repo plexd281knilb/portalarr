@@ -4590,7 +4590,7 @@ function SettingsPageContent() {
                                                 </div>
                                                 ) : (
                                                     <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
-                                                        Uses your Gaming PC RTX 3080 Ollama container (<code className="font-mono">192.168.1.68:11434</code> / <code className="font-mono">192.168.10.78:11434</code>) with automatic fallback if asleep.
+                                                        Uses your local/RTX 3080 Ollama container (<code className="font-mono">127.0.0.1:11434</code> / <code className="font-mono">192.168.10.78:11434</code>) with <code className="font-mono">portalarr-plex-master</code> and automatic fallback if offline.
                                                     </div>
                                                 )}
 
@@ -4613,7 +4613,7 @@ function SettingsPageContent() {
                                                             dynamicModels.includes(aiModelInput) ||
                                                             (aiProviderSelect === "gemini" && ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
                                                             (aiProviderSelect === "openai" && ["gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"].includes(aiModelInput)) ||
-                                                            (aiProviderSelect === "ollama" && ["qwen2.5:3b", "qwen2.5:7b-instruct", "qwen2.5:0.5b", "smollm2:135m-instruct-q4_K_M"].includes(aiModelInput))
+                                                            (aiProviderSelect === "ollama" && ["portalarr-plex-master", "qwen2.5:7b-instruct", "qwen2.5:3b", "qwen2.5:0.5b", "smollm2:135m-instruct-q4_K_M"].includes(aiModelInput))
                                                                 ? aiModelInput
                                                                 : "custom"
                                                         }
@@ -4638,8 +4638,9 @@ function SettingsPageContent() {
                                                                 </>
                                                             ) : aiProviderSelect === "ollama" ? (
                                                                 <>
-                                                                    <SelectItem value="qwen2.5:3b">qwen2.5:3b (RTX 3080 Default - Fast 3B)</SelectItem>
-                                                                    <SelectItem value="qwen2.5:7b-instruct">qwen2.5:7b-instruct (Requires 12GB WSL2 Memory)</SelectItem>
+                                                                    <SelectItem value="portalarr-plex-master">portalarr-plex-master (Fine-Tuned Plex Master - Recommended)</SelectItem>
+                                                                    <SelectItem value="qwen2.5:7b-instruct">qwen2.5:7b-instruct (High Reasoning 7B)</SelectItem>
+                                                                    <SelectItem value="qwen2.5:3b">qwen2.5:3b (Fast 3B)</SelectItem>
                                                                     <SelectItem value="qwen2.5:0.5b">qwen2.5:0.5b (Compact)</SelectItem>
                                                                     <SelectItem value="custom">Custom Model Name...</SelectItem>
                                                                 </>
@@ -4669,7 +4670,7 @@ function SettingsPageContent() {
                                                         "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
                                                         "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b",
                                                         "gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo",
-                                                        "qwen2.5:3b", "qwen2.5:7b-instruct", "qwen2.5:0.5b", "smollm2:135m-instruct-q4_K_M"
+                                                        "qwen2.5:3b", "qwen2.5:7b-instruct", "qwen2.5:0.5b", "smollm2:135m-instruct-q4_K_M", "portalarr-plex-master"
                                                     ].includes(aiModelInput)) && (
                                                         <Input 
                                                             value={aiModelInput}

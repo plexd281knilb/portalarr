@@ -1747,7 +1747,7 @@ async function runTestSuite() {
             if (ollamaUrls[0] !== "http://127.0.0.1:11434" || !ollamaUrls.some((u) => u.includes("192.168.10.78:11434"))) {
                 throw new Error(`getOllamaCandidateUrls failed to normalize or include RTX 3080 LAN fallback: ${JSON.stringify(ollamaUrls)}`);
             }
-            if (normalizeOllamaModelName("gemini-3.5-flash-lite") !== "qwen2.5:3b" || normalizeOllamaModelName("qwen2.5:7b-instruct") !== "qwen2.5:7b-instruct") {
+            if (normalizeOllamaModelName("gemini-3.5-flash-lite") !== "portalarr-plex-master" || normalizeOllamaModelName("qwen2.5:7b-instruct") !== "qwen2.5:7b-instruct") {
                 throw new Error("normalizeOllamaModelName did not normalize Gemini/Ollama model names cleanly");
             }
 

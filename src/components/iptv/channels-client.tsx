@@ -1167,13 +1167,13 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex items-center gap-1.5 bg-background/80 border border-border/80 rounded-xl px-2.5 py-1">
-                                <span className="text-xs text-muted-foreground font-semibold">Location:</span>
+                        <div className="flex flex-wrap items-center gap-2 max-w-full min-w-0">
+                            <div className="flex items-center gap-1.5 bg-background/80 border border-border/80 rounded-xl px-2.5 py-1 max-w-full min-w-0 w-full sm:w-auto">
+                                <span className="text-xs text-muted-foreground font-semibold shrink-0">Location:</span>
                                 <select
                                     value={selectedMarket}
                                     onChange={(e) => handleMarketChange(e.target.value)}
-                                    className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer pr-1"
+                                    className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer pr-1 min-w-0 max-w-full w-full sm:w-auto truncate"
                                 >
                                     {ORDERED_MARKETS.map((m) => (
                                         <option key={m.slug} value={m.slug} className="bg-card text-foreground">
