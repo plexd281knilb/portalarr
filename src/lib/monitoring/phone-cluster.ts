@@ -4,6 +4,7 @@ export interface PhoneClusterNodeConfig {
     role: "master" | "worker";
     label: string;
     url: string;
+    fallbackUrls?: string[];
     lanIp: string;
 }
 
@@ -99,7 +100,8 @@ const DEFAULT_PHONE_NODES: PhoneClusterNodeConfig[] = [
         role: "master",
         label: "Galaxy S22 #1 (Control Plane)",
         lanIp: "192.168.10.66",
-        url: "http://192.168.10.66:9100",
+        url: "http://192.168.1.68:9166",
+        fallbackUrls: ["http://192.168.10.66:9100"],
     },
     {
         id: "k3s-worker-s22b",
@@ -107,7 +109,8 @@ const DEFAULT_PHONE_NODES: PhoneClusterNodeConfig[] = [
         role: "worker",
         label: "Galaxy S22 #2 (AI + Ollama Worker)",
         lanIp: "192.168.10.63",
-        url: "http://192.168.10.63:9100",
+        url: "http://192.168.1.68:9163",
+        fallbackUrls: ["http://192.168.10.63:9100"],
     },
     {
         id: "k3s-worker-s9",
@@ -115,7 +118,8 @@ const DEFAULT_PHONE_NODES: PhoneClusterNodeConfig[] = [
         role: "worker",
         label: "Galaxy S9 (Web + VTT Worker)",
         lanIp: "192.168.10.65",
-        url: "http://192.168.10.65:9100",
+        url: "http://192.168.1.68:9165",
+        fallbackUrls: ["http://192.168.10.65:9100"],
     },
 ];
 
@@ -198,38 +202,62 @@ const UNAVAILABLE_BATTERY: PhoneBatteryTelemetry = {
     health: null,
 };
 
-async function probePhoneNode(node: PhoneClusterNodeConfig, timeoutMs = 2500): Promise<PhoneTelemetrySnapshot> {
+async function fetchPhoneCandidate(
+    candidateUrl: string,
+    timeoutMs: number,
+    externalSignal?: AbortSignal
+): Promise<{ url: string; data: any; latencyMs: number }> {
     const start = Date.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new DOMException("Timed out", "TimeoutError")), timeoutMs);
+    const onAbort = () => controller.abort(externalSignal?.reason);
+    if (externalSignal) {
+        if (externalSignal.aborted) {
+            clearTimeout(timer);
+            throw externalSignal.reason || new DOMException("Aborted", "AbortError");
+        }
+        externalSignal.addEventListener("abort", onAbort, { once: true });
+    }
+
     try {
-        const res = await fetch(`${node.url}/api/phone`, {
+        const res = await fetch(`${candidateUrl}/api/phone`, {
             method: "GET",
             headers: { Accept: "application/json" },
-            signal: AbortSignal.timeout(timeoutMs),
+            signal: controller.signal,
             cache: "no-store",
         });
         const latencyMs = Date.now() - start;
         if (!res.ok) {
-            return {
-                ...node,
-                status: "OFFLINE",
-                latencyMs,
-                error: `HTTP ${res.status}`,
-                battery: UNAVAILABLE_BATTERY,
-                cpu: null,
-                memory: null,
-                thermal: null,
-                qemu: null,
-            };
+            throw new Error(`HTTP ${res.status}`);
         }
-
         const data = await res.json();
+        return { url: candidateUrl, data, latencyMs };
+    } finally {
+        clearTimeout(timer);
+        if (externalSignal) {
+            externalSignal.removeEventListener("abort", onAbort);
+        }
+    }
+}
+
+async function probePhoneNode(node: PhoneClusterNodeConfig, timeoutMs = 4500): Promise<PhoneTelemetrySnapshot> {
+    const start = Date.now();
+    const candidates = Array.from(new Set([node.url, ...(node.fallbackUrls || [])].filter(Boolean)));
+    const winnerCtrl = new AbortController();
+    try {
+        const winner =
+            candidates.length === 1
+                ? await fetchPhoneCandidate(candidates[0], timeoutMs)
+                : await Promise.any(candidates.map(c => fetchPhoneCandidate(c, timeoutMs, winnerCtrl.signal)));
+        winnerCtrl.abort();
+        const { data, latencyMs, url: resolvedUrl } = winner;
         return {
             id: node.id,
             name: String(data?.nodeName || node.name),
             role: data?.role === "master" ? "master" : node.role,
             label: node.label,
             lanIp: String(data?.lanIp || node.lanIp),
-            url: node.url,
+            url: resolvedUrl,
             status: "ONLINE",
             latencyMs,
             timestamp: typeof data?.timestamp === "string" ? data.timestamp : undefined,
@@ -296,11 +324,15 @@ async function probePhoneNode(node: PhoneClusterNodeConfig, timeoutMs = 2500): P
                 : null,
         };
     } catch (err: any) {
+        const errors: any[] = err?.name === "AggregateError" && Array.isArray(err.errors) ? err.errors : [err];
+        const firstErr = errors[0];
+        const allTimeouts = errors.length > 0 && errors.every((e) => e?.name === "TimeoutError");
+        const errorLabel = allTimeouts ? "Timeout" : firstErr?.message || "Unreachable";
         return {
             ...node,
             status: "OFFLINE",
             latencyMs: Date.now() - start,
-            error: err?.name === "TimeoutError" ? "Timeout" : err?.message || "Unreachable",
+            error: errorLabel,
             battery: UNAVAILABLE_BATTERY,
             cpu: null,
             memory: null,

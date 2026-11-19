@@ -1686,8 +1686,12 @@ async function runTestSuite() {
         // 3. Phone Cluster Config Parser & Fail-Closed Auth Gate
         const { parsePhoneClusterConfig } = await import("../src/lib/monitoring/phone-cluster");
         const defaultNodes = parsePhoneClusterConfig("");
-        if (defaultNodes.length !== 3) {
-            throw new Error(`Expected 3 default phone cluster nodes, got ${defaultNodes.length}`);
+        if (
+            defaultNodes.length !== 3 ||
+            defaultNodes[0].url !== "http://192.168.1.68:9166" ||
+            defaultNodes[0].fallbackUrls?.[0] !== "http://192.168.10.66:9100"
+        ) {
+            throw new Error(`Unexpected default phone cluster nodes: ${JSON.stringify(defaultNodes)}`);
         }
         const customNodes = parsePhoneClusterConfig("s22a|192.168.10.66|master,s9|http://192.168.10.65:9100|worker");
         if (customNodes.length !== 2 || customNodes[0].url !== "http://192.168.10.66:9100" || customNodes[0].role !== "master") {
