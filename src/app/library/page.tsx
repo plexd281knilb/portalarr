@@ -2598,8 +2598,8 @@ function BookLibraryPageContent() {
                     Amazon requires you to add our homelab server sending address to your Amazon{" "}
                     <strong className="text-foreground">&quot;Approved Personal Document E-mail List&quot;</strong> before books can be delivered.
                   </p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-muted/60 dark:bg-black/60 p-2 rounded-lg text-xs font-mono font-bold text-foreground dark:text-white border border-amber-500/30 select-all truncate">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex-1 min-w-0 bg-muted/60 dark:bg-black/60 p-2 rounded-lg text-xs font-mono font-bold text-foreground dark:text-white border border-amber-500/30 select-all truncate">
                       {serverSmtpFrom || "kindle@domshomelab.com"}
                     </div>
                     <Button
@@ -2618,10 +2618,10 @@ function BookLibraryPageContent() {
                       href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-amber-700 dark:text-amber-400 underline hover:text-amber-800 dark:hover:text-amber-300 inline-flex items-center gap-0.5 font-semibold"
+                      className="text-amber-700 dark:text-amber-400 underline hover:text-amber-800 dark:hover:text-amber-300 inline break-all font-semibold"
                     >
                       <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
-                      <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
+                      <ExternalLink className="h-2.5 w-2.5 inline ml-0.5 align-middle shrink-0" />
                     </a>
                   </p>
                 </div>

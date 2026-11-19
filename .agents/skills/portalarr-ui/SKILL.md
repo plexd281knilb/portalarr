@@ -1497,3 +1497,7 @@ To guarantee 100% reliability, quality control, and consistency, the following 5
 - **Reusable Empty State (`src/components/ui/empty-state.tsx`)**:
   - Shared `<EmptyState />` (with `compact` option for dense queue panels) used across `/tickets`, `/requests`, `/radarr`, `/sonarr`, `/library` (and `/channels` on `dev`).
 - **Automated Regression Gate**: Verified automatically in **Suite 25** of `scripts/verify-all.ts` alongside the global `~/.gemini/config/skills/ui-design-system/SKILL.md` standard.
+- **Multi-Screen & Tablet-Breakpoint Invariants (Verified via Headless Chrome / Playwright)**:
+  - Always test built routes (`/`, `/admin/monitoring`, `/settings`, `/library`, `/discover`) across `360×800` (Android), `390×844` (iPhone), `768×1024` (Tablet), `1440×900` (Desktop), and `1920×1080` (Ultrawide) with `scrollWidth <= clientWidth` and `#mobile-sidebar-drawer` open/close verification.
+  - **Tablet `768px` Sidebar Gotcha**: At `md` (`768px`), the `w-56` (`224px`) desktop sidebar renders alongside `<main>`, leaving `544px` for `<main>`. Multi-column `<TabsList>` grids with wide desktop labels must switch at `lg:` (not `sm:`) with `min-w-0` and `truncate` so `768px` tablets never overflow horizontally.
+  - **Long External URLs on Mobile**: Raw URL anchors (e.g. Amazon Personal Document Settings links) must use `inline break-all` (never `inline-flex`) so `360px` Android screens wrap them cleanly without horizontal scroll.

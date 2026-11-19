@@ -401,13 +401,13 @@ export default function AdminFleetMonitoringPage() {
             )}
 
             {/* DASHBOARD HERO HEADER */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-border/70 dark:border-white/[0.08]">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-border/70 dark:border-white/[0.08]">
+                <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
                             <Layers className="h-6 w-6 text-emerald-700 dark:text-emerald-400 animate-pulse" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent flex items-center gap-2.5">
                                 System & Docker Fleet Monitoring
                             </h1>
@@ -418,7 +418,7 @@ export default function AdminFleetMonitoringPage() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0">
+                <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto shrink-0">
                     <Link href="/settings?tab=monitoring">
                         <Button variant="outline" size="sm" className="h-9 px-3 text-xs gap-1.5 border-border/60 hover:bg-accent dark:hover:bg-white/[0.04]">
                             <Settings className="h-4 w-4 text-muted-foreground" />
@@ -523,35 +523,35 @@ export default function AdminFleetMonitoringPage() {
                 className="w-full space-y-5"
             >
                 {/* HIGH-CONTRAST TAB SWITCHER */}
-                <TabsList className="bg-card dark:bg-[#121218] border border-border/70 dark:border-white/[0.08] p-1 rounded-xl w-full sm:w-auto grid grid-cols-3 gap-1 h-auto">
+                <TabsList className="bg-card dark:bg-[#121218] border border-border/70 dark:border-white/[0.08] p-1 rounded-xl w-full lg:w-auto grid grid-cols-3 gap-1 h-auto">
                     {/* TAB 1: SYSTEMS */}
                     <TabsTrigger
                         value="systems"
-                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-sky-700/80 dark:text-sky-400/80 hover:text-sky-800 dark:hover:text-sky-300 data-[state=active]:text-sky-700 dark:data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/15 data-[state=active]:border data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm"
+                        className="min-w-0 text-[11px] sm:text-xs font-bold py-2 px-1.5 sm:px-2.5 lg:px-4 rounded-lg transition-all gap-1 sm:gap-1.5 lg:gap-2 text-sky-700/80 dark:text-sky-400/80 hover:text-sky-800 dark:hover:text-sky-300 data-[state=active]:text-sky-700 dark:data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/15 data-[state=active]:border data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm"
                     >
                         <Server className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-700 dark:text-sky-400 shrink-0" />
-                        <span className="hidden sm:inline">Systems & Services ({services.length})</span>
-                        <span className="sm:hidden">Systems ({services.length})</span>
+                        <span className="hidden lg:inline truncate">Systems & Services ({services.length})</span>
+                        <span className="lg:hidden truncate">Systems ({services.length})</span>
                     </TabsTrigger>
 
                     {/* TAB 2: DOCKER CONTAINERS */}
                     <TabsTrigger
                         value="containers"
-                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-emerald-700/80 dark:text-emerald-400/80 hover:text-emerald-800 dark:hover:text-emerald-300 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/15 data-[state=active]:border data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm"
+                        className="min-w-0 text-[11px] sm:text-xs font-bold py-2 px-1.5 sm:px-2.5 lg:px-4 rounded-lg transition-all gap-1 sm:gap-1.5 lg:gap-2 text-emerald-700/80 dark:text-emerald-400/80 hover:text-emerald-800 dark:hover:text-emerald-300 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/15 data-[state=active]:border data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm"
                     >
                         <Cpu className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
-                        <span className="hidden sm:inline">Docker Fleet ({fleetSummary.totalContainers})</span>
-                        <span className="sm:hidden">Fleet ({fleetSummary.totalContainers})</span>
+                        <span className="hidden lg:inline truncate">Docker Fleet ({fleetSummary.totalContainers})</span>
+                        <span className="lg:hidden truncate">Fleet ({fleetSummary.totalContainers})</span>
                     </TabsTrigger>
 
                     {/* TAB 3: INCIDENTS & ALERTS */}
                     <TabsTrigger
                         value="incidents"
-                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-amber-700/80 dark:text-amber-400/80 hover:text-amber-800 dark:hover:text-amber-300 data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/15 data-[state=active]:border data-[state=active]:border-amber-500/40 data-[state=active]:shadow-sm"
+                        className="min-w-0 text-[11px] sm:text-xs font-bold py-2 px-1.5 sm:px-2.5 lg:px-4 rounded-lg transition-all gap-1 sm:gap-1.5 lg:gap-2 text-amber-700/80 dark:text-amber-400/80 hover:text-amber-800 dark:hover:text-amber-300 data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/15 data-[state=active]:border data-[state=active]:border-amber-500/40 data-[state=active]:shadow-sm"
                     >
                         <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-700 dark:text-amber-400 shrink-0" />
-                        <span className="hidden sm:inline">Outages & Alerts {activeIncidentsCount > 0 ? `(${activeIncidentsCount})` : ""}</span>
-                        <span className="sm:hidden">Outages {activeIncidentsCount > 0 ? `(${activeIncidentsCount})` : ""}</span>
+                        <span className="hidden lg:inline truncate">Outages & Alerts {activeIncidentsCount > 0 ? `(${activeIncidentsCount})` : ""}</span>
+                        <span className="lg:hidden truncate">Outages {activeIncidentsCount > 0 ? `(${activeIncidentsCount})` : ""}</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -582,8 +582,8 @@ export default function AdminFleetMonitoringPage() {
                             </div>
 
                             {/* FILTER BAR */}
-                            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
-                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+                            <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 pt-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                     <button
                                         onClick={() => setSystemStatusFilter("ALL")}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
@@ -626,7 +626,7 @@ export default function AdminFleetMonitoringPage() {
                                     </button>
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full xl:w-auto">
                                     <select
                                         value={systemCategoryFilter}
                                         onChange={(e) => setSystemCategoryFilter(e.target.value)}
@@ -794,8 +794,8 @@ export default function AdminFleetMonitoringPage() {
                             </div>
 
                             {/* FILTER BAR */}
-                            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
-                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+                            <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 pt-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                     <button
                                         onClick={() => setContainerStateFilter("ALL")}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
@@ -840,7 +840,7 @@ export default function AdminFleetMonitoringPage() {
                                     )}
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full xl:w-auto">
                                     <div className="flex items-center justify-center bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/10 rounded-lg p-0.5 h-8 shrink-0">
                                         <button
                                             onClick={() => setContainerSort("name_asc")}

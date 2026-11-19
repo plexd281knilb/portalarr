@@ -96,12 +96,12 @@ export default function PhoneClusterPanel({ compact = false }: { compact?: boole
     return (
         <Card className="border border-border/70 dark:border-white/[0.08] bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl overflow-hidden">
             <CardHeader className="p-4 sm:p-5 border-b border-border/70 dark:border-white/[0.06] space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start gap-2.5">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5 min-w-0">
                         <div className="p-2 rounded-xl bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20 shrink-0">
                             <Smartphone className="h-5 w-5" />
                         </div>
-                        <div className="space-y-0.5">
+                        <div className="space-y-0.5 min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                                 <CardTitle className="text-base font-bold text-foreground">
                                     Android K3s Phone Cluster
@@ -125,9 +125,9 @@ export default function PhoneClusterPanel({ compact = false }: { compact?: boole
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
                         {!compact && summary.totalPhones > 0 && (
-                            <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.06] text-xs text-muted-foreground tabular-nums">
+                            <div className="hidden xl:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.06] text-xs text-muted-foreground tabular-nums">
                                 <span>
                                     Avg CPU <strong className="text-foreground">{summary.avgCpuPercent}%</strong>
                                 </span>
