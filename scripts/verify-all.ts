@@ -1727,6 +1727,27 @@ async function runTestSuite() {
             if (unauthPhoneRes.status !== 401 && unauthPhoneRes.status !== 403) {
                 throw new Error(`Expected GET /api/admin/phone-cluster unauthenticated to return 401/403, got ${unauthPhoneRes.status}`);
             }
+
+            const { parseGamingPcConfig } = await import("../src/lib/monitoring/gaming-pc");
+            const gamingCfg = parseGamingPcConfig(undefined, undefined);
+            if (!gamingCfg.telemetryUrls.some((u) => u.includes("192.168.1.68:9178")) || !gamingCfg.ollamaUrls.some((u) => u.includes("192.168.10.78:11434"))) {
+                throw new Error(`parseGamingPcConfig did not include expected pfSense/LAN endpoints: ${JSON.stringify(gamingCfg)}`);
+            }
+
+            const { getOllamaCandidateUrls, normalizeOllamaModelName } = await import("../src/lib/ai-ollama");
+            const ollamaUrls = getOllamaCandidateUrls("http://127.0.0.1:11434/v1");
+            if (ollamaUrls[0] !== "http://127.0.0.1:11434" || !ollamaUrls.some((u) => u.includes("192.168.10.78:11434"))) {
+                throw new Error(`getOllamaCandidateUrls failed to normalize or include RTX 3080 LAN fallback: ${JSON.stringify(ollamaUrls)}`);
+            }
+            if (normalizeOllamaModelName("gemini-3.5-flash-lite") !== "qwen2.5:3b" || normalizeOllamaModelName("qwen2.5:7b-instruct") !== "qwen2.5:7b-instruct") {
+                throw new Error("normalizeOllamaModelName did not normalize Gemini/Ollama model names cleanly");
+            }
+
+            const { GET: getGamingPc } = await import("../src/app/api/admin/gaming-pc/route");
+            const unauthGamingRes = await getGamingPc();
+            if (unauthGamingRes.status !== 401 && unauthGamingRes.status !== 403) {
+                throw new Error(`Expected GET /api/admin/gaming-pc unauthenticated to return 401/403, got ${unauthGamingRes.status}`);
+            }
         } finally {
             if (prevTestAuth !== undefined) process.env.PORTALARR_TEST_AUTH = prevTestAuth;
             else delete process.env.PORTALARR_TEST_AUTH;
@@ -4647,6 +4668,7 @@ async function runTestSuite() {
             "src/components/system-logs-viewer.tsx",
             "src/components/suggest-fix-modal.tsx",
             "src/components/phone-cluster-panel.tsx",
+            "src/components/gaming-pc-panel.tsx",
         ]) {
             const uiSrc = fs.readFileSync(path.join(process.cwd(), relUiFile), "utf8");
             if (unprefixedDarkSurfaceRe.test(uiSrc)) {

@@ -22,6 +22,7 @@ import type {
 } from "@/lib/monitoring/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import PhoneClusterPanel from "@/components/phone-cluster-panel";
+import GamingPcPanel from "@/components/gaming-pc-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -558,6 +559,7 @@ export default function AdminFleetMonitoringPage() {
                 {/* TAB 1 CONTENT: SYSTEMS & SERVICES HEALTH */}
                 {/* ========================================================================= */}
                 <TabsContent value="systems" className="space-y-4 focus-visible:outline-hidden">
+                    <GamingPcPanel />
                     <PhoneClusterPanel />
                     <Card className="border border-border/70 dark:border-white/[0.08] bg-card/95 dark:bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl">
                         <CardHeader className="p-4 sm:p-5 border-b border-border/70 dark:border-white/[0.06] space-y-3">

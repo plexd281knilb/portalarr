@@ -36,6 +36,7 @@ import AdminUserSwitcher from "@/components/admin-user-switcher";
 import AdminDetailedStreams from "@/components/admin-detailed-streams";
 import AdminSystemHealthGrid from "@/components/admin-system-health-grid";
 import PhoneClusterPanel from "@/components/phone-cluster-panel";
+import GamingPcPanel from "@/components/gaming-pc-panel";
 import StreamQualityDoctorBanner from "@/components/stream-quality-doctor-banner";
 import TrialDashboardView from "@/components/trial-dashboard-view";
 import SuperUserCard from "@/components/super-user-card";
@@ -420,6 +421,9 @@ export default async function UserLandingPage() {
 
                         {/* ANDROID K3S PHONE CLUSTER TELEMETRY */}
                         <PhoneClusterPanel compact />
+
+                        {/* GAMING PC RTX 3080 TELEMETRY */}
+                        <GamingPcPanel compact />
 
                         {/* INTRICATE ADMIN SYSTEM STATUS & STREAM TELEMETRY TABLE */}
                         <AdminDetailedStreams devRoadmapText={devRoadmapText} roadmapText={roadmapText} />

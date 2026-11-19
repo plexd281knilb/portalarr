@@ -22,6 +22,7 @@ import {
 import { logAgentEvent, validateUserCrossBoundaryQuery } from "@/lib/ai-agent-guardrails";
 import { runDeepPlexPlaybackHealthCheck, PlexPlaybackDiagnosticReport } from "@/lib/plex-playback-probe";
 import { normalizeGeminiModel, getGeminiCandidateModels, getAvailableGeminiModels } from "@/lib/ai-agent";
+import { callOllamaChat } from "@/lib/ai-ollama";
 import { 
     GEMINI_TOOL_DECLARATIONS, 
     OPENAI_TOOL_DEFINITIONS, 
@@ -1213,7 +1214,7 @@ ${isAdmin ? `
 SERVER ADMINISTRATOR CAPABILITIES & HOMELAB MISSION CONTROL:
 - Caller is a verified SERVER ADMINISTRATOR ("${snapshot.username}").
 - You are equipped with structured function tools to inspect and manage the homelab infrastructure:
-  * "get_homelab_hardware_telemetry": Query physical host CPU %, RAM %, and load via Glances.
+  * "get_homelab_hardware_telemetry": Query physical host CPU %, RAM %, and load via Glances plus Gaming PC (RTX 3080 online/asleep state, GPU load, VRAM, loaded Ollama models, and active GPU processes).
   * "get_docker_fleet_status": Inspect running, stopped, and unhealthy Docker containers across the fleet.
   * "restart_docker_container": Safely restart a specific container by name/id (e.g. plex, sonarr, radarr, glances).
   * "get_account_sharing_alerts": Audit active streams for multi-IP password sharing across distinct residential locations.
@@ -1282,9 +1283,99 @@ INSTRUCTIONS:
 - Provide numbered, easy-to-follow steps with exact player menu names.
 - Keep the tone encouraging, technical yet accessible, and structured with clean markdown bolding and bullet points.`;
 
+    const tryOllamaAssistant = async (): Promise<AiAssistantResponse | null> => {
+        const shouldTry =
+            provider === "ollama" ||
+            (!process.env.PORTALARR_TEST && (provider === "default" || Boolean(rawKey) || Boolean(process.env.GEMINI_API_KEY)));
+        if (!shouldTry) return null;
+        try {
+            const ollamaModel =
+                settings?.aiModel &&
+                !settings.aiModel.toLowerCase().includes("gemini") &&
+                !settings.aiModel.toLowerCase().startsWith("gpt")
+                    ? settings.aiModel
+                    : "qwen2.5:3b";
+            const messages: any[] = [{ role: "system", content: systemPrompt }];
+            for (const h of history.slice(-4)) {
+                messages.push({ role: h.role, content: h.content });
+            }
+            messages.push({ role: "user", content: question });
+
+            const chatRes = await callOllamaChat({
+                messages,
+                model: ollamaModel,
+                tools: activeOpenAiTools,
+            });
+            const message = chatRes?.message;
+            if (message?.tool_calls && message.tool_calls.length > 0) {
+                const toolCall = message.tool_calls[0];
+                const fnName = toolCall.function.name;
+                let fnArgs: any = {};
+                try {
+                    fnArgs =
+                        typeof toolCall.function.arguments === "string"
+                            ? JSON.parse(toolCall.function.arguments || "{}")
+                            : toolCall.function.arguments || {};
+                } catch (_) {}
+
+                logAgentEvent("INFO", `RTX 3080 Ollama (${chatRes!.model}) invoked tool "${fnName}"`, fnArgs);
+                const toolResult = await executeAiAssistantTool(fnName, fnArgs, toolCtx);
+                if (toolCtx.mediaInspectionHolder.current) mediaInspection = toolCtx.mediaInspectionHolder.current;
+                if (toolCtx.playbackProbeHolder.current) playbackProbe = toolCtx.playbackProbeHolder.current;
+
+                const synth = await callOllamaChat({
+                    messages: [
+                        ...messages,
+                        message,
+                        {
+                            role: "tool",
+                            tool_call_id: toolCall.id || fnName,
+                            content: JSON.stringify(toolResult.result),
+                        },
+                    ],
+                    model: ollamaModel,
+                }).catch(() => null);
+                const synthText = synth?.message?.content;
+                return {
+                    success: true,
+                    answer:
+                        synthText && synthText.trim().length > 10
+                            ? synthText.trim()
+                            : toolResult.summary || "Action completed.",
+                    diagnostics: snapshot,
+                    providerUsed: `RTX 3080 Ollama (${chatRes!.model}) [Tool: ${fnName}]`,
+                    actionsTaken,
+                    mediaInspection,
+                    playbackProbe,
+                };
+            }
+            if (message?.content && message.content.trim().length > 10) {
+                logAgentEvent("INFO", `RTX 3080 Ollama (${chatRes!.model}) answered for "${snapshot.username}"`);
+                return {
+                    success: true,
+                    answer: message.content.trim(),
+                    diagnostics: snapshot,
+                    providerUsed: `RTX 3080 Ollama (${chatRes!.model})`,
+                    actionsTaken,
+                    mediaInspection,
+                    playbackProbe,
+                };
+            }
+        } catch (e: any) {
+            logAgentEvent("WARN", `RTX 3080 Ollama skipped: ${e.message}`);
+        }
+        return null;
+    };
+
+    // Prefer RTX 3080 Ollama FIRST when provider is "ollama" or "default" ("Auto (RTX 3080 if Online + Built-In Fallback)")
+    if (provider === "ollama" || !provider || provider === "default") {
+        const ollamaFirst = await tryOllamaAssistant();
+        if (ollamaFirst) return ollamaFirst;
+    }
+
     // 1. Google Gemini Provider
     const geminiKey = rawKey || process.env.GEMINI_API_KEY || "";
-    if ((provider === "gemini" || provider === "google" || (!provider || provider === "default")) && geminiKey) {
+    if ((provider === "gemini" || provider === "google" || provider === "ollama" || !provider || provider === "default") && geminiKey) {
         const dynamicModels = await getAvailableGeminiModels(geminiKey).catch(() => []);
         const candidateModels = getGeminiCandidateModels(modelName, dynamicModels);
 
@@ -1577,6 +1668,12 @@ INSTRUCTIONS:
         } finally {
             clearTimeout(timeoutId);
         }
+    }
+
+    // 2.5 Failover to Local RTX 3080 GPU (Ollama) when Gemini/OpenAI was selected but unavailable
+    if (provider !== "ollama" && provider && provider !== "default") {
+        const ollamaFailover = await tryOllamaAssistant();
+        if (ollamaFailover) return ollamaFailover;
     }
 
     // 3. Built-in Plex Master Knowledge Base & Heuristic Engine (Guaranteed Instant Response)
