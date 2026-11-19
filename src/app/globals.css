@@ -180,3 +180,43 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* In-app Email Live Preview: match Light/Dark theme + mobile table stacking */
+.dark .email-heading { color: #f8fafc !important; border-color: #334155 !important; }
+.dark .email-text { color: #cbd5e1 !important; }
+.dark .email-muted { color: #94a3b8 !important; }
+.dark .email-link { color: #60a5fa !important; }
+.dark .email-box-neutral { background-color: #1c1f2e !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+.dark .email-box-green { background-color: #0f291e !important; border-color: #166534 !important; border-left-color: #22c55e !important; color: #e2e8f0 !important; }
+.dark .email-box-green-title,
+.dark .email-green-text { color: #4ade80 !important; }
+.dark .email-red-text { color: #f87171 !important; }
+.dark .email-code { background-color: #14532d !important; color: #dcfce7 !important; }
+.dark .email-table { border-color: #334155 !important; }
+.dark .email-table-head { background-color: #1e293b !important; color: #f8fafc !important; }
+.dark .email-table-cell { border-color: #334155 !important; color: #e2e8f0 !important; }
+.dark .email-table-highlight { background-color: #0f291e !important; }
+
+@media (max-width: 600px) {
+  .recap-kv-row, .recap-kv-label, .recap-kv-value {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .recap-kv-label {
+    padding: 4px 0 2px 0 !important;
+  }
+  .recap-kv-value {
+    padding: 0 0 10px 0 !important;
+  }
+  .email-table th, .email-table td {
+    padding: 7px 6px !important;
+    font-size: 12px !important;
+  }
+  .email-cta-btn {
+    padding: 11px 14px !important;
+    font-size: 13px !important;
+    width: 100% !important;
+    text-align: center !important;
+  }
+}
