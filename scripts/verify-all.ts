@@ -4631,6 +4631,7 @@ async function runTestSuite() {
             "src/components/kindle-setup-guide-modal.tsx",
             "src/components/kindle-sender-update-banner.tsx",
             "src/components/request-library-access.tsx",
+            "src/app/library/page.tsx",
         ]) {
             const src = fs.readFileSync(path.join(process.cwd(), amazonLinkFile), "utf8");
             const rawUrlAnchorRe = /<a\b([^>]*)>\s*<span>https:\/\/www\.amazon\.com\/hz\/mycd\/myx/g;
@@ -4646,6 +4647,11 @@ async function runTestSuite() {
             if (!foundRawUrlAnchor) {
                 throw new Error(`Expected raw Amazon URL anchor check to match inside ${amazonLinkFile}`);
             }
+        }
+
+        const monitoringPageSrc = fs.readFileSync(path.join(process.cwd(), "src/app/admin/monitoring/page.tsx"), "utf8");
+        if (monitoringPageSrc.includes('w-full sm:w-auto grid grid-cols-3')) {
+            throw new Error("admin/monitoring/page.tsx TabsList must switch to lg:w-auto (not sm:w-auto) so 768px tablet viewports with the 224px sidebar do not overflow horizontally");
         }
 
         // 8. Light-mode readability & modal width regression guards
