@@ -3991,6 +3991,20 @@ async function runTestSuite() {
         if (priceIdx === -1 || compIdx === -1 || recapIdx === -1 || !(priceIdx < compIdx && compIdx < recapIdx)) {
             throw new Error("Annual recap email must present pricing/due-date/payment quick answers BEFORE comparisons and feature recap");
         }
+        for (const responsiveMarker of [
+            "email-heading",
+            "email-box-green",
+            "recap-kv-label",
+            "email-table",
+            "[data-ogsc]",
+            "@media (prefers-color-scheme: dark)",
+            "@media (prefers-color-scheme: light)",
+            "@media only screen and (max-width: 600px)"
+        ]) {
+            if (!rendered.html.includes(responsiveMarker)) {
+                throw new Error(`Rendered annual_thanksgiving_recap HTML missing dark/light/mobile rule: "${responsiveMarker}"`);
+            }
+        }
     });
 
     console.log("\n==========================================================");

@@ -1596,96 +1596,96 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         triggerEvent: "Sent automatically once per year on the Saturday before Thanksgiving (or manually from Broadcasts / System Schedules), staged in the Admin Approval Queue when enabled.",
         category: "BROADCAST",
         defaultSubject: "{portalName} {currentYear} Year in Review — Same Price, {nextYear} Renewal & What's New",
-        defaultBody: `<h2 style="margin-top: 0; color: #0f172a;">Happy Thanksgiving Week, {username}!</h2>
-<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 16px;">
+        defaultBody: `<h2 class="email-heading" style="margin-top: 0; color: #0f172a;">Happy Thanksgiving Week, {username}!</h2>
+<p class="email-text" style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 16px;">
     Thank you for being part of <strong>{portalName}</strong> this year! Before the holidays get busy, here are the quick answers everyone asks first—followed by a concise recap of what was added in {currentYear}, how our pricing compares, and what's coming next.
 </p>
 
 <!-- TOP QUICK ANSWERS -->
-<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #16a34a; padding: 18px 20px; border-radius: 10px; margin: 18px 0 22px 0;">
-    <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;">Quick Answers: {nextYear} Renewal &amp; Pricing</p>
-    <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #1e293b;">
-        <tr>
-            <td style="padding: 6px 8px 6px 0; font-weight: 700; width: 155px; color: #475569; vertical-align: top;">Did the price go up?</td>
-            <td style="padding: 6px 0; color: #15803d; font-weight: 800;">No &mdash; $0 increase! Same rates as last year.</td>
+<div class="email-box-green" style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #16a34a; padding: 18px 18px; border-radius: 10px; margin: 18px 0 22px 0; box-sizing: border-box;">
+    <p class="email-box-green-title" style="margin: 0 0 10px 0; font-size: 13px; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;">Quick Answers: {nextYear} Renewal &amp; Pricing</p>
+    <table class="recap-kv-table" style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr class="recap-kv-row">
+            <td class="recap-kv-label email-muted" style="padding: 6px 10px 6px 0; font-weight: 700; width: 155px; color: #475569; vertical-align: top;">Did the price go up?</td>
+            <td class="recap-kv-value email-green-text" style="padding: 6px 0; color: #15803d; font-weight: 800;">No &mdash; $0 increase! Same rates as last year.</td>
         </tr>
-        <tr>
-            <td style="padding: 6px 8px 6px 0; font-weight: 700; color: #475569; vertical-align: top;">When is it due?</td>
-            <td style="padding: 6px 0; color: #0f172a; font-weight: 700;">{renewalDate} <span style="font-weight: 400; color: #475569;">(for Annual plans; Monthly renews on the 1st of each month)</span></td>
+        <tr class="recap-kv-row">
+            <td class="recap-kv-label email-muted" style="padding: 6px 10px 6px 0; font-weight: 700; color: #475569; vertical-align: top;">When is it due?</td>
+            <td class="recap-kv-value email-heading" style="padding: 6px 0; color: #0f172a; font-weight: 700;">{renewalDate} <span class="email-muted" style="font-weight: 400; color: #475569;">(for Annual plans; Monthly renews on the 1st of each month)</span></td>
         </tr>
-        <tr>
-            <td style="padding: 6px 8px 6px 0; font-weight: 700; color: #475569; vertical-align: top;">How much is it?</td>
-            <td style="padding: 6px 0; color: #0f172a;">
-                <strong>Annual Pass: {yearlyPrice}/year</strong> <span style="color: #475569;">({annualMonthlyRate}/mo &mdash; saves {annualSavings}/yr)</span><br />
-                <strong>Monthly Plan: {monthlyPrice}/month</strong> <span style="color: #475569;">(flexible month-to-month)</span>
+        <tr class="recap-kv-row">
+            <td class="recap-kv-label email-muted" style="padding: 6px 10px 6px 0; font-weight: 700; color: #475569; vertical-align: top;">How much is it?</td>
+            <td class="recap-kv-value email-heading" style="padding: 6px 0; color: #0f172a;">
+                <strong>Annual Pass: {yearlyPrice}/year</strong> <span class="email-muted" style="color: #475569;">({annualMonthlyRate}/mo &mdash; saves {annualSavings}/yr)</span><br />
+                <strong>Monthly Plan: {monthlyPrice}/month</strong> <span class="email-muted" style="color: #475569;">(flexible month-to-month)</span>
             </td>
         </tr>
-        <tr>
-            <td style="padding: 6px 8px 6px 0; font-weight: 700; color: #475569; vertical-align: top;">How do I pay?</td>
-            <td style="padding: 6px 0; color: #0f172a;">
-                Send via <strong>{paymentMethodsText}</strong> (zero fees) and put <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px; font-weight: 700; color: #14532d;">{paymentMemo}</code> in the payment note/memo for automatic matching.
+        <tr class="recap-kv-row">
+            <td class="recap-kv-label email-muted" style="padding: 6px 10px 6px 0; font-weight: 700; color: #475569; vertical-align: top;">How do I pay?</td>
+            <td class="recap-kv-value email-heading" style="padding: 6px 0; color: #0f172a; word-break: break-word; overflow-wrap: anywhere;">
+                Send via <strong>{paymentMethodsText}</strong> (zero fees) and put <code class="email-code" style="background-color: #dcfce7; padding: 2px 6px; border-radius: 4px; font-weight: 700; color: #14532d;">{paymentMemo}</code> in the payment note/memo for automatic matching.
             </td>
         </tr>
     </table>
     <div style="text-align: center; margin-top: 16px;">
-        <a href="{billingUrl}" style="background-color: #16a34a; color: #ffffff !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 11px 24px; border-radius: 8px; display: inline-block;">View Payment QR, Links &amp; Your Due Date &rarr;</a>
+        <a href="{billingUrl}" class="email-cta-btn" style="background-color: #16a34a; color: #ffffff !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 11px 22px; border-radius: 8px; display: inline-block; max-width: 100%; box-sizing: border-box;">View Payment QR, Links &amp; Your Due Date &rarr;</a>
     </div>
 </div>
 
 <!-- LIBRARY SNAPSHOT -->
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; margin-bottom: 22px;">
-    <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.4px;">What's on the Server Right Now</p>
-    <p style="margin: 0; font-size: 14.5px; color: #334155; line-height: 1.55;">
+<div class="email-box-neutral" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; margin-bottom: 22px; box-sizing: border-box;">
+    <p class="email-heading" style="margin: 0 0 6px 0; font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.4px;">What's on the Server Right Now</p>
+    <p class="email-text" style="margin: 0; font-size: 14.5px; color: #334155; line-height: 1.55;">
         You currently have instant, ad-free access to <strong>{movieCount} movies</strong> and <strong>{showCount} TV shows</strong> (including 4K HDR &amp; Dolby Vision), plus <strong>e-books, audiobooks, and Live TV</strong> &mdash; all in one place with 1-click requests if anything is missing.
     </p>
 </div>
 
 <!-- COMPETITOR COMPARISON -->
-<h3 style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">How We Compare ({currentYear} Streaming Price Hikes)</h3>
-<p style="color: #475569; font-size: 13.5px; line-height: 1.55; margin: 0 0 12px 0;">
+<h3 class="email-heading" style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">How We Compare ({currentYear} Streaming Price Hikes)</h3>
+<p class="email-muted" style="color: #475569; font-size: 13.5px; line-height: 1.55; margin: 0 0 12px 0;">
     Almost every major streaming service raised prices again in {currentYear}. Here's what ad-free plans cost right now vs. {portalName}:
 </p>
-<table style="width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+<table class="email-table" style="width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
     <thead>
-        <tr style="background-color: #f1f5f9; color: #0f172a; text-align: left;">
-            <th style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">Service</th>
-            <th style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">Current Ad-Free Price</th>
-            <th style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">{currentYear} Change</th>
+        <tr class="email-table-head" style="background-color: #f1f5f9; color: #0f172a; text-align: left;">
+            <th class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">Service</th>
+            <th class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">Ad-Free Price</th>
+            <th class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">{currentYear} Change</th>
         </tr>
     </thead>
     <tbody>
         <tr>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">Netflix</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">$19.99/mo ($26.99/mo for 4K)</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">Went up (+$2/mo)</td>
+            <td class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">Netflix</td>
+            <td class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #334155;">$19.99/mo ($26.99/mo 4K)</td>
+            <td class="email-table-cell email-red-text" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">+$2/mo hike</td>
         </tr>
         <tr>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">Disney+</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">$21.49/mo ($214.99/yr)</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">Went up (+$2.50/mo)</td>
+            <td class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">Disney+</td>
+            <td class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #334155;">$21.49/mo ($214.99/yr)</td>
+            <td class="email-table-cell email-red-text" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">+$2.50/mo hike</td>
         </tr>
         <tr>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">Hulu</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">$21.49/mo</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">Went up (+$2.50/mo)</td>
+            <td class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">Hulu</td>
+            <td class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #334155;">$21.49/mo</td>
+            <td class="email-table-cell email-red-text" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">+$2.50/mo hike</td>
         </tr>
         <tr>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">Max (HBO)</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">$18.49/mo ($22.99/mo for 4K)</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #475569;">$184.99&ndash;$229.99/yr</td>
+            <td class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">Max (HBO)</td>
+            <td class="email-table-cell" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #334155;">$18.49/mo ($22.99/mo 4K)</td>
+            <td class="email-table-cell email-muted" style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #475569;">$184.99&ndash;$229.99/yr</td>
         </tr>
-        <tr style="background-color: #f0fdf4;">
-            <td style="padding: 9px 10px; font-weight: 800; color: #166534;">{portalName}</td>
-            <td style="padding: 9px 10px; font-weight: 800; color: #15803d;">{yearlyPrice}/yr ({annualMonthlyRate}/mo) or {monthlyPrice}/mo</td>
-            <td style="padding: 9px 10px; font-weight: 800; color: #15803d;">No increase!</td>
+        <tr class="email-table-highlight" style="background-color: #f0fdf4;">
+            <td class="email-table-cell email-box-green-title" style="padding: 9px 10px; font-weight: 800; color: #166534;">{portalName}</td>
+            <td class="email-table-cell email-green-text" style="padding: 9px 10px; font-weight: 800; color: #15803d;">{yearlyPrice}/yr ({annualMonthlyRate}/mo) or {monthlyPrice}/mo</td>
+            <td class="email-table-cell email-green-text" style="padding: 9px 10px; font-weight: 800; color: #15803d;">No increase!</td>
         </tr>
     </tbody>
 </table>
 
 <!-- WHAT WAS ADDED THIS YEAR -->
-<h3 style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">New Things Added in {currentYear}</h3>
-<ul style="color: #334155; font-size: 13.5px; line-height: 1.6; padding-left: 18px; margin: 0 0 18px 0;">
-    <li style="margin-bottom: 6px;"><strong>New {portalName} Portal (<a href="{appUrl}" style="color: #2563eb; text-decoration: none;">{appUrl}</a>):</strong> One clean hub with 1-click Plex sign-in, trending discovery, movie/TV requests with live download status, and mobile-friendly Light &amp; Dark themes.</li>
+<h3 class="email-heading" style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">New Things Added in {currentYear}</h3>
+<ul class="email-text" style="color: #334155; font-size: 13.5px; line-height: 1.6; padding-left: 18px; margin: 0 0 18px 0;">
+    <li style="margin-bottom: 6px;"><strong>New {portalName} Portal (<a href="{appUrl}" class="email-link" style="color: #2563eb; text-decoration: none; word-break: break-all;">{appUrl}</a>):</strong> One clean hub with 1-click Plex sign-in, trending discovery, movie/TV requests with live download status, and mobile-friendly Light &amp; Dark themes.</li>
     <li style="margin-bottom: 6px;"><strong>E-Books, Comics &amp; Audiobooks + Send-to-Kindle:</strong> Built-in browser reader, wireless 1-click Kindle delivery, automatic series tracking, and audiobook streaming in Plex.</li>
     <li style="margin-bottom: 6px;"><strong>Live TV Channels:</strong> Stream curated live sports, news, and broadcast channels right inside your Plex or Jellyfin app.</li>
     <li style="margin-bottom: 6px;"><strong>24/7 AI Assistant &amp; Stream Diagnostics:</strong> Instant buffering checks, built-in speed test, device setup guides, and automatic audio/file replacement when something won't play cleanly.</li>
@@ -1693,16 +1693,16 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </ul>
 
 <!-- THINGS TO COME -->
-<h3 style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">What's Coming Next</h3>
-<ul style="color: #334155; font-size: 13.5px; line-height: 1.6; padding-left: 18px; margin: 0 0 20px 0;">
+<h3 class="email-heading" style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">What's Coming Next</h3>
+<ul class="email-text" style="color: #334155; font-size: 13.5px; line-height: 1.6; padding-left: 18px; margin: 0 0 20px 0;">
     <li style="margin-bottom: 5px;"><strong>In-Browser Audiobook Player:</strong> Floating audio player with sleep timers and speed controls across pages.</li>
     <li style="margin-bottom: 5px;"><strong>Member Referral Rewards:</strong> Earn free months and renewal discounts when friends join.</li>
     <li style="margin-bottom: 5px;"><strong>Family &amp; Kids Sub-Profiles:</strong> Age-filtered shelves and optional PIN protection for shared TVs.</li>
     <li style="margin-bottom: 5px;"><strong>1-Click Subtitle Sync, Personal Year-in-Review &amp; Mobile Alerts:</strong> Fix out-of-sync subtitles on the fly, view your yearly watch recap, and get instant alerts when requests finish.</li>
 </ul>
 
-<p style="font-size: 13.5px; color: #475569; text-align: center; margin-top: 20px;">
-    Questions or feedback? Hit the <strong>Suggest Fix</strong> button on <a href="{appUrl}" style="color: #2563eb; text-decoration: none; font-weight: 600;">{appUrl}</a> or open a support ticket anytime. Happy Thanksgiving!
+<p class="email-muted" style="font-size: 13.5px; color: #475569; text-align: center; margin-top: 20px; word-break: break-word;">
+    Questions or feedback? Hit the <strong>Suggest Fix</strong> button on <a href="{appUrl}" class="email-link" style="color: #2563eb; text-decoration: none; font-weight: 600;">{appUrl}</a> or open a support ticket anytime. Happy Thanksgiving!
 </p>`,
         variables: [
             { key: "{username}", description: "Recipient's username", sampleValue: "alex_stream" },
@@ -1778,28 +1778,64 @@ export function wrapInPortalarrEmailLayout(options: {
             supported-color-schemes: light dark;
         }
         @media (prefers-color-scheme: dark) {
-            body { background-color: #0b0c10 !important; }
+            body { background-color: #0b0c10 !important; color: #e2e8f0 !important; }
             .email-card { background-color: #13141f !important; border-color: #27273a !important; color: #e2e8f0 !important; }
+            .email-body-content { color: #cbd5e1 !important; }
+            .email-heading { color: #f8fafc !important; border-color: #334155 !important; }
+            .email-text { color: #cbd5e1 !important; }
+            .email-muted { color: #94a3b8 !important; }
+            .email-link { color: #60a5fa !important; }
+            .email-box-neutral { background-color: #1c1f2e !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+            .email-box-green { background-color: #0f291e !important; border-color: #166534 !important; border-left-color: #22c55e !important; color: #e2e8f0 !important; }
+            .email-box-green-title { color: #4ade80 !important; }
+            .email-green-text { color: #4ade80 !important; }
+            .email-red-text { color: #f87171 !important; }
+            .email-code { background-color: #14532d !important; color: #dcfce7 !important; }
+            .email-table { border-color: #334155 !important; }
+            .email-table-head { background-color: #1e293b !important; color: #f8fafc !important; }
+            .email-table-cell { border-color: #334155 !important; color: #e2e8f0 !important; }
+            .email-table-highlight { background-color: #0f291e !important; }
+            .email-divider { border-top-color: #27273a !important; }
             .email-footer-text { color: #94a3b8 !important; }
             .email-footer-copyright { color: #64748b !important; }
             .open-dashboard-btn { background-color: #6366f1 !important; color: #ffffff !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; }
             .safe-sender-box { background-color: #1a1c29 !important; border-color: #27273a !important; border-left-color: #6366f1 !important; color: #94a3b8 !important; }
             .safe-sender-title { color: #f1f5f9 !important; }
         }
+        [data-ogsc] .email-card { background-color: #13141f !important; border-color: #27273a !important; color: #e2e8f0 !important; }
+        [data-ogsc] .email-heading { color: #f8fafc !important; border-color: #334155 !important; }
+        [data-ogsc] .email-text { color: #cbd5e1 !important; }
+        [data-ogsc] .email-muted { color: #94a3b8 !important; }
+        [data-ogsc] .email-link { color: #60a5fa !important; }
+        [data-ogsc] .email-box-neutral { background-color: #1c1f2e !important; border-color: #334155 !important; }
+        [data-ogsc] .email-box-green { background-color: #0f291e !important; border-color: #166534 !important; border-left-color: #22c55e !important; }
+        [data-ogsc] .email-box-green-title,
+        [data-ogsc] .email-green-text { color: #4ade80 !important; }
+        [data-ogsc] .email-red-text { color: #f87171 !important; }
+        [data-ogsc] .email-code { background-color: #14532d !important; color: #dcfce7 !important; }
+        [data-ogsc] .email-table { border-color: #334155 !important; }
+        [data-ogsc] .email-table-head { background-color: #1e293b !important; color: #f8fafc !important; }
+        [data-ogsc] .email-table-cell { border-color: #334155 !important; color: #e2e8f0 !important; }
+        [data-ogsc] .email-table-highlight { background-color: #0f291e !important; }
         @media (prefers-color-scheme: light) {
-            body { background-color: #f1f5f9 !important; }
+            body { background-color: #f1f5f9 !important; color: #1e293b !important; }
             .email-card { background-color: #ffffff !important; border-color: #e2e8f0 !important; color: #1e293b !important; }
             .email-footer-text { color: #475569 !important; }
             .email-footer-copyright { color: #64748b !important; }
             .open-dashboard-btn { background-color: #4f46e5 !important; color: #ffffff !important; }
         }
         @media only screen and (max-width: 600px) {
-            .email-wrapper { padding: 16px 8px !important; }
-            .email-card { padding: 22px 14px !important; }
+            .email-wrapper { padding: 14px 8px !important; }
+            .email-card { padding: 20px 14px !important; }
+            .recap-kv-row, .recap-kv-label, .recap-kv-value { display: block !important; width: 100% !important; box-sizing: border-box !important; }
+            .recap-kv-label { padding: 4px 0 2px 0 !important; }
+            .recap-kv-value { padding: 0 0 10px 0 !important; }
+            .email-table th, .email-table td { padding: 7px 6px !important; font-size: 12px !important; }
+            .email-cta-btn { padding: 11px 14px !important; font-size: 13px !important; width: 100% !important; text-align: center !important; }
         }
     </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #0b0c10; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
     <div class="email-wrapper" style="max-width: 600px; width: 100%; margin: 0 auto; padding: 32px 16px; box-sizing: border-box;">
         <!-- Header Banner -->
         <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); border-radius: 12px 12px 0 0; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.1); border-bottom: none; text-align: center; box-sizing: border-box;">
@@ -1815,7 +1851,7 @@ export function wrapInPortalarrEmailLayout(options: {
 
         <!-- Main Card Body -->
         <div class="email-card" style="background-color: #ffffff; padding: 32px 28px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
-            <div style="font-size: 15px; line-height: 1.65; color: #334155; word-break: break-word; overflow-wrap: anywhere;">
+            <div class="email-body-content" style="font-size: 15px; line-height: 1.65; color: #334155; word-break: break-word; overflow-wrap: anywhere;">
                 ${options.contentHtml}
             </div>
 
@@ -1837,7 +1873,7 @@ export function wrapInPortalarrEmailLayout(options: {
                 </div>
             </div>
 
-            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0 20px 0;" />
+            <hr class="email-divider" style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0 20px 0;" />
 
             <!-- Footer -->
             <div style="text-align: center; font-size: 12px; line-height: 1.6;">

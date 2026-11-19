@@ -1288,8 +1288,8 @@ export default function EmailManagement() {
                                             </div>
 
                                             {/* Simulated Email Body */}
-                                            <div className="p-6 text-xs leading-relaxed max-h-[380px] overflow-y-auto">
-                                                <div className="max-w-[560px] mx-auto bg-white dark:bg-[#13141f] border border-slate-200 dark:border-white/10 rounded-xl p-6 shadow-xl space-y-4 text-slate-800 dark:text-slate-200">
+                                            <div className="p-3 sm:p-6 text-xs leading-relaxed max-h-[380px] overflow-y-auto">
+                                                <div className="max-w-[560px] mx-auto bg-white dark:bg-[#13141f] border border-slate-200 dark:border-white/10 rounded-xl p-4 sm:p-6 shadow-xl space-y-4 text-slate-800 dark:text-slate-200">
                                                     <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-3">
                                                         <div className="h-7 w-7 rounded-lg bg-sky-600/10 border border-sky-600/30 dark:bg-sky-500/20 dark:border-sky-500/40 flex items-center justify-center font-black text-sky-600 dark:text-sky-400 text-xs">
                                                             D
@@ -1302,7 +1302,7 @@ export default function EmailManagement() {
                                                     <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedBroadcastSubjectPreview}</h4>
 
                                                     <div 
-                                                        className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-fixed [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
+                                                        className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-auto [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
                                                         dangerouslySetInnerHTML={{ __html: renderedBroadcastBodyPreview }}
                                                     />
 
@@ -1798,8 +1798,8 @@ export default function EmailManagement() {
                                                 </div>
 
                                                 {/* Email Card Frame */}
-                                                <div className="p-6 text-xs leading-relaxed max-h-[380px] overflow-y-auto">
-                                                    <div className="max-w-[560px] mx-auto bg-white dark:bg-[#13141f] border border-slate-200 dark:border-white/10 rounded-xl p-6 shadow-xl space-y-4 text-slate-800 dark:text-slate-200">
+                                                <div className="p-3 sm:p-6 text-xs leading-relaxed max-h-[380px] overflow-y-auto">
+                                                    <div className="max-w-[560px] mx-auto bg-white dark:bg-[#13141f] border border-slate-200 dark:border-white/10 rounded-xl p-4 sm:p-6 shadow-xl space-y-4 text-slate-800 dark:text-slate-200">
                                                         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-3">
                                                             <div className="h-7 w-7 rounded-lg bg-sky-600/10 border border-sky-600/30 dark:bg-sky-500/20 dark:border-sky-500/40 flex items-center justify-center font-black text-sky-600 dark:text-sky-400 text-xs">
                                                                 D
@@ -1812,7 +1812,7 @@ export default function EmailManagement() {
                                                         <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedTemplateSubjectPreview}</h4>
 
                                                         <div 
-                                                            className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-fixed [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
+                                                            className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-auto [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
                                                             dangerouslySetInnerHTML={{ __html: renderedTemplateBodyPreview }}
                                                         />
 
