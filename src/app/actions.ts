@@ -1899,6 +1899,8 @@ export async function getEmailNotificationSettings() {
             notifyTrialExpired: settings.notifyTrialExpired ?? false,
             notifySubscriptionActive: settings.notifySubscriptionActive ?? false,
             notifySubscriptionRenewal: settings.notifySubscriptionRenewal ?? true,
+            notifyAnnualThanksgivingRecap: settings.notifyAnnualThanksgivingRecap ?? true,
+            lastAnnualRecapYear: settings.lastAnnualRecapYear ?? null,
             notifyReferralReward: settings.notifyReferralReward ?? false,
             notifySupportTickets: settings.notifySupportTickets ?? false,
             notifySendToKindle: settings.notifySendToKindle ?? false,
@@ -1918,6 +1920,7 @@ export async function saveEmailNotificationSettingsAction(data: {
     notifyTrialExpired?: boolean;
     notifySubscriptionActive?: boolean;
     notifySubscriptionRenewal?: boolean;
+    notifyAnnualThanksgivingRecap?: boolean;
     notifyReferralReward?: boolean;
     notifySupportTickets?: boolean;
     notifySendToKindle?: boolean;
@@ -1937,6 +1940,7 @@ export async function saveEmailNotificationSettingsAction(data: {
         if (data.notifyTrialExpired !== undefined) updateData.notifyTrialExpired = data.notifyTrialExpired;
         if (data.notifySubscriptionActive !== undefined) updateData.notifySubscriptionActive = data.notifySubscriptionActive;
         if (data.notifySubscriptionRenewal !== undefined) updateData.notifySubscriptionRenewal = data.notifySubscriptionRenewal;
+        if (data.notifyAnnualThanksgivingRecap !== undefined) updateData.notifyAnnualThanksgivingRecap = data.notifyAnnualThanksgivingRecap;
         if (data.notifyReferralReward !== undefined) updateData.notifyReferralReward = data.notifyReferralReward;
         if (data.notifySupportTickets !== undefined) updateData.notifySupportTickets = data.notifySupportTickets;
         if (data.notifySendToKindle !== undefined) updateData.notifySendToKindle = data.notifySendToKindle;
@@ -2118,18 +2122,32 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
         return { success: false, error: "Unknown template identifier" };
     }
 
-    // Build mock variables map from sample values
+    // Build variables map (hydrated dynamically for annual_thanksgiving_recap)
     const mockVars: Record<string, string> = {};
     for (const v of defaultDef.variables) {
         const cleanKey = v.key.replace(/^\{|\}$/g, "");
         mockVars[cleanKey] = v.sampleValue;
     }
-    mockVars.username = adminUser?.username || "admin_user";
-    mockVars.email = recipientEmail;
 
     const appUrl = await getAppUrl();
-    mockVars.appUrl = appUrl;
-    mockVars.portalName = "DomsHomeLab";
+    if (id === "annual_thanksgiving_recap") {
+        const { buildAnnualRecapTemplateVars } = await import("@/lib/annual-recap");
+        const liveVars = await buildAnnualRecapTemplateVars({
+            username: adminUser?.username || "admin_user",
+            email: recipientEmail,
+            kindleEmail: adminUser?.kindleEmail || "",
+            role: adminUser?.role || "ADMIN",
+            status: adminUser?.status || "APPROVED",
+            settings,
+            appUrl
+        });
+        Object.assign(mockVars, liveVars);
+    } else {
+        mockVars.username = adminUser?.username || "admin_user";
+        mockVars.email = recipientEmail;
+        mockVars.appUrl = appUrl;
+        mockVars.portalName = "DomsHomeLab";
+    }
 
     let subject = customSubject || defaultDef.defaultSubject;
     let body = customBody || defaultDef.defaultBody;
@@ -2143,7 +2161,7 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
         }
     }
 
-    const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl"]);
+    const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl", "billingUrl"]);
     for (const [k, val] of Object.entries(mockVars)) {
         const placeholder = `{${k}}`;
         const safeSub = String(val ?? "").replace(/[\r\n]+/g, " ");
@@ -2275,6 +2293,8 @@ export async function sendBroadcastEmailAction(payload: {
 
     const appUrl = await getAppUrl();
     const isFullDoc = payload.isCustomHtml && (payload.body.includes("<html") || payload.body.includes("<!DOCTYPE"));
+    const { buildAnnualRecapTemplateVars, getServerMediaCounts } = await import("@/lib/annual-recap");
+    const sharedCounts = await getServerMediaCounts();
 
     let sentCount = 0;
     let queuedCount = 0;
@@ -2294,21 +2314,21 @@ export async function sendBroadcastEmailAction(payload: {
             continue;
         }
 
-        const userVars: Record<string, string> = {
+        const userVars = await buildAnnualRecapTemplateVars({
             username: user.username,
             email: user.email,
             kindleEmail: user.kindleEmail || "",
             role: user.role || "USER",
             status: user.status || "APPROVED",
+            settings,
             appUrl,
-            loginUrl: `${appUrl}/login`,
-            portalName: "DomsHomeLab"
-        };
+            counts: sharedCounts
+        });
 
         let personalizedSubject = payload.subject;
         let personalizedBody = payload.body;
 
-        const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl"]);
+        const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl", "billingUrl"]);
         for (const [k, v] of Object.entries(userVars)) {
             const placeholder = `{${k}}`;
             const safeSub = String(v ?? "").replace(/[\r\n]+/g, " ");
@@ -2385,21 +2405,21 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
     }
 
     const appUrl = await getAppUrl();
-    const mockVars: Record<string, string> = {
+    const { buildAnnualRecapTemplateVars } = await import("@/lib/annual-recap");
+    const mockVars = await buildAnnualRecapTemplateVars({
         username: adminUser?.username || "Admin (Preview)",
         email: recipientEmail,
         kindleEmail: adminUser?.kindleEmail || "admin_kindle@kindle.com",
         role: adminUser?.role || "ADMIN",
         status: adminUser?.status || "APPROVED",
-        appUrl,
-        loginUrl: `${appUrl}/login`,
-        portalName: "DomsHomeLab"
-    };
+        settings,
+        appUrl
+    });
 
     let personalizedSubject = payload.subject || "DomsHomeLab Broadcast Test";
     let personalizedBody = payload.body || "<p>This is a test broadcast email message.</p>";
 
-    const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl"]);
+    const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl", "billingUrl"]);
     for (const [k, v] of Object.entries(mockVars)) {
         const placeholder = `{${k}}`;
         const safeSub = String(v ?? "").replace(/[\r\n]+/g, " ");
@@ -2463,6 +2483,50 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Broadcast test failed: ${e.message}`);
         return { success: false, error: e.message || "Failed to send test email" };
+    }
+}
+
+export async function getAnnualRecapVarsAction() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const { buildAnnualRecapTemplateVars, getNextAnnualRecapDate } = await import("@/lib/annual-recap");
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        const vars = await buildAnnualRecapTemplateVars({ settings });
+        const nextDate = getNextAnnualRecapDate(new Date(), settings?.lastAnnualRecapYear ?? null);
+        return {
+            success: true,
+            vars,
+            nextScheduledDate: nextDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }),
+            lastAnnualRecapYear: settings?.lastAnnualRecapYear ?? null
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to load annual recap variables", vars: {} as Record<string, string> };
+    }
+}
+
+export async function triggerAnnualThanksgivingRecapAction() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const { sendAnnualThanksgivingRecapInternal } = await import("@/lib/annual-recap");
+        const res = await sendAnnualThanksgivingRecapInternal({ force: true });
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        if (!res.success) {
+            return { success: false, error: res.reason || "Failed to run Annual Thanksgiving Recap broadcast." };
+        }
+        return {
+            success: true,
+            sent: res.sent,
+            queued: res.queued,
+            failed: res.failed,
+            message: res.queued > 0
+                ? `Staged ${res.queued} Annual Thanksgiving Recap email(s) in the Admin Approval Queue.`
+                : `Dispatched Annual Thanksgiving Recap to ${res.sent} member(s) (${res.failed} failed).`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to trigger Annual Thanksgiving Recap." };
     }
 }
 

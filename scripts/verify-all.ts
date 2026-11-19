@@ -21,6 +21,14 @@ import { executeScript, abortActiveScriptRun } from "../src/lib/scripts/script-r
 import { DISCORD_ROLES_BLUEPRINT, DISCORD_SERVER_BLUEPRINT, resolveOrProvisionStatusChannel, updateDiscordLiveStatus } from "../src/lib/discord/discord-bot";
 import { computeExpectedDiscordRole, findBestMatch } from "../src/lib/discord/discord-role-sync";
 import { getBuildTelemetry } from "../src/lib/version";
+import {
+    getThanksgivingDate,
+    getSaturdayBeforeThanksgiving,
+    isAnnualRecapWindow,
+    getNextAnnualRecapDate,
+    buildAnnualRecapTemplateVars
+} from "../src/lib/annual-recap";
+import { renderEmailTemplate } from "../src/lib/email-templates";
 import fs from "fs";
 import path from "path";
 
@@ -3886,6 +3894,102 @@ async function runTestSuite() {
                     throw new Error(`${rel} has <DialogContent> with unprefixed max-w-(xl..5xl) missing sm:max-w-* override (silently throttled to 512px)`);
                 }
             }
+        }
+    });
+
+    // =========================================================================
+    // SUITE 26: Annual Thanksgiving Recap Broadcast & Schedule Calculator
+    // =========================================================================
+    await assertTest("Suite 26: Annual Thanksgiving Recap Broadcast & Schedule Calculator", async () => {
+        // 1. Deterministic Thanksgiving & Saturday-before-Thanksgiving dates
+        const tg2026 = getThanksgivingDate(2026);
+        const sat2026 = getSaturdayBeforeThanksgiving(2026);
+        if (tg2026.getMonth() !== 10 || tg2026.getDate() !== 26 || tg2026.getDay() !== 4) {
+            throw new Error(`Expected 2026 Thanksgiving to be Thu Nov 26, got ${tg2026.toDateString()}`);
+        }
+        if (sat2026.getMonth() !== 10 || sat2026.getDate() !== 21 || sat2026.getDay() !== 6) {
+            throw new Error(`Expected 2026 Saturday before Thanksgiving to be Sat Nov 21, got ${sat2026.toDateString()}`);
+        }
+
+        const sat2027 = getSaturdayBeforeThanksgiving(2027);
+        if (sat2027.getMonth() !== 10 || sat2027.getDate() !== 20 || sat2027.getDay() !== 6) {
+            throw new Error(`Expected 2027 Saturday before Thanksgiving to be Sat Nov 20, got ${sat2027.toDateString()}`);
+        }
+
+        // 2. Dispatch window checks
+        if (isAnnualRecapWindow(new Date(2026, 10, 20, 12, 0, 0))) {
+            throw new Error("Friday before Thanksgiving should NOT be inside the dispatch window");
+        }
+        if (isAnnualRecapWindow(new Date(2026, 10, 21, 8, 59, 0))) {
+            throw new Error("Saturday 8:59 AM should be before the 9:00 AM dispatch window");
+        }
+        if (!isAnnualRecapWindow(new Date(2026, 10, 21, 9, 0, 0))) {
+            throw new Error("Saturday 9:00 AM before Thanksgiving MUST be inside the dispatch window");
+        }
+        if (!isAnnualRecapWindow(new Date(2026, 10, 22, 18, 0, 0))) {
+            throw new Error("Sunday weekend catch-up window MUST be inside the dispatch window");
+        }
+        if (isAnnualRecapWindow(new Date(2026, 10, 23, 0, 1, 0))) {
+            throw new Error("Monday after the weekend window should NOT be inside the dispatch window");
+        }
+
+        // 3. Next run date advances to next year once sent for current year
+        const nextBeforeSend = getNextAnnualRecapDate(new Date(2026, 10, 19, 14, 0, 0), null);
+        if (nextBeforeSend.getFullYear() !== 2026 || nextBeforeSend.getDate() !== 21) {
+            throw new Error(`Expected next run before 2026 send to be Nov 21, 2026; got ${nextBeforeSend.toDateString()}`);
+        }
+        const nextAfterSend = getNextAnnualRecapDate(new Date(2026, 10, 21, 10, 0, 0), 2026);
+        if (nextAfterSend.getFullYear() !== 2027 || nextAfterSend.getDate() !== 20) {
+            throw new Error(`Expected next run after 2026 send to be Nov 20, 2027; got ${nextAfterSend.toDateString()}`);
+        }
+
+        // 4. Template variable hydration & HTML rendering
+        const vars = await buildAnnualRecapTemplateVars({
+            username: "holiday_tester",
+            now: new Date(2026, 10, 19, 14, 0, 0),
+            settings: {
+                yearlyPrice: 180,
+                monthlyPrice: 17.5,
+                renewalMonth: 1,
+                renewalDay: 1,
+                paymentVenmo: "@domshomelab",
+                paymentPaypal: "paypal.me/domshomelab"
+            },
+            appUrl: "https://home.domshomelab.com",
+            counts: {
+                movieCount: 2450,
+                showCount: 410,
+                movieCountText: "2,450",
+                showCountText: "410",
+                source: "plex"
+            }
+        });
+        const rendered = await renderEmailTemplate("annual_thanksgiving_recap", vars);
+        if (!rendered.subject.includes("2026") || !rendered.subject.includes("2027")) {
+            throw new Error(`Expected subject to include 2026 and 2027, got: ${rendered.subject}`);
+        }
+        const requiredSnippets = [
+            "Did the price go up?",
+            "January 1, 2027",
+            "$180/year",
+            "$17.50/month",
+            "holiday_tester",
+            "2,450 movies",
+            "410 TV shows",
+            "Netflix",
+            "Disney+",
+            "Max (HBO)"
+        ];
+        for (const snippet of requiredSnippets) {
+            if (!rendered.html.includes(snippet)) {
+                throw new Error(`Rendered annual_thanksgiving_recap HTML missing expected content: "${snippet}"`);
+            }
+        }
+        const priceIdx = rendered.html.indexOf("Did the price go up?");
+        const compIdx = rendered.html.indexOf("How We Compare");
+        const recapIdx = rendered.html.indexOf("New Things Added in");
+        if (priceIdx === -1 || compIdx === -1 || recapIdx === -1 || !(priceIdx < compIdx && compIdx < recapIdx)) {
+            throw new Error("Annual recap email must present pricing/due-date/payment quick answers BEFORE comparisons and feature recap");
         }
     });
 
