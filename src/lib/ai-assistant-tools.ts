@@ -109,7 +109,7 @@ export const GEMINI_TOOL_DECLARATIONS = [
     },
     {
         name: "get_homelab_hardware_telemetry",
-        description: "Query physical host hardware telemetry from Glances (CPU utilization %, RAM usage %, and system load). RESTRICTED TO SERVER ADMINISTRATORS.",
+        description: "Query physical host hardware telemetry from Glances (CPU utilization %, RAM usage %, and system load) plus the Gaming PC (online/asleep status, RTX 3080 GPU load/VRAM/temp/power, loaded Ollama models, and active GPU processes). RESTRICTED TO SERVER ADMINISTRATORS.",
         parameters: {
             type: "OBJECT",
             properties: {}
@@ -477,34 +477,60 @@ export async function executeAiAssistantTool(
 
             try {
                 const glancesInstances = await prisma.glancesInstance.findMany({ where: { monitored: true } }).catch(() => []);
-                const { fetchGlancesHardwareStats } = await import("@/app/actions");
+                const [{ fetchGlancesHardwareStats }, { fetchGamingPcTelemetry }] = await Promise.all([
+                    import("@/app/actions"),
+                    import("@/lib/monitoring/gaming-pc"),
+                ]);
 
-                const hostsTelemetry = await Promise.all(
-                    glancesInstances.map(async (g) => {
-                        const start = Date.now();
-                        const stats = await fetchGlancesHardwareStats(g.url, 4000);
-                        return {
-                            name: g.name,
-                            url: g.url,
-                            online: stats.online,
-                            cpuPercent: stats.cpu,
-                            ramPercent: stats.ram,
-                            latencyMs: Date.now() - start
-                        };
-                    })
-                );
+                const [hostsTelemetry, gamingPc] = await Promise.all([
+                    Promise.all(
+                        glancesInstances.map(async (g) => {
+                            const start = Date.now();
+                            const stats = await fetchGlancesHardwareStats(g.url, 4000);
+                            return {
+                                name: g.name,
+                                url: g.url,
+                                online: stats.online,
+                                cpuPercent: stats.cpu,
+                                ramPercent: stats.ram,
+                                latencyMs: Date.now() - start
+                            };
+                        })
+                    ),
+                    fetchGamingPcTelemetry().catch(() => null),
+                ]);
 
-                const summary = `Homelab Hardware Telemetry: Queried ${hostsTelemetry.length} host(s). ${hostsTelemetry.map(h => `${h.name}: CPU ${h.cpuPercent}%, RAM ${h.ramPercent}%`).join(" | ")}`;
+                const hostSummary = hostsTelemetry.map(h => `${h.name}: CPU ${h.cpuPercent}%, RAM ${h.ramPercent}%`).join(" | ");
+                let gamingPcSummary = "";
+                if (gamingPc) {
+                    if (gamingPc.status === "ONLINE") {
+                        const loadedNames = gamingPc.ollama.loadedModels.map(m => `${m.name} (${m.vramMb}MB)`).join(", ");
+                        const activeProcs = (gamingPc.gpu?.processes || [])
+                            .filter(p => (p.gpuPercent || 0) > 0 || (p.encPercent || 0) > 0 || (p.decPercent || 0) > 0 || p.vramMb > 0)
+                            .map(p => p.name)
+                            .slice(0, 4)
+                            .join(", ");
+                        const usageBits = [
+                            loadedNames ? `Ollama: ${loadedNames}` : "",
+                            activeProcs ? `Apps: ${activeProcs}` : "",
+                        ].filter(Boolean).join("; ");
+                        gamingPcSummary = ` | Gaming PC (RTX 3080): ONLINE (GPU ${gamingPc.gpu?.utilizationPercent ?? 0}%, VRAM ${gamingPc.gpu?.vramUsedMb ?? 0}/${gamingPc.gpu?.vramTotalMb ?? 10240}MB${usageBits ? `, ${usageBits}` : ""})`;
+                    } else {
+                        gamingPcSummary = ` | Gaming PC (RTX 3080): OFFLINE (${gamingPc.error || "Asleep"})`;
+                    }
+                }
+
+                const summary = `Homelab Hardware Telemetry: Queried ${hostsTelemetry.length} host(s). ${hostSummary}${gamingPcSummary}`;
                 ctx.actionsTaken.push({
                     action: "STREAM_PATTERN_DIAGNOSTIC",
                     status: "SUCCESS",
-                    target: "Homelab Hardware (Glances)",
+                    target: "Homelab Hardware (Glances & Gaming PC)",
                     summary,
-                    details: hostsTelemetry,
+                    details: { hosts: hostsTelemetry, gamingPc },
                     timestamp
                 });
 
-                return { success: true, result: { hosts: hostsTelemetry }, summary };
+                return { success: true, result: { hosts: hostsTelemetry, gamingPc }, summary };
             } catch (hErr: any) {
                 return { success: false, result: { error: hErr.message }, summary: `Hardware query failed: ${hErr.message}` };
             }

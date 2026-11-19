@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
+import { callOllamaJsonCompletion } from "@/lib/ai-ollama";
 
 export interface AIResolvedMetadata {
     title: string;
@@ -86,12 +87,48 @@ export async function assignVolumeNumbersWithAI(
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
     const modelName = normalizeGeminiModel(settings?.aiModel);
+    const ollamaModel = (settings?.aiModel && !settings.aiModel.includes("gemini") && !settings.aiModel.startsWith("gpt"))
+        ? settings.aiModel
+        : "qwen2.5:3b";
 
-    if ((provider === "gemini" || provider === "google") && rawKey) {
+    if (provider === "ollama" || (!process.env.PORTALARR_TEST && provider === "default")) {
+        const res = await callOllamaBulkVolumes(seriesName, author, bookTitles, ollamaModel);
+        if (Object.keys(res).length > 0) return res;
+    }
+
+    if ((provider === "gemini" || provider === "google" || provider === "default" || provider === "ollama") && (rawKey || process.env.GEMINI_API_KEY)) {
+        const geminiKey = rawKey || process.env.GEMINI_API_KEY || "";
         await new Promise(r => setTimeout(r, 4000));
-        return await callGeminiAIBulkVolumes(seriesName, author, bookTitles, rawKey, modelName);
+        const res = await callGeminiAIBulkVolumes(seriesName, author, bookTitles, geminiKey, modelName);
+        if (Object.keys(res).length > 0) return res;
+    }
+
+    if (!process.env.PORTALARR_TEST && provider !== "ollama" && provider !== "default") {
+        const res = await callOllamaBulkVolumes(seriesName, author, bookTitles, ollamaModel);
+        if (Object.keys(res).length > 0) return res;
     }
     return {};
+}
+
+async function callOllamaBulkVolumes(
+    seriesName: string,
+    author: string,
+    bookTitles: string[],
+    model: string
+): Promise<Record<string, string | null>> {
+    try {
+        const systemPrompt = `You are an expert media server librarian AI agent. Map each book title in "${seriesName}" by "${author}" to its series volume number (e.g. "1", "2", or null if standalone). Return ONLY a raw JSON object.`;
+        const res = await callOllamaJsonCompletion({
+            systemPrompt,
+            userPrompt: `Titles: ${JSON.stringify(bookTitles)}`,
+            model,
+        });
+        if (!res) return {};
+        const parsed = JSON.parse(res.content.replace(/```json/gi, "").replace(/```/g, "").trim());
+        return typeof parsed === "object" && parsed ? parsed : {};
+    } catch {
+        return {};
+    }
 }
 
 async function callGeminiAIBulkVolumes(
@@ -170,15 +207,30 @@ export async function resolveMetadataWithAI(
     const provider = overrideProvider || settings?.aiProvider || "default";
     const rawKey = overrideKey !== undefined ? overrideKey : (settings?.aiApiKey ? decryptData(settings.aiApiKey) : "");
     const modelName = normalizeGeminiModel(overrideModel || settings?.aiModel);
+    const ollamaModel = (overrideModel || (settings?.aiModel && !settings.aiModel.includes("gemini") && !settings.aiModel.startsWith("gpt") ? settings.aiModel : "")) || "qwen2.5:3b";
 
     console.log(`[AI-AGENT] 🤖 Querying AI Metadata Engine for "${rawFilename}" (Type: ${mediaType}, Engine: ${provider})...`);
 
+    if (provider === "ollama" || (!process.env.PORTALARR_TEST && provider === "default")) {
+        try {
+            const aiRes = await callOllamaMetadata(rawFilename, mediaType, ollamaModel);
+            if (aiRes) return aiRes;
+            if (provider === "ollama" && throwErrors) {
+                throw new Error("RTX 3080 Ollama is offline or unreachable.");
+            }
+        } catch (err: any) {
+            console.warn(`[AI-AGENT-OLLAMA] Error resolving "${rawFilename}": ${err.message}. Falling back to default resolver.`);
+            if (provider === "ollama" && throwErrors) throw err;
+        }
+    }
+
     // 1. Google Gemini Provider
-    if ((provider === "gemini" || provider === "google") && rawKey) {
+    const geminiKey = rawKey || (provider === "default" ? process.env.GEMINI_API_KEY || "" : "");
+    if ((provider === "gemini" || provider === "google" || provider === "default") && geminiKey) {
         try {
             // Apply a natural 4-second delay for Gemini Free Tier to avoid hitting the 15 Requests Per Minute limit during bulk scans
             await new Promise(r => setTimeout(r, 4000));
-            const aiRes = await callGeminiAI(rawFilename, mediaType, rawKey, modelName);
+            const aiRes = await callGeminiAI(rawFilename, mediaType, geminiKey, modelName);
             if (aiRes) {
                 console.log(`[AI-AGENT] ✨ Gemini AI Resolved "${aiRes.title}" by "${aiRes.author}" [Series: ${aiRes.series || "N/A"} #${aiRes.volumeNumber || "N/A"}] (Model: ${aiRes.providerUsed})`);
                 return aiRes;
@@ -203,10 +255,45 @@ export async function resolveMetadataWithAI(
         }
     }
 
+    // 2.5 Automatic Failover to local RTX 3080 Ollama if cloud provider failed/unconfigured
+    if (!process.env.PORTALARR_TEST && provider !== "ollama" && provider !== "default") {
+        try {
+            const aiRes = await callOllamaMetadata(rawFilename, mediaType, ollamaModel);
+            if (aiRes) return aiRes;
+        } catch {}
+    }
+
     // 3. Default Built-in Resolver (Free Fallback)
     const heurRes = callDefaultResolver(rawFilename, mediaType);
     console.log(`[AI-AGENT] ⚙️ Heuristic Resolved "${heurRes.title}" by "${heurRes.author}" [Series: ${heurRes.series || "N/A"} #${heurRes.volumeNumber || "N/A"}]`);
     return heurRes;
+}
+
+async function callOllamaMetadata(
+    rawFilename: string,
+    mediaType: string,
+    model: string
+): Promise<AIResolvedMetadata | null> {
+    const res = await callOllamaJsonCompletion({
+        systemPrompt: "You are a precise book and series metadata normalization agent. Return ONLY raw JSON with keys: title, author, series, volumeNumber, coverQuery, publishYear, confidence.",
+        userPrompt: `Analyze this raw book request or release name: "${rawFilename}" (${mediaType}).`,
+        model,
+    });
+    if (!res) return null;
+    const parsed = JSON.parse(res.content.replace(/```json/gi, "").replace(/```/g, "").trim());
+    if (parsed && parsed.title) {
+        return {
+            title: parsed.title,
+            author: parsed.author || "Unknown Author",
+            series: parsed.series || null,
+            volumeNumber: parsed.volumeNumber ? String(parsed.volumeNumber) : null,
+            coverQuery: parsed.coverQuery || `${parsed.title} ${parsed.author || ""}`.trim(),
+            publishYear: parsed.publishYear ? String(parsed.publishYear) : null,
+            confidence: parsed.confidence || 0.9,
+            providerUsed: `RTX 3080 Ollama (${res.model})`
+        };
+    }
+    return null;
 }
 
 export async function resolveRequestMetadataWithAI(
@@ -428,11 +515,22 @@ export async function analyzeAudiobookChaptersWithAI(
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
     const modelName = normalizeGeminiModel(settings?.aiModel);
+    const ollamaModel = (settings?.aiModel && !settings.aiModel.includes("gemini") && !settings.aiModel.startsWith("gpt"))
+        ? settings.aiModel
+        : "qwen2.5:3b";
 
-    if ((provider === "gemini" || provider === "google") && rawKey) {
+    if (provider === "ollama" || (!process.env.PORTALARR_TEST && provider === "default")) {
+        try {
+            const aiRes = await callOllamaForChapters(bookTitle, bookAuthor, fileList, ollamaModel);
+            if (aiRes && aiRes.length > 0) return aiRes;
+        } catch {}
+    }
+
+    const geminiKey = rawKey || (provider === "default" ? process.env.GEMINI_API_KEY || "" : "");
+    if ((provider === "gemini" || provider === "google" || provider === "default" || provider === "ollama") && geminiKey) {
         try {
             await new Promise(r => setTimeout(r, 4000));
-            const aiRes = await callGeminiAIForChapters(bookTitle, bookAuthor, fileList, rawKey, modelName);
+            const aiRes = await callGeminiAIForChapters(bookTitle, bookAuthor, fileList, geminiKey, modelName);
             if (aiRes && aiRes.length > 0) return aiRes;
         } catch (e: any) {
             console.warn(`[AI-AGENT-CHAPTERS] Gemini API failed: ${e.message}. Using fallback chapter resolver.`);
@@ -448,7 +546,39 @@ export async function analyzeAudiobookChaptersWithAI(
         }
     }
 
+    if (!process.env.PORTALARR_TEST && provider !== "ollama" && provider !== "default") {
+        try {
+            const aiRes = await callOllamaForChapters(bookTitle, bookAuthor, fileList, ollamaModel);
+            if (aiRes && aiRes.length > 0) return aiRes;
+        } catch {}
+    }
+
     return fallbackChapterResolver(bookTitle, bookAuthor, fileList);
+}
+
+async function callOllamaForChapters(
+    bookTitle: string,
+    bookAuthor: string,
+    fileList: { fileName: string; fileSize?: number }[],
+    model: string
+): Promise<AIChapterResult[] | null> {
+    const res = await callOllamaJsonCompletion({
+        systemPrompt: "You are an audiobook chapter resolution AI agent. Return JSON object with key 'chapters' containing an array of {trackNumber, fileName, chapterTitle, suggestedFileName}.",
+        userPrompt: `Audiobook: "${bookTitle}" by "${bookAuthor}". Tracks: ${JSON.stringify(fileList)}`,
+        model,
+    });
+    if (!res) return null;
+    const parsed = JSON.parse(res.content.replace(/```json/gi, "").replace(/```/g, "").trim());
+    const arr = Array.isArray(parsed) ? parsed : (parsed.chapters || parsed.tracks || []);
+    if (Array.isArray(arr) && arr.length > 0) {
+        return arr.map((item: any, idx: number) => ({
+            trackNumber: item.trackNumber || idx + 1,
+            fileName: item.fileName || fileList[idx]?.fileName || `Track_${idx + 1}`,
+            chapterTitle: item.chapterTitle || `Chapter ${idx + 1}`,
+            suggestedFileName: item.suggestedFileName || `${String(idx + 1).padStart(2, "0")} ${item.chapterTitle || ""}.mp3`
+        }));
+    }
+    return null;
 }
 
 async function callGeminiAIForChapters(

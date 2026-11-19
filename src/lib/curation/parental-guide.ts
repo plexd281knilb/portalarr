@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 import { getPlexServers, getPlexCloudServersMap, resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { getPlexLibraryMediaItems, getPlexLibraryLabels, getPlexLibraryCollections, deletePlexCollection, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import { normalizeGeminiModel, getGeminiCandidateModels } from "@/lib/ai-agent";
+import { callOllamaJsonCompletion } from "@/lib/ai-ollama";
 
 export * from "./parental-guide-types";
 import {
@@ -407,8 +408,8 @@ export async function resolveParentalAdvisoryBatchAI(
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
     const modelName = normalizeGeminiModel(settings?.aiModel);
 
-    // If no AI key configured, use heuristic fallbacks
-    if (!rawKey && (provider === "gemini" || provider === "google" || provider === "openai" || provider === "anthropic")) {
+    // If explicitly configured for an external key provider without a key (and in test mode or without Ollama), use heuristic fallbacks
+    if (!rawKey && (provider === "openai" || provider === "anthropic")) {
         const fallbacks: Record<string, ImdbParentalAdvisory> = {};
         for (const it of items) {
             fallbacks[it.ratingKey] = resolveParentalAdvisoryFallback(it);
@@ -455,8 +456,23 @@ Example output:
 
     try {
         let rawText = "";
+        const tryOllama = async () => {
+            if (process.env.PORTALARR_TEST) return "";
+            const res = await callOllamaJsonCompletion({
+                systemPrompt,
+                userPrompt: JSON.stringify(payload),
+                model: settings?.aiModel,
+                timeoutMs: 25000,
+            }).catch(() => null);
+            return res?.content || "";
+        };
 
-        if (provider === "gemini" || provider === "google" || (!provider || provider === "default")) {
+        // Default or explicit Ollama: try RTX 3080 Ollama first
+        if (provider === "ollama" || !provider || provider === "default") {
+            rawText = await tryOllama();
+        }
+
+        if (!rawText && (provider === "gemini" || provider === "google" || !provider || provider === "default" || provider === "ollama")) {
             const keyToUse = rawKey || process.env.GEMINI_API_KEY || "";
             if (keyToUse) {
                 const candidateModels = getGeminiCandidateModels(modelName);
@@ -496,7 +512,7 @@ Example output:
                     } catch (e) {}
                 }
             }
-        } else if (provider === "openai" && rawKey) {
+        } else if (!rawText && provider === "openai" && rawKey) {
             const res = await fetch("https://api.openai.com/v1/chat/completions", {
                 method: "POST",
                 headers: {
@@ -518,6 +534,11 @@ Example output:
                 const data = await res.json();
                 rawText = data.choices?.[0]?.message?.content || "";
             }
+        }
+
+        // Fail over to RTX 3080 Ollama if Gemini/OpenAI was selected but failed
+        if (!rawText && provider !== "ollama" && provider !== "default") {
+            rawText = await tryOllama();
         }
 
         if (rawText) {

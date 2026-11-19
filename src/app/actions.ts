@@ -15826,7 +15826,8 @@ export async function saveAiAgentSettings(formData: FormData) {
         const { normalizeGeminiModel } = await import("@/lib/ai-agent");
         const aiProvider = (formData.get("aiProvider") as string) || "default";
         const aiApiKeyRaw = (formData.get("aiApiKey") as string) || "";
-        const rawModel = (formData.get("aiModel") as string) || "gemini-3.5-flash-lite";
+        const defaultModelForProvider = aiProvider === "ollama" ? "qwen2.5:3b" : "gemini-3.5-flash-lite";
+        const rawModel = (formData.get("aiModel") as string) || defaultModelForProvider;
         const aiModel = (aiProvider === "gemini" || aiProvider === "google" || aiProvider === "default") ? normalizeGeminiModel(rawModel) : rawModel;
         const aiAutoResolve = formData.get("aiAutoResolve") === "true";
         const aiAutonomyLevel = (formData.get("aiAutonomyLevel") as string) || "autonomous";
@@ -19838,10 +19839,13 @@ export async function fetchAvailableAiModels(provider: string, apiKey: string) {
     await verifyAdmin();
     try {
         const { getAvailableGeminiModels, getAvailableOpenAIModels } = await import("@/lib/ai-agent");
+        const { getAvailableOllamaModels } = await import("@/lib/ai-ollama");
         if (provider === "gemini" || provider === "google") {
             return { success: true, data: await getAvailableGeminiModels(apiKey) };
         } else if (provider === "openai") {
             return { success: true, data: await getAvailableOpenAIModels(apiKey) };
+        } else if (provider === "ollama" || provider === "default") {
+            return { success: true, data: await getAvailableOllamaModels() };
         }
         return { success: true, data: [] };
     } catch (e: any) {

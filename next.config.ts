@@ -64,7 +64,8 @@ function getGitMetadata() {
 }
 
 const gitMeta = getGitMetadata();
-const availableCores = Math.max(2, cpus().length - 1);
+const rawCores = Math.max(2, cpus().length - 1);
+const availableCores = process.platform === "win32" ? Math.min(6, rawCores) : rawCores;
 
 const nextConfig: NextConfig = {
   output: "standalone",

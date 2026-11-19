@@ -1008,7 +1008,7 @@ function SettingsPageContent() {
     const handleLoadModels = async () => {
         const keyInput = document.querySelector('input[name="aiApiKey"]') as HTMLInputElement;
         const key = keyInput ? keyInput.value : "";
-        if (!key && aiProviderSelect !== "default") return;
+        if (!key && aiProviderSelect !== "default" && aiProviderSelect !== "ollama") return;
         
         setLoadingModels(true);
         try {
@@ -4477,7 +4477,7 @@ function SettingsPageContent() {
                                                 </Badge>
                                             )}
                                             <Badge className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/30 text-[10px]">
-                                                {aiProviderSelect === "default" ? "Built-In Heuristic" : aiProviderSelect === "gemini" ? "Google Gemini" : "OpenAI"}
+                                                {aiProviderSelect === "default" ? "Built-In Heuristic + RTX 3080" : aiProviderSelect === "ollama" ? "RTX 3080 (Ollama)" : aiProviderSelect === "gemini" ? "Google Gemini" : "OpenAI"}
                                             </Badge>
                                         </div>
                                     </div>
@@ -4519,9 +4519,12 @@ function SettingsPageContent() {
                                                 value={aiProviderSelect} 
                                                 onValueChange={(val) => {
                                                     setAiProviderSelect(val);
-                                                    if (val === "gemini" && (!aiModelInput || aiModelInput.startsWith("gpt"))) {
+                                                    setDynamicModels([]);
+                                                    if (val === "ollama") {
+                                                        setAiModelInput("qwen2.5:3b");
+                                                    } else if (val === "gemini" && (!aiModelInput || aiModelInput.startsWith("gpt") || aiModelInput.startsWith("qwen"))) {
                                                         setAiModelInput("gemini-3.5-flash-lite");
-                                                    } else if (val === "openai" && (!aiModelInput || aiModelInput.startsWith("gemini"))) {
+                                                    } else if (val === "openai" && (!aiModelInput || aiModelInput.startsWith("gemini") || aiModelInput.startsWith("qwen"))) {
                                                         setAiModelInput("gpt-4o-mini");
                                                     }
                                                 }}
@@ -4530,15 +4533,23 @@ function SettingsPageContent() {
                                                     <SelectValue placeholder="Select AI Provider" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="default">Default Built-In (Free Heuristic & Search)</SelectItem>
+                                                    <SelectItem value="default">Auto (RTX 3080 if Online + Built-In Fallback)</SelectItem>
+                                                    <SelectItem value="ollama">Local RTX 3080 GPU (Ollama)</SelectItem>
                                                     <SelectItem value="gemini">Google Gemini (Gemini 3.5 Flash Lite / 3.8 Flash)</SelectItem>
                                                     <SelectItem value="openai">OpenAI (GPT-4o / GPT-4o-mini)</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
 
+                                        {aiProviderSelect === "default" && (
+                                            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+                                                Auto mode routes AI Assistant, book metadata, audiobook chapters, and IMDb parental guide classification to your Gaming PC RTX 3080 Ollama (<code className="font-mono">192.168.1.68:11434</code> / <code className="font-mono">192.168.10.78:11434</code>) whenever awake, and automatically falls back if asleep.
+                                            </div>
+                                        )}
+
                                         {aiProviderSelect !== "default" && (
                                             <>
+                                                {aiProviderSelect !== "ollama" ? (
                                                 <div className="space-y-2">
                                                     <div className="flex items-center justify-between">
                                                         <Label>API Key</Label>
@@ -4577,6 +4588,11 @@ function SettingsPageContent() {
                                                         )}
                                                     </p>
                                                 </div>
+                                                ) : (
+                                                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+                                                        Uses your Gaming PC RTX 3080 Ollama container (<code className="font-mono">192.168.1.68:11434</code> / <code className="font-mono">192.168.10.78:11434</code>) with automatic fallback if asleep.
+                                                    </div>
+                                                )}
 
                                                 <div className="space-y-2">
                                                     <div className="flex items-center justify-between">
@@ -4596,7 +4612,8 @@ function SettingsPageContent() {
                                                         value={
                                                             dynamicModels.includes(aiModelInput) ||
                                                             (aiProviderSelect === "gemini" && ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
-                                                            (aiProviderSelect === "openai" && ["gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"].includes(aiModelInput))
+                                                            (aiProviderSelect === "openai" && ["gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"].includes(aiModelInput)) ||
+                                                            (aiProviderSelect === "ollama" && ["qwen2.5:3b", "qwen2.5:7b-instruct", "qwen2.5:0.5b", "smollm2:135m-instruct-q4_K_M"].includes(aiModelInput))
                                                                 ? aiModelInput
                                                                 : "custom"
                                                         }
@@ -4617,6 +4634,13 @@ function SettingsPageContent() {
                                                                     {dynamicModels.map(m => (
                                                                         <SelectItem key={m} value={m}>{m}</SelectItem>
                                                                     ))}
+                                                                    <SelectItem value="custom">Custom Model Name...</SelectItem>
+                                                                </>
+                                                            ) : aiProviderSelect === "ollama" ? (
+                                                                <>
+                                                                    <SelectItem value="qwen2.5:3b">qwen2.5:3b (RTX 3080 Default - Fast 3B)</SelectItem>
+                                                                    <SelectItem value="qwen2.5:7b-instruct">qwen2.5:7b-instruct (Requires 12GB WSL2 Memory)</SelectItem>
+                                                                    <SelectItem value="qwen2.5:0.5b">qwen2.5:0.5b (Compact)</SelectItem>
                                                                     <SelectItem value="custom">Custom Model Name...</SelectItem>
                                                                 </>
                                                             ) : aiProviderSelect === "gemini" ? (
@@ -4642,8 +4666,10 @@ function SettingsPageContent() {
                                                     </Select>
 
                                                     {(!dynamicModels.includes(aiModelInput) && ![
+                                                        "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
                                                         "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b",
-                                                        "gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"
+                                                        "gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo",
+                                                        "qwen2.5:3b", "qwen2.5:7b-instruct", "qwen2.5:0.5b", "smollm2:135m-instruct-q4_K_M"
                                                     ].includes(aiModelInput)) && (
                                                         <Input 
                                                             value={aiModelInput}
