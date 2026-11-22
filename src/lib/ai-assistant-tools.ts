@@ -78,7 +78,9 @@ export const GEMINI_TOOL_DECLARATIONS = [
                 season: { type: "INTEGER", description: "Season number if TV show" },
                 episode: { type: "INTEGER", description: "Episode number if TV show" },
                 media_type: { type: "STRING", description: "movie or tv" },
-                issue: { type: "STRING", description: "Reason for replacement (e.g. missing English audio, corrupt file)" }
+                issue: { type: "STRING", description: "Reason for replacement (e.g. missing English audio, corrupt file)" },
+                quality_preference: { type: "STRING", description: "Optional user-chosen resolution preference: '1080p', '4k', or 'auto'. Leave 'auto' unless user explicitly chose 4K or 1080p." },
+                confirm_4k: { type: "BOOLEAN", description: "Set true ONLY if the user explicitly confirmed they want a 4K/2160p download." }
             },
             required: ["title"]
         }
@@ -155,7 +157,7 @@ export const OPENAI_TOOL_DEFINITIONS = GEMINI_TOOL_DECLARATIONS.map(d => ({
                 Object.entries(d.parameters.properties).map(([k, v]: [string, any]) => [
                     k,
                     {
-                        type: v.type.toLowerCase() === "integer" ? "integer" : "string",
+                        type: v.type.toLowerCase() === "integer" ? "integer" : v.type.toLowerCase() === "boolean" ? "boolean" : "string",
                         description: v.description
                     }
                 ])
@@ -174,6 +176,7 @@ export interface ToolExecutionContext {
     snapshot: UserDiagnosticSnapshot;
     actionsTaken: AgentActionReport[];
     autonomyLevel: "advisory" | "assisted" | "autonomous";
+    userQuestion?: string;
     mediaInspectionHolder: { current?: MediaStreamInspection };
     playbackProbeHolder: { current?: PlexPlaybackDiagnosticReport };
 }
@@ -307,7 +310,9 @@ export async function executeAiAssistantTool(
                 );
                 ctx.mediaInspectionHolder.current = insp;
 
-                const summary = `Inspected Plex container for "${insp.title}": Found ${insp.audioTracks.length} audio tracks (${insp.audioTracks.map(t => t.displayTitle).join(", ")}). Verdict: ${insp.verdict}.`;
+                const summary = insp.verdict === "NOT_IN_LIBRARY"
+                    ? (insp.diagnosisSummary || `No matching media item was found in Plex libraries for "${insp.title}".`)
+                    : `Inspected Plex container for "${insp.title}": Found ${insp.audioTracks.length} audio tracks (${insp.audioTracks.map(t => t.displayTitle).join(", ")}). Verdict: ${insp.verdict}.`;
                 ctx.actionsTaken.push({
                     action: "INSPECT_MEDIA",
                     status: insp.verdict === "FILE_CORRUPT" ? "FAILED" : "SUCCESS",
@@ -393,17 +398,34 @@ export async function executeAiAssistantTool(
 
             try {
                 const isTv = args.media_type === "tv" || args.season !== undefined || args.episode !== undefined;
+                const qualityOpts = {
+                    qualityPreference: args.quality_preference,
+                    confirm4k: Boolean(args.confirm_4k),
+                    userQuestion: ctx.userQuestion
+                };
                 const grabResult = isTv 
                     ? await searchAndGrabSonarrReplacement(
                         args.title, 
                         args.season, 
                         args.episode, 
                         args.issue || "Media defect replacement", 
-                        ctx.user
+                        ctx.user,
+                        qualityOpts
                     )
-                    : await searchAndGrabRadarrReplacement(args.title, args.year, args.issue || "Media defect replacement", ctx.user);
+                    : await searchAndGrabRadarrReplacement(args.title, args.year, args.issue || "Media defect replacement", ctx.user, undefined, qualityOpts);
 
-                if (grabResult.success) {
+                if (grabResult.requiresQualityConfirmation) {
+                    const confirmMsg = grabResult.message || `A 4K release is available for "${args.title}". Would you like me to download the 4K version or 1080p?`;
+                    ctx.actionsTaken.push({
+                        action: "INSPECT_MEDIA",
+                        status: "SUCCESS",
+                        target: args.title,
+                        summary: confirmMsg,
+                        details: grabResult,
+                        timestamp
+                    });
+                    return { success: true, result: grabResult, summary: confirmMsg };
+                } else if (grabResult.success) {
                     const summary = grabResult.alreadyOptimal
                         ? `Optimal Release Confirmed: The highest-scoring release "${grabResult.releaseTitle}" (${grabResult.quality}) is already downloaded and present on disk in ${isTv ? "Sonarr" : "Radarr"} (Custom Format Score: ${grabResult.existingScore ?? 900000}). Indexers have no superior releases.`
                         : `Autonomous Grab: Queued verified release "${grabResult.releaseTitle}" (${grabResult.quality}) in ${isTv ? "Sonarr" : "Radarr"}.`;
@@ -493,17 +515,24 @@ export async function executeAiAssistantTool(
                     limit: 5
                 });
 
-                const summary = recResult.summary;
+                const shortSummary = recResult.summary;
                 ctx.actionsTaken.push({
                     action: "BOOK_RECOMMENDATION",
                     status: "SUCCESS",
                     target: args.reference_title || args.author || args.genre || "Personalized Reading Profile",
-                    summary,
+                    summary: shortSummary,
                     details: recResult,
                     timestamp
                 });
 
-                return { success: true, result: recResult, summary };
+                const recs = Array.isArray(recResult.recommendations) ? recResult.recommendations : [];
+                const detailedSummary = recs.length > 0
+                    ? `${shortSummary}\n\n${recs.map((r, idx) =>
+                        `${idx + 1}. **${r.title}** by *${r.author}*${r.series ? ` (${r.series})` : ""} — ${r.inLibrary ? "[In Library](/library)" : "[Available to Request](/requests)"}\n   * ${r.matchReason}`
+                      ).join("\n")}`
+                    : shortSummary;
+
+                return { success: true, result: recResult, summary: detailedSummary };
             } catch (err: any) {
                 return { success: false, result: { error: err.message }, summary: `Failed to generate recommendations: ${err.message}` };
             }

@@ -42,6 +42,9 @@ async function runTests() {
     const q5 = cleanMediaSearchQuery("make sure frozen runs on kids plex server");
     assert("cleanMediaSearchQuery extracts title & targetServer from 'make sure frozen runs on kids plex server'", q5.title === "Frozen" && q5.targetServer === "kids");
 
+    const q6 = cleanMediaSearchQuery('Diagnose my current stream of "The Grinch" playing on SHIELD. Why is it direct play and how can I get 100% Direct Play?');
+    assert("cleanMediaSearchQuery extracts exact quoted movie title from active stream diagnosis", q6.title === "The Grinch");
+
     // TEST 2: validateMediaReleaseCandidate - Foreign & Quality Rejections
     const camRelease = {
         title: "The.Sandlot.1993.HDCAM.x264",
@@ -233,6 +236,80 @@ async function runTests() {
     assert("getOllamaCandidateUrls puts localhost 127.0.0.1:11434 first", urls[0] === "http://127.0.0.1:11434");
     assert("normalizeOllamaModelName defaults to portalarr-plex-master", normalizeOllamaModelName("gemini-3.5-flash-lite") === "portalarr-plex-master");
     assert("normalizeOllamaModelName preserves explicit Ollama models", normalizeOllamaModelName("qwen2.5:7b-instruct") === "qwen2.5:7b-instruct");
+
+    const recToolRes = await executeAiAssistantTool(
+        "recommend_books_and_media",
+        { reference_title: "War of the Worlds", genre: "Sci-Fi" },
+        {
+            user: regularUser,
+            snapshot: {
+                ...mockSnap,
+                readingProfile: {
+                    favoriteAuthors: ["Brandon Sanderson"],
+                    favoriteGenres: ["Sci-Fi", "Fantasy"],
+                    favoriteSeries: [],
+                    recentTitles: ["War of the Worlds"]
+                }
+            },
+            autonomyLevel: "autonomous",
+            actionsTaken: [],
+            mediaInspectionHolder: { current: null },
+            playbackProbeHolder: { current: null },
+        }
+    );
+    assert(
+        "recommend_books_and_media summary lists actual book titles instead of count-only stub",
+        Boolean(recToolRes.success && recToolRes.result?.recommendations?.length > 0 && recToolRes.summary.includes("1. **"))
+    );
+
+    // TEST 18: 4K confirmation gate asks before downloading 2160p unless explicitly confirmed
+    const { selectReleaseWith4kGate } = await import("../src/lib/ai-media-diagnostics");
+    const mock4kRelease = {
+        score: 2000,
+        release: {
+            title: "We.Were.Soldiers.2002.2160p.UHD.BluRay.DV.HDR10",
+            quality: { quality: { name: "Bluray-2160p" } },
+            size: 52 * 1024 * 1024 * 1024
+        }
+    };
+    const mock1080Release = {
+        score: 1200,
+        release: {
+            title: "We.Were.Soldiers.2002.1080p.BluRay.x264",
+            quality: { quality: { name: "Bluray-1080p" } },
+            size: 9 * 1024 * 1024 * 1024
+        }
+    };
+    const gateAuto = selectReleaseWith4kGate([mock4kRelease, mock1080Release], "We Were Soldiers", {
+        confirm4k: true, // Even if LLM sets confirm_4k=true unprompted, userQuestion governs
+        userQuestion: "can you download it?"
+    });
+    assert("4K confirmation gate pauses instead of grabbing 4K on 'can you download it?'", Boolean(gateAuto.requiresQualityConfirmation && !gateAuto.selected && gateAuto.message?.includes("4K")));
+
+    const gateConfirm4k = selectReleaseWith4kGate([mock4kRelease, mock1080Release], "We Were Soldiers", {
+        userQuestion: "Yes download the 4K version please"
+    });
+    assert("4K confirmation gate selects 2160p when user confirms 4K", Boolean(!gateConfirm4k.requiresQualityConfirmation && gateConfirm4k.selected?.release.title.includes("2160p")));
+
+    const gateChoose1080 = selectReleaseWith4kGate([mock4kRelease, mock1080Release], "We Were Soldiers", {
+        userQuestion: "Just get 1080p, no 4K"
+    });
+    assert("4K confirmation gate selects 1080p when user declines 4K", Boolean(!gateChoose1080.requiresQualityConfirmation && gateChoose1080.selected?.release.title.includes("1080p")));
+
+    const gateOnly1080 = selectReleaseWith4kGate([mock1080Release], "We Were Soldiers", {
+        userQuestion: "can you download it?"
+    });
+    assert("4K confirmation gate grabs 1080p automatically when no 4K exists", Boolean(!gateOnly1080.requiresQualityConfirmation && gateOnly1080.selected?.release.title.includes("1080p")));
+
+    const { getQualityIsolatedArrApps } = await import("../src/lib/ai-media-diagnostics");
+    const mockRadarrApps = [
+        { id: "radarr-hd", name: "Radarr (1080p)" },
+        { id: "radarr-4k", name: "Radarr 4K" }
+    ];
+    const hdOnlyList = getQualityIsolatedArrApps(mockRadarrApps, "1080p", "radarr-hd", "radarr-4k");
+    assert("1080p quality strictly isolates non-4K Radarr instance", hdOnlyList.length === 1 && hdOnlyList[0].id === "radarr-hd");
+    const uhdOnlyList = getQualityIsolatedArrApps(mockRadarrApps, "4k", "radarr-hd", "radarr-4k");
+    assert("4K quality strictly isolates 4K Radarr instance", uhdOnlyList.length === 1 && uhdOnlyList[0].id === "radarr-4k");
 
     console.log("==================================================");
     console.log(`TEST RESULTS: ${passed} PASSED, ${failed} FAILED`);

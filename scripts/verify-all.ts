@@ -3985,6 +3985,12 @@ async function runTestSuite() {
                 throw new Error(`Rendered annual_thanksgiving_recap HTML missing expected content: "${snippet}"`);
             }
         }
+        if (/live\s*tv/i.test(rendered.html)) {
+            throw new Error("Rendered annual_thanksgiving_recap HTML must NOT mention Live TV while Live TV is still in beta");
+        }
+        if (/quick answers everyone asks first/i.test(rendered.html)) {
+            throw new Error("Rendered annual_thanksgiving_recap HTML still contains overly meta intro phrasing");
+        }
         const priceIdx = rendered.html.indexOf("Did the price go up?");
         const compIdx = rendered.html.indexOf("How We Compare");
         const recapIdx = rendered.html.indexOf("New Things Added in");
@@ -4004,6 +4010,45 @@ async function runTestSuite() {
             if (!rendered.html.includes(responsiveMarker)) {
                 throw new Error(`Rendered annual_thanksgiving_recap HTML missing dark/light/mobile rule: "${responsiveMarker}"`);
             }
+        }
+
+        // 5. Self-service billing cadence switcher persistence
+        const { updateCurrentUserBillingCadenceAction } = await import("../src/app/actions");
+        const cadenceUser = await prisma.user.create({
+            data: {
+                username: `cadence_usr_${Date.now()}`,
+                email: `cadence_${Date.now()}@example.com`,
+                password: "hash",
+                status: "APPROVED",
+                role: "USER",
+                membershipTier: "STANDARD",
+                subscriptionCadence: "YEARLY",
+                subscriptionEndsAt: new Date(2027, 0, 1)
+            }
+        });
+        const prevTestUid = process.env.PORTALARR_TEST_USER_ID;
+        try {
+            process.env.PORTALARR_TEST_USER_ID = cadenceUser.id;
+            const monthlyRes = await updateCurrentUserBillingCadenceAction("MONTHLY");
+            if (!monthlyRes.success || monthlyRes.cadence !== "MONTHLY") {
+                throw new Error(`Expected switching to MONTHLY to succeed, got: ${JSON.stringify(monthlyRes)}`);
+            }
+            const afterMonthly = await prisma.user.findUnique({ where: { id: cadenceUser.id }, select: { subscriptionCadence: true } });
+            if (afterMonthly?.subscriptionCadence !== "MONTHLY") {
+                throw new Error(`Expected DB subscriptionCadence=MONTHLY, got ${afterMonthly?.subscriptionCadence}`);
+            }
+            const yearlyRes = await updateCurrentUserBillingCadenceAction("YEARLY");
+            if (!yearlyRes.success || yearlyRes.cadence !== "YEARLY") {
+                throw new Error(`Expected switching back to YEARLY to succeed, got: ${JSON.stringify(yearlyRes)}`);
+            }
+            const invalidRes = await updateCurrentUserBillingCadenceAction("WEEKLY" as any);
+            if (invalidRes.success) {
+                throw new Error("Expected invalid billing cadence 'WEEKLY' to be rejected");
+            }
+        } finally {
+            if (prevTestUid !== undefined) process.env.PORTALARR_TEST_USER_ID = prevTestUid;
+            else delete process.env.PORTALARR_TEST_USER_ID;
+            await prisma.user.delete({ where: { id: cadenceUser.id } }).catch(() => {});
         }
     });
 

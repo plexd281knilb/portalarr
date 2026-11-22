@@ -1598,7 +1598,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "{portalName} {currentYear} Year in Review — Same Price, {nextYear} Renewal & What's New",
         defaultBody: `<h2 class="email-heading" style="margin-top: 0; color: #0f172a;">Happy Thanksgiving Week, {username}!</h2>
 <p class="email-text" style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 16px;">
-    Thank you for being part of <strong>{portalName}</strong> this year! Before the holidays get busy, here are the quick answers everyone asks first—followed by a concise recap of what was added in {currentYear}, how our pricing compares, and what's coming next.
+    Thanks for watching along on <strong>{portalName}</strong> this year! Before the holiday rush kicks in, here's a quick rundown of {nextYear} renewal details, how rates compare elsewhere, and a look at what's new around the server.
 </p>
 
 <!-- TOP QUICK ANSWERS -->
@@ -1636,7 +1636,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div class="email-box-neutral" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; margin-bottom: 22px; box-sizing: border-box;">
     <p class="email-heading" style="margin: 0 0 6px 0; font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.4px;">What's on the Server Right Now</p>
     <p class="email-text" style="margin: 0; font-size: 14.5px; color: #334155; line-height: 1.55;">
-        You currently have instant, ad-free access to <strong>{movieCount} movies</strong> and <strong>{showCount} TV shows</strong> (including 4K HDR &amp; Dolby Vision), plus <strong>e-books, audiobooks, and Live TV</strong> &mdash; all in one place with 1-click requests if anything is missing.
+        You currently have instant, ad-free access to <strong>{movieCount} movies</strong> and <strong>{showCount} TV shows</strong> (including 4K HDR &amp; Dolby Vision), plus <strong>e-books and audiobooks</strong> &mdash; all in one place with 1-click requests if anything is missing.
     </p>
 </div>
 
@@ -1687,9 +1687,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <ul class="email-text" style="color: #334155; font-size: 13.5px; line-height: 1.6; padding-left: 18px; margin: 0 0 18px 0;">
     <li style="margin-bottom: 6px;"><strong>New {portalName} Portal (<a href="{appUrl}" class="email-link" style="color: #2563eb; text-decoration: none; word-break: break-all;">{appUrl}</a>):</strong> One clean hub with 1-click Plex sign-in, trending discovery, movie/TV requests with live download status, and mobile-friendly Light &amp; Dark themes.</li>
     <li style="margin-bottom: 6px;"><strong>E-Books, Comics &amp; Audiobooks + Send-to-Kindle:</strong> Built-in browser reader, wireless 1-click Kindle delivery, automatic series tracking, and audiobook streaming in Plex.</li>
-    <li style="margin-bottom: 6px;"><strong>Live TV Channels:</strong> Stream curated live sports, news, and broadcast channels right inside your Plex or Jellyfin app.</li>
     <li style="margin-bottom: 6px;"><strong>24/7 AI Assistant &amp; Stream Diagnostics:</strong> Instant buffering checks, built-in speed test, device setup guides, and automatic audio/file replacement when something won't play cleanly.</li>
-    <li style="margin-bottom: 6px;"><strong>Flexible Billing &amp; Linked Family Inboxes:</strong> Switch between Monthly and Yearly anytime, track your paid-through date, and route renewal or request alerts to a spouse or secondary inbox.</li>
+    <li style="margin-bottom: 6px;"><strong>Flexible Billing &amp; Linked Family Inboxes:</strong> Flip between Monthly and Annual billing anytime right from your dashboard or Account Settings to see exact amounts due, and route renewal or request alerts to a spouse or secondary inbox.</li>
 </ul>
 
 <!-- THINGS TO COME -->

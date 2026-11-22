@@ -942,7 +942,15 @@ ${serverListMarkdown}
             lowerQ.includes("wrong movie") ||
             lowerQ.includes("reds to be redownloaded");
 
-        const isLanguageOrMediaIssue = 
+        const isLiveStreamTelemetryCheck =
+            /\b(my\s+|the\s+)?(current|active)\s+(direct\s+play\s+|transcoding\s+|live\s+)?stream\b/i.test(question) &&
+            snapshot.activeStreams.length > 0 &&
+            !isRedownloadOrForeignSubRequest &&
+            !lowerQ.includes("spanish") &&
+            !lowerQ.includes("missing") &&
+            !lowerQ.includes("wrong audio");
+
+        const isLanguageOrMediaIssue = !isLiveStreamTelemetryCheck && (
             isSpecificMediaPlaybackTest ||
             isTitleCorrection ||
             isRedownloadOrForeignSubRequest ||
@@ -955,7 +963,8 @@ ${serverListMarkdown}
             lowerQ.includes("broken") ||
             lowerQ.includes("corrupt") ||
             lowerQ.includes("wrong audio") ||
-            lowerQ.includes("foreign");
+            lowerQ.includes("foreign")
+        );
 
         if (isLanguageOrMediaIssue) {
             const candidateTitle = cleanedMedia.title;
@@ -997,16 +1006,28 @@ ${serverListMarkdown}
                                 targetSeason,
                                 targetEpisode,
                                 isRedownloadOrForeignSubRequest ? "Hardcoded Asian/Chinese subtitles on current release / Clean English copy requested" : "Missing English audio track / Spanish only file",
-                                user
+                                user,
+                                { userQuestion: question }
                             )
                             : await searchAndGrabRadarrReplacement(
                                 mediaInspection.title, 
                                 candidateYear || (mediaInspection.year ? parseInt(mediaInspection.year, 10) : undefined),
                                 isRedownloadOrForeignSubRequest ? "Hardcoded Asian/Chinese subtitles on current release / Clean English copy requested" : "Missing English audio track / Spanish only file",
-                                user
+                                user,
+                                mediaInspection,
+                                { userQuestion: question }
                             );
 
-                        if (grabResult.success) {
+                        if (grabResult.requiresQualityConfirmation) {
+                            actionsTaken.push({
+                                action: "INSPECT_MEDIA",
+                                status: "SUCCESS",
+                                target: mediaInspection.title,
+                                summary: grabResult.message || `A 4K release is available for "${mediaInspection.title}". Ask whether the user prefers 4K or 1080p before downloading.`,
+                                details: grabResult,
+                                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            });
+                        } else if (grabResult.success) {
                             const grabSummary = grabResult.alreadyOptimal
                                 ? `Optimal Release Confirmed: Highest-quality release "${grabResult.releaseTitle}" (${grabResult.quality || "Standard"}) is already present in ${isEpisode ? "Sonarr" : "Radarr"} (Custom Format Score: ${grabResult.existingScore ?? 900000}).`
                                 : `Autonomous Grab: Located verified English release "${grabResult.releaseTitle}" (${grabResult.quality || "Standard"}, ${grabResult.sizeFormatted || "N/A"}) on indexer "${grabResult.indexer || "Indexer"}" and queued download in ${isEpisode ? "Sonarr" : "Radarr"}.`;
@@ -1148,6 +1169,7 @@ ${serverListMarkdown}
         snapshot,
         actionsTaken,
         autonomyLevel,
+        userQuestion: question,
         mediaInspectionHolder: { current: mediaInspection },
         playbackProbeHolder: { current: playbackProbe }
     };
@@ -1234,6 +1256,7 @@ FUNCTION CALLING INSTRUCTIONS:
   * For TV show episodes (e.g. "Rj Decker Season 2 Episode 5" or "Breaking Bad S02E05"), provide the canonical series name as "title" (e.g. "R.J. Decker" or "Breaking Bad"), the season number as "season" (e.g. 2), and the episode number as "episode" (e.g. 5) when invoking "inspect_media_container" or "search_and_replace_media".
   * Strip season and episode markers from the "title" parameter.
   * If a series name has abbreviations or initials (e.g. "RJ Decker", "Agents of SHIELD", "MASH"), normalize to the canonical title (e.g. "R.J. Decker", "Marvel's Agents of S.H.I.E.L.D.", "M*A*S*H").
+  * Never set "confirm_4k: true" unless the user explicitly requested or confirmed 4K/2160p/UHD. If "search_and_replace_media" returns "requiresQualityConfirmation: true", ask the user clearly whether they want the 4K version or 1080p before downloading.
 - After receiving the function response, present the information clearly with Markdown formatting, bullet points, and actionable next steps.
 
 ${actionsTaken.length > 0 ? `
@@ -1430,7 +1453,7 @@ INSTRUCTIONS:
                     system_instruction: { parts: [{ text: systemPrompt }] },
                     contents: contents,
                     tools: [{ function_declarations: activeGeminiTools }],
-                    generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
+                    generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
                 };
 
                 let res = await fetch(url, {
@@ -1473,16 +1496,16 @@ INSTRUCTIONS:
                         if (toolCtx.mediaInspectionHolder.current) mediaInspection = toolCtx.mediaInspectionHolder.current;
                         if (toolCtx.playbackProbeHolder.current) playbackProbe = toolCtx.playbackProbeHolder.current;
 
-                        // Follow-up synthesis turn
+                        // Follow-up synthesis turn (preserve full candidate.content so Gemini thoughtSignature stays intact)
                         try {
+                            const modelTurn = candidate?.content?.parts?.length
+                                ? { role: candidate.content.role || "model", parts: candidate.content.parts }
+                                : { role: "model", parts: [{ functionCall }] };
                             const followUpContents = [
                                 ...contents,
+                                modelTurn,
                                 {
-                                    role: "model",
-                                    parts: [{ functionCall }]
-                                },
-                                {
-                                    role: "function",
+                                    role: "user",
                                     parts: [{
                                         functionResponse: {
                                             name: fnName,
@@ -1498,14 +1521,19 @@ INSTRUCTIONS:
                                 body: JSON.stringify({
                                     system_instruction: { parts: [{ text: systemPrompt }] },
                                     contents: followUpContents,
-                                    generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
+                                    tools: [{ function_declarations: activeGeminiTools }],
+                                    generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
                                 }),
                                 signal: AbortSignal.timeout(20000)
                             });
 
                             if (synthRes.ok) {
                                 const synthData = await synthRes.json();
-                                const synthText = synthData.candidates?.[0]?.content?.parts?.[0]?.text;
+                                const synthParts = synthData.candidates?.[0]?.content?.parts || [];
+                                const synthText = synthParts
+                                    .filter((p: any) => !p?.thought && typeof p?.text === "string")
+                                    .map((p: any) => p.text)
+                                    .join("\n");
                                 if (synthText && synthText.trim().length > 10) {
                                     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                                     logAgentEvent("INFO", `✨ Gemini synthesized tool response in ${elapsed}s for user "${snapshot.username}"`);
@@ -1536,7 +1564,11 @@ INSTRUCTIONS:
                         };
                     }
 
-                    const text = candidate?.content?.parts?.[0]?.text;
+                    const candidateParts = candidate?.content?.parts || [];
+                    const text = candidateParts
+                        .filter((p: any) => !p?.thought && typeof p?.text === "string")
+                        .map((p: any) => p.text)
+                        .join("\n");
                     if (text && text.trim().length > 10) {
                         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                         logAgentEvent("INFO", `✨ Gemini (${activeModel}) generated response in ${elapsed}s for user "${snapshot.username}"`);

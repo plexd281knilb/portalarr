@@ -650,7 +650,11 @@ export function AiServerAssistant() {
                                                 <Button
                                                     size="sm"
                                                     variant="ghost"
-                                                    onClick={() => handleSend(`Diagnose my current stream of "${activeStream.title}" playing on ${activeStream.player}. Why is it ${activeStream.transcodeDecision} and how can I get 100% Direct Play?`)}
+                                                    onClick={() => handleSend(
+                                                        activeStream.transcodeDecision === "direct play"
+                                                            ? `Review my active Direct Play stream of "${activeStream.title}" on ${activeStream.player}. Summarize the video/audio telemetry and confirm everything is optimal.`
+                                                            : `Diagnose my current stream of "${activeStream.title}" playing on ${activeStream.player}. Why is it ${activeStream.transcodeDecision} instead of Direct Play, and how do I fix it?`
+                                                    )}
                                                     className="h-6 text-[10px] px-2 text-sky-800 dark:text-sky-300 bg-sky-500/10 dark:bg-sky-950/40 hover:bg-sky-500/10 dark:hover:bg-sky-900/60 border border-sky-500/30 gap-1 cursor-pointer"
                                                 >
                                                     <Sparkles className="h-3 w-3 text-sky-700 dark:text-sky-400" />

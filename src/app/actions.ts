@@ -4388,6 +4388,44 @@ export async function updateCurrentUserPrimaryEmail(newEmail: string) {
     return { success: true, message: `Account email successfully updated to ${cleanEmail}!` };
 }
 
+export async function updateCurrentUserBillingCadenceAction(cadence: "MONTHLY" | "YEARLY") {
+    const session: any = await verifyUser();
+    const userId = session?.userId || session?.id;
+    if (!userId) return { success: false, error: "Unauthorized" };
+
+    const normalized = String(cadence || "").trim().toUpperCase();
+    if (normalized !== "MONTHLY" && normalized !== "YEARLY") {
+        return { success: false, error: "Billing plan must be MONTHLY or YEARLY." };
+    }
+
+    const target = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, username: true, role: true, membershipTier: true, subscriptionCadence: true }
+    });
+    if (!target) return { success: false, error: "Account not found." };
+    if (target.role === "ADMIN" || target.membershipTier === "PERMANENT" || target.subscriptionCadence === "PERMANENT") {
+        return { success: false, error: "Permanent accounts do not have a recurring billing plan." };
+    }
+
+    await prisma.user.update({
+        where: { id: userId },
+        data: { subscriptionCadence: normalized }
+    });
+
+    logger.addLog("INFO", "PLEX", `User "${target.username}" switched billing preference to ${normalized}.`);
+    try {
+        revalidatePath("/");
+        revalidatePath("/profile");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings/access");
+    } catch {}
+    return {
+        success: true,
+        cadence: normalized as "MONTHLY" | "YEARLY",
+        message: normalized === "MONTHLY" ? "Switched billing preference to Monthly Plan." : "Switched billing preference to Annual Pass."
+    };
+}
+
 export async function updateAppUserEmail(id: string, newEmail: string) {
     await verifyAdmin();
     const cleanEmail = (newEmail || "").trim().toLowerCase();

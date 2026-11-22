@@ -337,11 +337,11 @@ export async function getPersonalizedBookRecommendations(options: {
 
     // Track books user already requested or received
     const alreadyKnownTitles = new Set<string>();
-    for (const b of profile.requestedBooks) {
-        alreadyKnownTitles.add(b.title.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    for (const b of (profile?.requestedBooks || [])) {
+        if (b?.title) alreadyKnownTitles.add(b.title.toLowerCase().replace(/[^a-z0-9]/g, ""));
     }
-    for (const kd of profile.recentKindleDeliveries) {
-        alreadyKnownTitles.add(kd.bookTitle.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    for (const kd of (profile?.recentKindleDeliveries || [])) {
+        if (kd?.bookTitle) alreadyKnownTitles.add(kd.bookTitle.toLowerCase().replace(/[^a-z0-9]/g, ""));
     }
 
     // Determine target authors and cluster signals
@@ -358,8 +358,8 @@ export async function getPersonalizedBookRecommendations(options: {
         querySource = "explicit_query";
     }
 
-    if (targetAuthors.size === 0 && profile.favoriteAuthors.length > 0) {
-        for (const a of profile.favoriteAuthors) {
+    if (targetAuthors.size === 0 && (profile?.favoriteAuthors || []).length > 0) {
+        for (const a of (profile?.favoriteAuthors || [])) {
             targetAuthors.add(a.toLowerCase().trim());
         }
     }
@@ -538,7 +538,7 @@ export async function getPersonalizedBookRecommendations(options: {
         a.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
     ).slice(0, 5);
 
-    const basedOnSeries = profile.favoriteSeries.slice(0, 3);
+    const basedOnSeries = (profile?.favoriteSeries || []).slice(0, 3);
 
     const summary = recommendations.length > 0
         ? `Found ${recommendations.length} personalized recommendation(s) based on your interest in ${basedOnAuthors.join(", ") || "our top library titles"}.`
