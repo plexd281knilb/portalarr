@@ -57,6 +57,7 @@ import FeatureGuideModal from "@/components/feature-guide-modal";
 import PlexSetupGuides from "@/components/plex-setup-guides";
 import SuperUserCard from "@/components/super-user-card";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
+import { BillingCadenceSwitcher } from "@/components/billing-cadence-switcher";
 import { UserMediaServersManager, UserMediaServersManagerHandle } from "@/components/profile/user-media-servers-manager";
 import { LinkedEmailsManager } from "@/components/profile/linked-emails-manager";
 import { format, differenceInDays } from "date-fns";
@@ -1571,6 +1572,17 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                    {/* INTERACTIVE MONTHLY VS ANNUAL PLAN FLIPPER */}
+                    <BillingCadenceSwitcher
+                        user={user}
+                        pricing={paymentConfig}
+                        referralInfo={referralInfo}
+                        variant="settings"
+                        onCadenceChanged={(nextCadence) => {
+                            setUser((prev: any) => prev ? { ...prev, subscriptionCadence: nextCadence } : prev);
+                        }}
+                    />
+
                     {/* ACCOUNT CREDIT & PARTIAL PAYMENT NOTICE */}
                     {(user?.accountCredit ?? 0) > 0 && (
                         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2.5">

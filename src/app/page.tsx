@@ -241,7 +241,15 @@ export default async function UserLandingPage() {
                     <TrialDashboardView 
                         user={user} 
                         quota={quota} 
-                        billing={billing} 
+                        billing={billing}
+                        pricing={globalSettings ? {
+                            yearlyPrice: globalSettings.yearlyPrice,
+                            monthlyPrice: globalSettings.monthlyPrice,
+                            tier2YearlyPrice: globalSettings.tier2YearlyPrice,
+                            tier2MonthlyPrice: globalSettings.tier2MonthlyPrice,
+                            renewalMonth: globalSettings.renewalMonth,
+                            renewalDay: globalSettings.renewalDay,
+                        } : null}
                     />
                 ) : null}
 
@@ -251,7 +259,18 @@ export default async function UserLandingPage() {
                 {isMember ? (
                     <div className="space-y-6">
                         {/* 0. DEDICATED MEMBERSHIP & PAID THROUGH STATUS HEADER */}
-                        <PaidThroughHeader user={user} referralInfo={referralInfo} />
+                        <PaidThroughHeader
+                            user={user}
+                            referralInfo={referralInfo}
+                            pricing={globalSettings ? {
+                                yearlyPrice: globalSettings.yearlyPrice,
+                                monthlyPrice: globalSettings.monthlyPrice,
+                                tier2YearlyPrice: globalSettings.tier2YearlyPrice,
+                                tier2MonthlyPrice: globalSettings.tier2MonthlyPrice,
+                                renewalMonth: globalSettings.renewalMonth,
+                                renewalDay: globalSettings.renewalDay,
+                            } : null}
+                        />
 
                         {/* 1. MODERN BUTTON-LED DASHBOARD LAUNCHPAD */}
                         <UserLaunchpad isSuperUser={isSuperUser} />

@@ -66,6 +66,12 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
         }
     }
 
+    // 0.25 Extract explicit quoted media title when diagnosing a live stream (e.g. Diagnose my current stream of "The Grinch" playing on SHIELD)
+    const quotedStreamTitleMatch = rawQuery.match(/(?:current|active|direct\s*play|transcod\w+)?\s*stream\s+(?:of|for)\s+["'“”]([^"'“”]{2,120})["'“”]/i);
+    if (quotedStreamTitleMatch?.[1]) {
+        clean = quotedStreamTitleMatch[1].trim();
+    }
+
     // 0. Detect if this is an explicit conversational correction e.g. "no the sandlot", "actually the sandlot"
     const hasCorrectionPrefix = /^(no\s*,?\s*|actually\s*,?\s*|i\s+meant\s+|sorry\s*,?\s*|try\s+|switch\s+to\s+|check\s+out\s+)/i.test(clean);
     clean = clean.replace(/^(no\s*,?\s*|actually\s*,?\s*|i\s+meant\s+|sorry\s*,?\s*|try\s+|switch\s+to\s+|check\s+out\s+)/i, "").trim();
@@ -135,7 +141,8 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
     const leadingPatterns = [
         /^(can you|could you|would you|will you|can we|could we)(\s+please)?\s+/i,
         /^(please\s+)?(run|execute|perform)\s+(a\s+)?(quick\s+)?(playback|stream|server|file)?\s*test\s+(on|for|of)?\s+/i,
-        /^(please\s+)?(test|check|verify|see|diagnose|inspect|probe|try|run)\s+(playback\s+(of|for)|streaming\s+(of|for)|stream\s+(of|for)|to\s+make\s+sure(\s+that)?|if|whether|that|it|this|out)?\s*/i,
+        /^(please\s+)?(review|analyze|diagnose|inspect|check)\s+(my\s+|the\s+)?(current\s+|active\s+)?(direct\s+play\s+|transcoding\s+|live\s+)?streams?\s+(of|for)\s+/i,
+        /^(please\s+)?(test|check|verify|see|diagnose|inspect|probe|try|run|review|analyze)\s+(playback\s+(of|for)|streaming\s+(of|for)|stream\s+(of|for)|to\s+make\s+sure(\s+that)?|if|whether|that|it|this|out)?\s*/i,
         /^(make\s+sure(\s+that)?)\s+/i,
         /^(how\s+about|what\s+about)\s+/i,
         /^(please\s+)?(redownload|re-download|download|grab|search for|replace|fix)\s+/i,
@@ -159,6 +166,7 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
     // 4. Strip trailing intent phrases, condition phrases, server phrases
     const trailingPatterns = [
         /\s+on\s+(the\s+)?(main|primary|backup|kids?|living\s*room)?\s*(plex)?\s*(server)?$/i,
+        /\s+playing\s+on\s+.+$/i,
         /\s+on\s+plex$/i,
         /\s+on\s+server$/i,
         /\s+in\s+plex$/i,
@@ -1044,6 +1052,168 @@ export async function inspectMediaStreams(
 }
 
 /**
+ * Evaluates candidate releases so 4K/2160p releases are NEVER silently grabbed unless the user explicitly requested or confirmed 4K.
+ */
+export type MediaQualityPreference = "auto" | "1080p" | "4k";
+
+export function is4kReleaseCandidate(rel: any): boolean {
+    const titleStr = String(rel?.title || "");
+    const qualStr = String(rel?.quality?.quality?.name || "");
+    return /\b(2160p?|4k|uhd|ultra[\s._-]*hd)\b/i.test(titleStr) || /\b(2160p?|4k|uhd)\b/i.test(qualStr);
+}
+
+export function detectQualityPreference(
+    userQuestion?: string,
+    explicitPreference?: string,
+    explicitConfirm4k?: boolean
+): { preference: MediaQualityPreference; confirm4k: boolean } {
+    const q = (userQuestion || "").toLowerCase();
+    const mentionsNo4kOr1080p = /\b(no\s+4k|not\s+4k|without\s+4k|skip\s+4k|avoid\s+4k|1080p|1080|720p|hd\s+only|standard\s+hd|regular\s+version|non[\s-]?4k)\b/i.test(q);
+    const mentions4kInPrompt = /\b(4k|2160p|2160|uhd|ultra[\s-]*hd)\b/i.test(q);
+
+    if (mentionsNo4kOr1080p || explicitPreference === "1080p") {
+        return { preference: "1080p", confirm4k: false };
+    }
+    if (mentions4kInPrompt) {
+        return { preference: "4k", confirm4k: true };
+    }
+    // Only honor LLM args for 4K when userQuestion isn't known (direct helper call); never allow LLM to bypass missing prompt confirmation
+    if (!userQuestion && (explicitPreference === "4k" || explicitConfirm4k === true)) {
+        return { preference: "4k", confirm4k: true };
+    }
+    return { preference: "auto", confirm4k: false };
+}
+
+function formatReleaseGb(sizeBytes?: number): string | undefined {
+    if (!sizeBytes || isNaN(sizeBytes) || sizeBytes <= 0) return undefined;
+    return `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+export function selectReleaseWith4kGate<T extends { release: any; score: number }>(
+    sortedCandidates: T[],
+    title: string,
+    opts?: { qualityPreference?: string; confirm4k?: boolean; userQuestion?: string }
+): {
+    selected?: T;
+    requiresQualityConfirmation?: boolean;
+    has4kOption?: boolean;
+    has1080pOption?: boolean;
+    top4k?: T;
+    topHd?: T;
+    message?: string;
+} {
+    if (!sortedCandidates || sortedCandidates.length === 0) return {};
+
+    const { preference } = detectQualityPreference(opts?.userQuestion, opts?.qualityPreference, opts?.confirm4k);
+    const uhdCandidates = sortedCandidates.filter(c => is4kReleaseCandidate(c.release));
+    const hdCandidates = sortedCandidates.filter(c => !is4kReleaseCandidate(c.release));
+    const top4k = uhdCandidates[0];
+    const topHd = hdCandidates[0];
+
+    if (preference === "4k") {
+        return { selected: top4k || sortedCandidates[0], top4k, topHd };
+    }
+
+    if (preference === "1080p") {
+        if (topHd) return { selected: topHd, top4k, topHd };
+        if (top4k) {
+            const sizeStr = formatReleaseGb(top4k.release?.size);
+            return {
+                requiresQualityConfirmation: true,
+                has4kOption: true,
+                has1080pOption: false,
+                top4k,
+                message: `No 1080p release was found for "${title}" — only a **4K (${top4k.release?.quality?.quality?.name || "2160p UHD"}${sizeStr ? `, ${sizeStr}` : ""})** release is available. Would you like me to download the **4K version**?`
+            };
+        }
+        return {};
+    }
+
+    // preference === "auto": ask before grabbing if any 4K option exists (or would be picked)
+    if (top4k) {
+        const size4k = formatReleaseGb(top4k.release?.size);
+        const sizeHd = formatReleaseGb(topHd?.release?.size);
+        const message = topHd
+            ? `A **4K (2160p)** release${size4k ? ` (${size4k})` : ""} is available for **"${title}"**, along with a **1080p** release${sizeHd ? ` (${sizeHd})` : ""}. Would you like the **4K version** before I start the download, or should I grab **1080p**?`
+            : `The only verified release found for **"${title}"** is **4K (${top4k.release?.quality?.quality?.name || "2160p UHD"}${size4k ? `, ${size4k}` : ""})**. Would you like me to download the **4K version**?`;
+        return {
+            requiresQualityConfirmation: true,
+            has4kOption: true,
+            has1080pOption: Boolean(topHd),
+            top4k,
+            topHd,
+            message
+        };
+    }
+
+    return { selected: sortedCandidates[0], topHd };
+}
+
+export function getQualityIsolatedArrApps<T extends { id?: string; name?: string | null }>(
+    apps: T[],
+    preference: MediaQualityPreference,
+    defaultId?: string | null,
+    default4kId?: string | null
+): T[] {
+    if (!apps || apps.length <= 1) return apps || [];
+    const isDedicated4k = (a: T) =>
+        (Boolean(default4kId && default4kId !== "none" && a.id === default4kId && a.id !== defaultId)) ||
+        /\b(4k|2160p?|uhd)\b/i.test(String(a.name || ""));
+
+    const uhdApps = apps.filter(isDedicated4k);
+    const hdApps = apps.filter(a => !isDedicated4k(a));
+
+    if (preference === "4k") {
+        if (uhdApps.length > 0) {
+            const primary4k = default4kId ? uhdApps.find(a => a.id === default4kId) : undefined;
+            return primary4k ? [primary4k, ...uhdApps.filter(a => a.id !== primary4k.id)] : uhdApps;
+        }
+        return apps;
+    }
+
+    // For "1080p" or "auto": strictly keep on non-4K instances when any non-4K instance exists
+    if (hdApps.length > 0) {
+        const primaryHd = defaultId ? hdApps.find(a => a.id === defaultId) : undefined;
+        return primaryHd ? [primaryHd, ...hdApps.filter(a => a.id !== primaryHd.id)] : hdApps;
+    }
+    return apps;
+}
+
+function pickPreferredArrInstance(
+    apps: any[],
+    desiredIs4k: boolean,
+    defaultId?: string | null,
+    default4kId?: string | null
+) {
+    const isolated = getQualityIsolatedArrApps(apps, desiredIs4k ? "4k" : "1080p", defaultId, default4kId);
+    return isolated[0] || apps[0];
+}
+
+async function resolveArrProfileAndFolder(
+    targetApp: any,
+    configuredProfileId?: number | null,
+    configuredFolder?: string | null
+): Promise<{ qualityProfileId: number; rootFolderPath: string } | null> {
+    const [profilesRes, foldersRes] = await Promise.all([
+        arrApiGet(targetApp, "/api/v3/qualityprofile"),
+        arrApiGet(targetApp, "/api/v3/rootfolder")
+    ]);
+    const availableProfiles = profilesRes.success && Array.isArray(profilesRes.data) ? profilesRes.data : [];
+    const availableFolders = foldersRes.success && Array.isArray(foldersRes.data) ? foldersRes.data : [];
+    if (availableProfiles.length === 0 || availableFolders.length === 0) return null;
+
+    const qualityProfileId =
+        configuredProfileId && availableProfiles.some((p: any) => p.id === configuredProfileId)
+            ? configuredProfileId
+            : availableProfiles[0].id;
+    const rootFolderPath =
+        configuredFolder && availableFolders.some((f: any) => f.path === configuredFolder)
+            ? configuredFolder
+            : availableFolders[0].path;
+    return { qualityProfileId, rootFolderPath };
+}
+
+/**
  * Searches indexers via Radarr, validates releases for English audio and quality profile, and grabs replacement.
  * Automatically escalates to an Admin Support Ticket if no valid release is found.
  */
@@ -1052,9 +1222,13 @@ export async function searchAndGrabRadarrReplacement(
     year?: number,
     reason: string = "Spanish only / Missing English audio track",
     user?: any,
-    mediaInspection?: any
+    mediaInspection?: any,
+    qualityOpts?: { qualityPreference?: string; confirm4k?: boolean; userQuestion?: string }
 ): Promise<{
     success: boolean;
+    requiresQualityConfirmation?: boolean;
+    has4kOption?: boolean;
+    has1080pOption?: boolean;
     alreadyOptimal?: boolean;
     deletedCam?: boolean;
     isPreRelease?: boolean;
@@ -1065,6 +1239,9 @@ export async function searchAndGrabRadarrReplacement(
     indexer?: string;
     quality?: string;
     sizeFormatted?: string;
+    alternativeTitle?: string;
+    alternativeQuality?: string;
+    alternativeSizeFormatted?: string;
     escalated?: boolean;
     ticketId?: string;
     message?: string;
@@ -1109,13 +1286,21 @@ export async function searchAndGrabRadarrReplacement(
         };
     }
 
-    // 3. Locate movie across ALL enabled Radarr instances
+    // 3. Locate movie across quality-appropriate Radarr instances (never mix 4K onto 1080p Radarr when dedicated instances exist)
+    const qualityIntent = detectQualityPreference(qualityOpts?.userQuestion, qualityOpts?.qualityPreference, qualityOpts?.confirm4k);
+    const orderedApps = getQualityIsolatedArrApps(
+        appsRes.data,
+        qualityIntent.preference,
+        settings?.seerrDefaultMovieAppId,
+        settings?.seerrDefaultMovie4kAppId
+    );
+
     let matchedApp: any = null;
     let targetMovie: any = null;
     let targetMovieId = 0;
 
-    // Priority 1: Check existing Radarr library across all instances
-    for (const curApp of appsRes.data) {
+    // Priority 1: Check existing Radarr library across prioritized instances
+    for (const curApp of orderedApps) {
         try {
             const libRes = await arrApiGet(curApp, "/api/v3/movie");
             if (libRes.success && Array.isArray(libRes.data)) {
@@ -1133,9 +1318,9 @@ export async function searchAndGrabRadarrReplacement(
         } catch (e) {}
     }
 
-    // Priority 2: If not in library, check lookup across all instances
+    // Priority 2: If not in library, check lookup across prioritized instances
     if (!targetMovie) {
-        for (const curApp of appsRes.data) {
+        for (const curApp of orderedApps) {
             try {
                 const lookupRes = await arrApiGet(curApp, `/api/v3/movie/lookup?term=${encodeURIComponent(title)}`);
                 if (lookupRes.success && Array.isArray(lookupRes.data) && lookupRes.data.length > 0) {
@@ -1174,7 +1359,7 @@ export async function searchAndGrabRadarrReplacement(
         };
     }
 
-    const app = matchedApp || appsRes.data[0];
+    let app = matchedApp || appsRes.data[0];
 
     // 3.5 Check Pre-Release / Unreleased Digital Status:
     // If digitalRelease date is in the future, or status is inCinemas with no past digital/physical release,
@@ -1252,27 +1437,103 @@ export async function searchAndGrabRadarrReplacement(
     }
 
     if (targetMovieId === 0) {
-        logAgentEvent("WARN", `Movie "${title}" found in lookup but not added to Radarr library.`);
-        const escalation = await escalateToAdminTicket({
-            user,
-            title,
-            issue: `User reported issue with "${title}" (${reason}). Movie was not found in Radarr library to trigger an automated release search.`,
-            stepsTaken: [
-                `1. Inspected Plex media: English audio track missing.`,
-                `2. Looked up movie in Radarr: Movie "${title}" is not registered in Radarr library.`
-            ],
-            recommendation: `Add "${title}" to Radarr and search indexers for an English 1080p release.`
-        });
-        return {
-            success: false,
-            escalated: true,
-            ticketId: escalation.ticketId,
-            error: `Movie "${title}" could not be located in Radarr library. A ticket was created for your server administrator.`
-        };
+        // Choose default 1080p vs 4K Radarr instance for missing movies
+        app = pickPreferredArrInstance(
+            appsRes.data,
+            qualityIntent.preference === "4k",
+            settings?.seerrDefaultMovieAppId,
+            settings?.seerrDefaultMovie4kAppId
+        );
+
+        // If movie isn't in Radarr yet and caller hasn't confirmed 4K vs 1080p, check indexers by TMDb ID first before adding
+        if (qualityIntent.preference === "auto" && targetMovie.tmdbId) {
+            const probeRelRes = await arrApiGet(app, `/api/v3/release?tmdbId=${targetMovie.tmdbId}`).catch(() => ({ success: false, data: [] }));
+            if (probeRelRes.success && Array.isArray(probeRelRes.data) && probeRelRes.data.length > 0) {
+                const probeEvaluated: Array<{ release: any; score: number }> = [];
+                for (const rel of probeRelRes.data) {
+                    const validation = validateMediaReleaseCandidate(rel, "movie", "English");
+                    if (validation.ok) probeEvaluated.push({ release: rel, score: validation.score });
+                }
+                probeEvaluated.sort((a, b) => b.score - a.score);
+                const probeGate = selectReleaseWith4kGate(probeEvaluated, targetMovie.title || title, qualityOpts);
+                if (probeGate.requiresQualityConfirmation) {
+                    logAgentEvent("INFO", `Paused Radarr add/download for "${title}" to ask user about 4K vs 1080p preference.`);
+                    return {
+                        success: true,
+                        requiresQualityConfirmation: true,
+                        has4kOption: probeGate.has4kOption,
+                        has1080pOption: probeGate.has1080pOption,
+                        releaseTitle: probeGate.top4k?.release?.title,
+                        quality: probeGate.top4k?.release?.quality?.quality?.name || "2160p UHD",
+                        sizeFormatted: formatReleaseGb(probeGate.top4k?.release?.size),
+                        alternativeTitle: probeGate.topHd?.release?.title,
+                        alternativeQuality: probeGate.topHd?.release?.quality?.quality?.name || (probeGate.topHd ? "1080p" : undefined),
+                        alternativeSizeFormatted: formatReleaseGb(probeGate.topHd?.release?.size),
+                        message: probeGate.message
+                    };
+                }
+            }
+        }
+
+        // Add the missing movie directly into Radarr so releases attach and import cleanly
+        const desiredIs4k = qualityIntent.preference === "4k";
+        const profFolder = await resolveArrProfileAndFolder(
+            app,
+            desiredIs4k ? settings?.seerrDefaultMovie4kProfileId : settings?.seerrDefaultMovieProfileId,
+            desiredIs4k ? settings?.seerrDefaultMovie4kRootFolder : settings?.seerrDefaultMovieRootFolder
+        );
+        if (profFolder) {
+            const { id: _unusedId, ...cleanedLookup } = targetMovie;
+            const addRes = await arrApiPost(app, "/api/v3/movie", {
+                ...cleanedLookup,
+                qualityProfileId: profFolder.qualityProfileId,
+                rootFolderPath: profFolder.rootFolderPath,
+                monitored: true,
+                addOptions: { searchForMovie: false }
+            });
+            if (addRes.success && addRes.data?.id) {
+                targetMovie = addRes.data;
+                targetMovieId = addRes.data.id;
+                logAgentEvent("INFO", `Added missing movie "${targetMovie.title || title}" to Radarr (${app.name}) with movieId=${targetMovieId}`);
+            } else if (targetMovie.tmdbId) {
+                // Re-check library in case it was concurrently added
+                const libCheck = await arrApiGet(app, "/api/v3/movie");
+                const existing = libCheck.success && Array.isArray(libCheck.data)
+                    ? libCheck.data.find((m: any) => m.tmdbId === targetMovie.tmdbId)
+                    : null;
+                if (existing?.id) {
+                    targetMovie = existing;
+                    targetMovieId = existing.id;
+                }
+            }
+        }
+
+        if (targetMovieId === 0) {
+            logAgentEvent("WARN", `Movie "${title}" found in lookup but could not be added to Radarr library.`);
+            const escalation = await escalateToAdminTicket({
+                user,
+                title,
+                issue: `User requested "${title}" (${reason}). Movie was looked up in Radarr (${app.name}) but could not be added automatically.`,
+                stepsTaken: [
+                    `1. Searched Radarr lookup for "${title}".`,
+                    `2. Attempted to add movie to "${app.name}" before grabbing release: no quality profile/root folder or API error.`
+                ],
+                recommendation: `Add "${title}" manually in Radarr and search indexers.`
+            });
+            return {
+                success: false,
+                escalated: true,
+                ticketId: escalation.ticketId,
+                error: `Movie "${title}" could not be added to Radarr library. A ticket was created for your server administrator.`
+            };
+        }
+    } else if (targetMovie && targetMovie.monitored === false) {
+        targetMovie.monitored = true;
+        await arrApiPut(app, `/api/v3/movie/${targetMovieId}`, targetMovie).catch(() => {});
     }
 
     // 4. Fetch candidate releases from indexers via Radarr
-    logAgentEvent("INFO", `Querying indexers for Radarr movieId=${targetMovieId} ("${title}")`);
+    logAgentEvent("INFO", `Querying indexers for Radarr movieId=${targetMovieId} ("${title}") on "${app.name}"`);
     const releaseRes = await arrApiGet(app, `/api/v3/release?movieId=${targetMovieId}`);
     if (!releaseRes.success || !Array.isArray(releaseRes.data) || releaseRes.data.length === 0) {
         const escalation = await escalateToAdminTicket({
@@ -1343,16 +1604,46 @@ export async function searchAndGrabRadarrReplacement(
         };
     }
 
-    // Sort by highest score
+    // Sort by highest score and apply 4K confirmation gate
     evaluatedReleases.sort((a, b) => b.score - a.score);
-    const bestCandidate = evaluatedReleases[0].release;
+    const gate = selectReleaseWith4kGate(evaluatedReleases, targetMovie.title || title, qualityOpts);
+    if (gate.requiresQualityConfirmation) {
+        logAgentEvent("INFO", `Paused Radarr download for "${title}" to ask user about 4K vs 1080p preference.`);
+        return {
+            success: true,
+            requiresQualityConfirmation: true,
+            has4kOption: gate.has4kOption,
+            has1080pOption: gate.has1080pOption,
+            releaseTitle: gate.top4k?.release?.title,
+            quality: gate.top4k?.release?.quality?.quality?.name || "2160p UHD",
+            sizeFormatted: formatReleaseGb(gate.top4k?.release?.size),
+            alternativeTitle: gate.topHd?.release?.title,
+            alternativeQuality: gate.topHd?.release?.quality?.quality?.name || (gate.topHd ? "1080p" : undefined),
+            alternativeSizeFormatted: formatReleaseGb(gate.topHd?.release?.size),
+            message: gate.message
+        };
+    }
+
+    const bestCandidate = gate.selected?.release || evaluatedReleases[0].release;
+
+    // Also ensure we never send a 4K release to a non-4K Radarr instance
+    const isTargetApp4k =
+        (Boolean(settings?.seerrDefaultMovie4kAppId && app.id === settings.seerrDefaultMovie4kAppId && app.id !== settings?.seerrDefaultMovieAppId)) ||
+        /\b(4k|2160p?|uhd)\b/i.test(String(app?.name || ""));
+    if (!isTargetApp4k && is4kReleaseCandidate(bestCandidate)) {
+        return {
+            success: false,
+            error: `Blocked 4K release "${bestCandidate.title}" from being sent to non-4K Radarr instance "${app.name}". Specify 1080p or use a 4K Radarr instance.`
+        };
+    }
 
     // 6. Dispatch release download to Radarr
     logAgentEvent("INFO", `Grabbing top candidate release for "${title}": "${bestCandidate.title}" (score=${evaluatedReleases[0].score})`);
 
     const grabRes = await arrApiPost(app, "/api/v3/release", {
         guid: bestCandidate.guid,
-        indexerId: bestCandidate.indexerId
+        indexerId: bestCandidate.indexerId,
+        movieId: targetMovieId
     });
 
     if (!grabRes.success) {
@@ -1399,13 +1690,21 @@ export async function searchAndGrabSonarrReplacement(
     seasonNumber?: number,
     episodeNumber?: number,
     reason: string = "Missing English audio track / Corrupt episode",
-    user?: any
+    user?: any,
+    qualityOpts?: { qualityPreference?: string; confirm4k?: boolean; userQuestion?: string }
 ): Promise<{
     success: boolean;
+    requiresQualityConfirmation?: boolean;
+    has4kOption?: boolean;
+    has1080pOption?: boolean;
     releaseTitle?: string;
     indexer?: string;
     quality?: string;
     sizeFormatted?: string;
+    alternativeTitle?: string;
+    alternativeQuality?: string;
+    alternativeSizeFormatted?: string;
+    message?: string;
     escalated?: boolean;
     ticketId?: string;
     error?: string;
@@ -1443,10 +1742,16 @@ export async function searchAndGrabSonarrReplacement(
 
     let matchedApp: any = null;
     let seriesId = 0;
-    const cleanQ = (effectiveTitle || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const sonarrQualityIntent = detectQualityPreference(qualityOpts?.userQuestion, qualityOpts?.qualityPreference, qualityOpts?.confirm4k);
+    const orderedSonarrApps = getQualityIsolatedArrApps(
+        appsRes.data,
+        sonarrQualityIntent.preference,
+        settings?.seerrDefaultTvAppId,
+        settings?.seerrDefaultTv4kAppId
+    );
 
-    // 1. Check existing series in all configured Sonarr instances
-    for (const app of appsRes.data) {
+    // 1. Check existing series in quality-appropriate Sonarr instances
+    for (const app of orderedSonarrApps) {
         try {
             const seriesRes = await arrApiGet(app, "/api/v3/series");
             if (seriesRes.success && Array.isArray(seriesRes.data)) {
@@ -1460,19 +1765,55 @@ export async function searchAndGrabSonarrReplacement(
         } catch (e) {}
     }
 
-    // 2. Fallback: series lookup
+    // 2. Fallback: series lookup & auto-add to Sonarr if not in library yet
+    let lookupSeriesObj: any = null;
     if (seriesId === 0) {
-        for (const app of appsRes.data) {
+        for (const app of orderedSonarrApps) {
             try {
                 const seriesRes = await arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(effectiveTitle)}`);
                 if (seriesRes.success && Array.isArray(seriesRes.data) && seriesRes.data.length > 0) {
-                    seriesId = seriesRes.data[0].id || 0;
-                    if (seriesId > 0) {
+                    const matched = seriesRes.data.find((s: any) => isMediaTitleMatch(s.title, effectiveTitle)) || seriesRes.data[0];
+                    if (matched?.id && matched.id > 0) {
                         matchedApp = app;
+                        seriesId = matched.id;
                         break;
+                    }
+                    if (!lookupSeriesObj && matched) {
+                        lookupSeriesObj = matched;
+                        matchedApp = app;
                     }
                 }
             } catch (e) {}
+        }
+
+        if (seriesId === 0 && lookupSeriesObj && matchedApp) {
+            const desiredIs4k = sonarrQualityIntent.preference === "4k";
+            const profFolder = await resolveArrProfileAndFolder(
+                matchedApp,
+                desiredIs4k ? settings?.seerrDefaultTv4kProfileId : settings?.seerrDefaultTvProfileId,
+                desiredIs4k ? settings?.seerrDefaultTv4kRootFolder : settings?.seerrDefaultTvRootFolder
+            );
+            if (profFolder) {
+                const { id: _unusedId, languageProfileId: lookupLangId, ...cleanedSeries } = lookupSeriesObj;
+                const addBody: any = {
+                    ...cleanedSeries,
+                    qualityProfileId: profFolder.qualityProfileId,
+                    rootFolderPath: profFolder.rootFolderPath,
+                    monitored: true,
+                    addOptions: {
+                        monitor: effectiveSeason !== undefined ? "future" : "all",
+                        searchForMissingEpisodes: false
+                    }
+                };
+                if (lookupLangId !== undefined) {
+                    addBody.languageProfileId = lookupLangId || 1;
+                }
+                const addSeriesRes = await arrApiPost(matchedApp, "/api/v3/series", addBody);
+                if (addSeriesRes.success && addSeriesRes.data?.id) {
+                    seriesId = addSeriesRes.data.id;
+                    logAgentEvent("INFO", `Added missing series "${effectiveTitle}" to Sonarr (${matchedApp.name}) with seriesId=${seriesId}`);
+                }
+            }
         }
     }
 
@@ -1540,11 +1881,32 @@ export async function searchAndGrabSonarrReplacement(
                         });
 
                         if (validReleases.length > 0) {
-                            validReleases.sort((a: any, b: any) => (b.customFormatScore || 0) - (a.customFormatScore || 0));
-                            const topRelease = validReleases[0];
+                            const scoredSonarr = validReleases
+                                .map((r: any) => ({ release: r, score: Number(r.customFormatScore || 0) }))
+                                .sort((a: { release: any; score: number }, b: { release: any; score: number }) => b.score - a.score);
+                            const gate = selectReleaseWith4kGate(scoredSonarr, `${effectiveTitle} S${effectiveSeason}E${effectiveEpisode}`, qualityOpts);
+                            if (gate.requiresQualityConfirmation) {
+                                logAgentEvent("INFO", `Paused Sonarr download for "${effectiveTitle} S${effectiveSeason}E${effectiveEpisode}" to ask user about 4K vs 1080p preference.`);
+                                return {
+                                    success: true,
+                                    requiresQualityConfirmation: true,
+                                    has4kOption: gate.has4kOption,
+                                    has1080pOption: gate.has1080pOption,
+                                    releaseTitle: gate.top4k?.release?.title,
+                                    quality: gate.top4k?.release?.quality?.quality?.name || "2160p UHD",
+                                    sizeFormatted: formatReleaseGb(gate.top4k?.release?.size),
+                                    alternativeTitle: gate.topHd?.release?.title,
+                                    alternativeQuality: gate.topHd?.release?.quality?.quality?.name || (gate.topHd ? "1080p" : undefined),
+                                    alternativeSizeFormatted: formatReleaseGb(gate.topHd?.release?.size),
+                                    message: gate.message
+                                };
+                            }
+                            const topRelease = gate.selected?.release || scoredSonarr[0].release;
                             const grabRes = await arrApiPost(matchedApp, "/api/v3/release", {
                                 guid: topRelease.guid,
-                                indexerId: topRelease.indexerId
+                                indexerId: topRelease.indexerId,
+                                seriesId,
+                                episodeIds: [targetEp.id]
                             });
 
                             if (grabRes.success) {

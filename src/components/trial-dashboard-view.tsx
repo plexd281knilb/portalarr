@@ -13,15 +13,17 @@ import MyPlexHub from "@/components/my-plex-hub";
 import { AiServerAssistant } from "@/components/ai-server-assistant";
 import PlexSetupGuides from "@/components/plex-setup-guides";
 import ServerSpeedTest from "@/components/server-speed-test";
+import { BillingCadenceSwitcher, BillingPricingConfig } from "@/components/billing-cadence-switcher";
 import { format, differenceInDays } from "date-fns";
 
 interface TrialDashboardViewProps {
     user: any;
     quota: any;
     billing: any;
+    pricing?: BillingPricingConfig | null;
 }
 
-export default function TrialDashboardView({ user, quota, billing }: TrialDashboardViewProps) {
+export default function TrialDashboardView({ user, quota, billing, pricing }: TrialDashboardViewProps) {
     const trialEndsAt = user?.trialEndsAt ? new Date(user.trialEndsAt) : null;
     const now = new Date();
     const daysRemaining = trialEndsAt ? Math.max(0, differenceInDays(trialEndsAt, now)) : 14;
@@ -33,30 +35,40 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* --- COMPACT TRIAL STATUS & LAUNCHPAD --- */}
             <div className="space-y-3">
-                {/* Status Bar Header: Glowing Countdown Pill */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 sm:px-4 sm:py-2.5 rounded-2xl bg-card/95 dark:bg-[#121218]/90 border border-amber-500/30 backdrop-blur-md shadow-sm">
-                    <div className="flex items-center gap-2.5">
-                        <span className="relative flex h-3 w-3 shrink-0">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
-                        </span>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs sm:text-sm font-bold px-2.5 py-0.5 shadow-xs">
-                                ⏳ Free Trial: {daysRemaining} {daysRemaining === 1 ? "Day" : "Days"} Remaining
-                            </Badge>
-                            {trialEndsAt && (
-                                <span className="text-xs text-muted-foreground hidden sm:inline">
-                                    Expires on <strong className="text-foreground">{format(trialEndsAt, "MMMM d, yyyy")}</strong>
-                                </span>
-                            )}
+                {/* Status Bar Header: Glowing Countdown Pill + Interactive Billing Plan Flipper */}
+                <div className="flex flex-col gap-2.5 p-3 sm:px-4 sm:py-3 rounded-2xl bg-card/95 dark:bg-[#121218]/90 border border-amber-500/30 backdrop-blur-md shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-3 w-3 shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs sm:text-sm font-bold px-2.5 py-0.5 shadow-xs">
+                                    ⏳ Free Trial: {daysRemaining} {daysRemaining === 1 ? "Day" : "Days"} Remaining
+                                </Badge>
+                                {trialEndsAt && (
+                                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                                        Expires on <strong className="text-foreground">{format(trialEndsAt, "MMMM d, yyyy")}</strong>
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Link href="/profile#billing" className="hover:text-primary transition-colors flex items-center gap-1">
+                                <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span>Billing &amp; Password</span>
+                            </Link>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Link href="/profile#password" className="hover:text-primary transition-colors flex items-center gap-1">
-                            <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span>Account &amp; Password</span>
-                        </Link>
+                    <div className="pt-2 border-t border-border/40">
+                        <BillingCadenceSwitcher
+                            user={user}
+                            pricing={pricing}
+                            variant="dashboard"
+                        />
                     </div>
                 </div>
 
