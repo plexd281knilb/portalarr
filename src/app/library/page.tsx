@@ -43,6 +43,7 @@ import {
   approveBookRequestAction,
   getKindleSenderUpdateNoticeStatusAction,
   acknowledgeKindleSenderUpdateAction,
+  updateUserAudiobooksLibraryAccessAction,
 } from "@/app/actions";
 import { KindleSenderUpdateModal } from "@/components/kindle-sender-update-modal";
 import { KindleSetupGuideModal } from "@/components/kindle-setup-guide-modal";
@@ -461,6 +462,44 @@ function BookLibraryPageContent() {
     senderEmail: string;
   } | null>(null);
   const [pendingKindleAction, setPendingKindleAction] = useState<(() => Promise<void> | void) | null>(null);
+
+  // Audiobook access request state
+  const [enablingAudiobooks, setEnablingAudiobooks] = useState(false);
+  const [audioAccessMsg, setAudioAccessMsg] = useState("");
+  const [audioAccessErr, setAudioAccessErr] = useState("");
+
+  const handleEnableAudiobooksAccess = async () => {
+    setEnablingAudiobooks(true);
+    setAudioAccessMsg("");
+    setAudioAccessErr("");
+    try {
+      const res = await updateUserAudiobooksLibraryAccessAction(true);
+      if (res.success) {
+        const freshLibs = await getLibraries().catch(() => []);
+        setLibraries(freshLibs);
+        const topAudio = freshLibs.find(
+          (l: any) =>
+            l.mediaType === "audiobook" ||
+            l.name.toLowerCase().includes("audio") ||
+            l.downloadCategory === "audiobooks",
+        );
+        if (topAudio) {
+          setSelectedLibrary(topAudio);
+        }
+        setAudioAccessMsg(
+          topAudio
+            ? (res.message || "Audiobooks access granted! Loading your library...")
+            : (res.message || "Audiobooks add-on enabled on your account. If libraries remain hidden, check Account Add-Ons or ask your server admin."),
+        );
+      } else {
+        setAudioAccessErr(res.error || "Could not enable audiobooks access.");
+      }
+    } catch (e: any) {
+      setAudioAccessErr(e?.message || "Failed to request audiobooks access.");
+    } finally {
+      setEnablingAudiobooks(false);
+    }
+  };
 
   const handleCopyServerSmtp = async () => {
     const textToCopy = serverSmtpFrom || "kindle@domshomelab.com";
@@ -3396,8 +3435,12 @@ function BookLibraryPageContent() {
                 <CardContent className="p-2 space-y-1">
                   {audiobookLibraries.length === 0 ? (
                     <div className="p-4 text-center text-xs text-muted-foreground space-y-3">
-                      <p>No audiobook libraries configured yet.</p>
-                      {isAdmin && (
+                      <p>
+                        {isAdmin
+                          ? "No audiobook libraries configured yet."
+                          : "No audiobook libraries available on your account yet."}
+                      </p>
+                      {isAdmin ? (
                         <Button
                           size="sm"
                           variant="outline"
@@ -3413,6 +3456,29 @@ function BookLibraryPageContent() {
                           <Plus className="h-3 w-3 mr-1" /> Add Audiobook
                           Library
                         </Button>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 pt-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={enablingAudiobooks}
+                            onClick={handleEnableAudiobooksAccess}
+                            className="w-full text-xs font-semibold gap-1.5 cursor-pointer"
+                          >
+                            {enablingAudiobooks ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Headphones className="h-3.5 w-3.5" />
+                            )}
+                            <span>{enablingAudiobooks ? "Enabling Access..." : "Get Audiobook Access"}</span>
+                          </Button>
+                          <Link
+                            href="/profile#addons"
+                            className="text-[11px] font-medium text-primary hover:underline"
+                          >
+                            Manage Add-Ons in Profile
+                          </Link>
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -3582,6 +3648,72 @@ function BookLibraryPageContent() {
                     </div>
                   )}
                 </>
+              ) : audiobookLibraries.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border/70 bg-card/40 px-6 py-12 flex flex-col items-center justify-center text-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                    <Headphones className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1.5 max-w-md">
+                    <h3 className="text-base font-bold text-foreground text-balance">
+                      {isAdmin
+                        ? "No Audiobook Libraries Configured Yet"
+                        : "Get Access to Audiobook Libraries"}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                      {isAdmin
+                        ? "Create an audiobook library folder in Library Management so members can listen and browse files."
+                        : "You do not currently have any audiobook libraries unlocked on your account. Enable the free Audiobooks add-on to gain access."}
+                    </p>
+                  </div>
+
+                  {audioAccessMsg && (
+                    <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-800 dark:text-emerald-300 max-w-md">
+                      {audioAccessMsg}
+                    </div>
+                  )}
+                  {audioAccessErr && (
+                    <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3.5 py-2 text-xs font-medium text-rose-800 dark:text-rose-300 max-w-md">
+                      {audioAccessErr}
+                    </div>
+                  )}
+
+                  {isAdmin ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        setLibName("Audiobooks");
+                        setLibMediaType("audiobook");
+                        setLibDownloadCategory("audiobooks");
+                        setLibPath("/audiobooks");
+                        handleTabChange("manage");
+                      }}
+                      className="text-xs font-semibold gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Audiobook Library</span>
+                    </Button>
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                      <Button
+                        type="button"
+                        disabled={enablingAudiobooks}
+                        onClick={handleEnableAudiobooksAccess}
+                        className="text-xs sm:text-sm font-semibold gap-2 cursor-pointer"
+                      >
+                        {enablingAudiobooks ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Headphones className="h-4 w-4" />
+                        )}
+                        <span>{enablingAudiobooks ? "Enabling Audiobook Access..." : "Get Audiobook Access"}</span>
+                      </Button>
+                      <Button asChild variant="outline" size="sm" className="text-xs font-semibold">
+                        <Link href="/profile#addons">Manage Add-Ons in Profile</Link>
+                      </Button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="text-center p-16 text-muted-foreground border border-dashed rounded-lg bg-muted/5 space-y-3">
                   <Headphones className="h-12 w-12 mx-auto text-amber-700/60 dark:text-amber-400/60" />
