@@ -4543,7 +4543,7 @@ function SettingsPageContent() {
 
                                         {aiProviderSelect === "default" && (
                                             <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
-                                                Auto mode routes AI Assistant, book metadata, audiobook chapters, and IMDb parental guide classification to your Gaming PC RTX 3080 Ollama (<code className="font-mono">192.168.1.68:11434</code> / <code className="font-mono">192.168.10.78:11434</code>) whenever awake, and automatically falls back if asleep.
+                                                Auto mode routes AI Assistant, book metadata, audiobook chapters, and IMDb parental guide classification to your Gaming PC RTX 3080 Ollama (<code className="font-mono">192.168.1.68:11434</code> / <code className="font-mono">192.168.10.246:11434</code>) whenever awake, and automatically falls back if asleep.
                                             </div>
                                         )}
 
@@ -4590,7 +4590,7 @@ function SettingsPageContent() {
                                                 </div>
                                                 ) : (
                                                     <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
-                                                        Uses your local/RTX 3080 Ollama container (<code className="font-mono">127.0.0.1:11434</code> / <code className="font-mono">192.168.10.78:11434</code>) with <code className="font-mono">portalarr-plex-master</code> and automatic fallback if offline.
+                                                        Uses your local/RTX 3080 Ollama container (<code className="font-mono">127.0.0.1:11434</code> / <code className="font-mono">192.168.10.246:11434</code>) with <code className="font-mono">portalarr-plex-master</code> and automatic fallback if offline.
                                                     </div>
                                                 )}
 

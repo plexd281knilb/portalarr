@@ -1730,13 +1730,13 @@ async function runTestSuite() {
 
             const { parseGamingPcConfig } = await import("../src/lib/monitoring/gaming-pc");
             const gamingCfg = parseGamingPcConfig(undefined, undefined);
-            if (!gamingCfg.telemetryUrls.some((u) => u.includes("192.168.1.68:9178")) || !gamingCfg.ollamaUrls.some((u) => u.includes("192.168.10.78:11434"))) {
+            if (!gamingCfg.telemetryUrls.some((u) => u.includes("192.168.1.68:9178")) || !gamingCfg.ollamaUrls.some((u) => u.includes("192.168.10.246:11434"))) {
                 throw new Error(`parseGamingPcConfig did not include expected pfSense/LAN endpoints: ${JSON.stringify(gamingCfg)}`);
             }
 
             const { getOllamaCandidateUrls, normalizeOllamaModelName } = await import("../src/lib/ai-ollama");
             const ollamaUrls = getOllamaCandidateUrls("http://127.0.0.1:11434/v1");
-            if (ollamaUrls[0] !== "http://127.0.0.1:11434" || !ollamaUrls.some((u) => u.includes("192.168.10.78:11434"))) {
+            if (ollamaUrls[0] !== "http://127.0.0.1:11434" || !ollamaUrls.some((u) => u.includes("192.168.10.246:11434"))) {
                 throw new Error(`getOllamaCandidateUrls failed to normalize or include RTX 3080 LAN fallback: ${JSON.stringify(ollamaUrls)}`);
             }
             if (normalizeOllamaModelName("gemini-3.5-flash-lite") !== "portalarr-plex-master" || normalizeOllamaModelName("qwen2.5:7b-instruct") !== "qwen2.5:7b-instruct") {

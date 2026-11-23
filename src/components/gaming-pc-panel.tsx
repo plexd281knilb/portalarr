@@ -156,7 +156,7 @@ export default function GamingPcPanel({ compact = false }: { compact?: boolean }
                     <div className="p-3.5 rounded-xl border border-border/70 dark:border-white/[0.08] bg-muted/40 dark:bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                         <div className="space-y-0.5">
                             <p className="font-semibold text-foreground">
-                                Gaming PC ({pc?.lanIp || "192.168.10.78"}) is currently offline or asleep
+                                Gaming PC ({pc?.lanIp || "192.168.10.246"}) is currently offline or asleep
                             </p>
                             <p className="text-[11px] text-muted-foreground">
                                 AI workloads automatically fail over to the phone cluster or built-in engine. If awake, ensure{" "}
