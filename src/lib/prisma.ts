@@ -2625,7 +2625,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         }
       }
 
-      // 1b. Subscription Expiration & Renewal Warnings (Evaluated hourly with milestone deduplication)
+      // 1b. Subscription Expiration & Renewal Warnings (Evaluated hourly with milestone deduplication; blocked on dev/beta)
       if (!(global as any).__PORTALARR_RENEWAL_REMINDERS_RUNNING) {
         const lastReminderCheck = (global as any).__PORTALARR_LAST_RENEWAL_REMINDER_TIME || 0;
         if (now.getTime() - lastReminderCheck >= 60 * 60 * 1000) {
@@ -2633,6 +2633,8 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           (global as any).__PORTALARR_RENEWAL_REMINDERS_RUNNING = true;
           (async () => {
             try {
+              const { getNonProdAutomaticEmailBlockReason } = await import("./version");
+              if (getNonProdAutomaticEmailBlockReason()) return;
               const { sendSubscriptionRenewalRemindersInternal } = await import("../app/payment-actions");
               await sendSubscriptionRenewalRemindersInternal();
             } catch (remErr: any) {
@@ -2644,7 +2646,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         }
       }
 
-      // 1c. Annual Thanksgiving Recap Broadcast (Saturday before Thanksgiving, once per year)
+      // 1c. Annual Thanksgiving Recap Broadcast (Saturday before Thanksgiving, once per year; blocked on dev/beta)
       if (!(global as any).__PORTALARR_ANNUAL_RECAP_RUNNING) {
         const lastAnnualCheck = (global as any).__PORTALARR_LAST_ANNUAL_RECAP_CHECK || 0;
         if (now.getTime() - lastAnnualCheck >= 60 * 60 * 1000) {
@@ -2652,6 +2654,8 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           (global as any).__PORTALARR_ANNUAL_RECAP_RUNNING = true;
           (async () => {
             try {
+              const { getNonProdAutomaticEmailBlockReason } = await import("./version");
+              if (getNonProdAutomaticEmailBlockReason()) return;
               const { sendAnnualThanksgivingRecapInternal } = await import("./annual-recap");
               await sendAnnualThanksgivingRecapInternal({ now });
             } catch (annualErr: any) {

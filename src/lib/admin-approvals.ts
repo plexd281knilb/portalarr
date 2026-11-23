@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 import { decryptData } from "@/lib/encryption";
 import { postDiscordMessage, type DiscordEmbed } from "@/lib/discord/discord-bot";
 import { wrapInPortalarrEmailLayout, renderEmailTemplate, resolveSenderAddress, resolveEmailProviderConfig } from "@/lib/email-templates";
+import { getNonProdAutomaticEmailBlockReason } from "@/lib/version";
 import nodemailer from "nodemailer";
 
 export interface ApprovalNotifyResult {
@@ -106,6 +107,12 @@ export async function notifyAdminsOnPendingApproval(approval: {
         }
 
         // 2. SMTP / RESEND ADMIN EMAIL ALERT
+        const nonProdEmailBlock = getNonProdAutomaticEmailBlockReason();
+        if (nonProdEmailBlock) {
+            logger.addLog("INFO", "EMAIL", `[NON-PROD-EMAIL-GUARD] ${nonProdEmailBlock} — suppressed admin approval alert for "${approval.title}"`);
+            return { success: true, adminsNotified: 0, discordNotified };
+        }
+
         const emailConfig = resolveEmailProviderConfig(settings);
 
         if (

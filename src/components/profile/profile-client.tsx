@@ -57,6 +57,7 @@ import FeatureGuideModal from "@/components/feature-guide-modal";
 import PlexSetupGuides from "@/components/plex-setup-guides";
 import SuperUserCard from "@/components/super-user-card";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
+import { PaymentImportantNotice } from "@/components/payment-important-notice";
 import { BillingCadenceSwitcher } from "@/components/billing-cadence-switcher";
 import { UserMediaServersManager, UserMediaServersManagerHandle } from "@/components/profile/user-media-servers-manager";
 import { LinkedEmailsManager } from "@/components/profile/linked-emails-manager";
@@ -1322,7 +1323,9 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
     const userCreditBalance = Math.max(0, Number(user?.accountCredit || 0));
     const profileCadence: "yearly" | "monthly" = user?.subscriptionCadence === "MONTHLY" ? "monthly" : "yearly";
     const rawProfileTargetAmount = isTrial
-        ? (activeTrialProrated?.amountDueNow ?? effectiveYearlyPrice)
+        ? (profileCadence === "monthly"
+            ? (activeTrialProrated?.monthlyAmountDueNow ?? effectiveMonthlyPrice)
+            : (activeTrialProrated?.amountDueNow ?? effectiveYearlyPrice))
         : profileCadence === "monthly"
         ? effectiveMonthlyPrice
         : (referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice);
@@ -1563,10 +1566,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         </div>
                         <div className="flex items-center gap-2">
                             <FeatureGuideModal guideId="referral-rewards" triggerText="Referral & Billing Guide" />
-                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-xs font-bold w-fit">
+                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-xs font-bold w-fit tabular-nums">
                                 {user?.subscriptionCadence === "MONTHLY"
-                                    ? `$${effectiveMonthlyPrice} / month`
-                                    : `$${effectiveYearlyPrice} / year`}
+                                    ? `$${effectiveMonthlyPrice.toFixed(2)} / month`
+                                    : `$${effectiveYearlyPrice.toFixed(2)} / year`}
                             </Badge>
                         </div>
                     </div>
@@ -1653,18 +1656,30 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     <p className="text-[10px] text-muted-foreground">Ends {safeFormatDate(user?.trialEndsAt, "MMM d, yyyy")}</p>
                                 </div>
                                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
-                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">1st Year Prorated</span>
-                                    <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">{activeTrialProrated.amountDueText}</p>
-                                    <p className="text-[10px] text-muted-foreground">{activeTrialProrated.remainingMonthsText}</p>
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
+                                        {profileCadence === "monthly" ? "1st Month Prorated" : "1st Year Prorated"}
+                                    </span>
+                                    <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">
+                                        {profileCadence === "monthly" ? activeTrialProrated.monthlyAmountDueText : activeTrialProrated.amountDueText}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        {profileCadence === "monthly" ? `Covers through ${activeTrialProrated.nextMonthlyRenewalDate}` : activeTrialProrated.remainingMonthsText}
+                                    </p>
                                 </div>
                                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
-                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Renewal</span>
-                                    <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">${effectiveYearlyPrice} / yr</p>
-                                    <p className="text-[10px] text-muted-foreground">Renews {activeTrialProrated.nextRenewalDate}</p>
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
+                                        {profileCadence === "monthly" ? "Monthly Renewal" : "Annual Renewal"}
+                                    </span>
+                                    <p className="font-bold text-amber-800 dark:text-amber-300 text-sm tabular-nums">
+                                        {profileCadence === "monthly" ? `$${effectiveMonthlyPrice.toFixed(2)} / mo` : `$${effectiveYearlyPrice} / yr`}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        Renews {profileCadence === "monthly" ? activeTrialProrated.nextMonthlyRenewalDate : activeTrialProrated.nextRenewalDate}
+                                    </p>
                                 </div>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                {activeTrialProrated.breakdownSummary}
+                                {profileCadence === "monthly" ? activeTrialProrated.monthlyBreakdownSummary : activeTrialProrated.breakdownSummary}
                             </p>
                         </div>
                     ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
@@ -1725,20 +1740,15 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         </div>
                     )}
 
+                    <PaymentImportantNotice
+                        username={user?.username}
+                        instructions={paymentConfig?.paymentInstructions}
+                    />
+
                     {/* PAYMENT HANDLES & MODAL */}
                     <div className="pt-2 border-t border-border/40">
                         <PaymentMethodsGrid config={paymentConfig} username={user?.username} membershipTier={user?.membershipTier} amount={profileEffectiveAmountDue > 0 ? profileEffectiveAmountDue : undefined} cadence={profileCadence} />
                     </div>
-
-                    {paymentConfig?.paymentInstructions && (
-                        <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
-                            {paymentConfig.paymentInstructions}
-                        </div>
-                    )}
-
-                    <p className="text-[11px] text-muted-foreground pt-1">
-                        When making a payment, remember to include your username <strong className="text-foreground">({user?.username})</strong> in the payment memo.
-                    </p>
                 </CardContent>
             </Card>
 

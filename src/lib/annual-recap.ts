@@ -3,6 +3,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
 import { isPlexMaintenanceWindow } from "@/lib/curation/schedule-helper";
+import { getNonProdAutomaticEmailBlockReason } from "@/lib/version";
 
 const MONTH_NAMES = [
     "January", "February", "March", "April", "May", "June",
@@ -317,6 +318,11 @@ export async function sendAnnualThanksgivingRecapInternal(options?: {
     }
 
     if (!force) {
+        const nonProdBlock = getNonProdAutomaticEmailBlockReason();
+        if (nonProdBlock) {
+            logger.addLog("INFO", "EMAIL", `[NON-PROD-EMAIL-GUARD] ${nonProdBlock} — skipped automatic Annual Thanksgiving Recap sweep.`);
+            return { success: true, skipped: true, reason: nonProdBlock, total: 0, sent: 0, queued: 0, failed: 0 };
+        }
         if (!settings.emailNotificationsEnabled || settings.notifyAnnualThanksgivingRecap === false) {
             return { success: true, skipped: true, reason: "Annual Thanksgiving Recap email automation is disabled.", total: 0, sent: 0, queued: 0, failed: 0 };
         }

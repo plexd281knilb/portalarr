@@ -1351,10 +1351,17 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
     success: boolean;
     scannedUsers: number;
     remindersSent: number;
+    blockedByNonProdGuard?: boolean;
     details: Array<{ username: string; plan: string; milestone: string; daysRemaining: number }>;
 }> {
     if (await isDirectExternalServerActionCall()) {
         await verifyAdmin();
+    }
+    const { getNonProdAutomaticEmailBlockReason } = await import("@/lib/version");
+    const nonProdBlock = getNonProdAutomaticEmailBlockReason();
+    if (nonProdBlock) {
+        logger.addLog("INFO", "EMAIL", `[NON-PROD-EMAIL-GUARD] ${nonProdBlock} — skipped automated renewal reminder sweep.`);
+        return { success: true, scannedUsers: 0, remindersSent: 0, blockedByNonProdGuard: true, details: [] };
     }
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
     if (!settings || !settings.emailNotificationsEnabled || settings.notifySubscriptionRenewal === false) {
@@ -1649,7 +1656,9 @@ export async function triggerSubscriptionRenewalCheckAction() {
             remindersSent: result.remindersSent,
             scannedUsers: result.scannedUsers,
             details: result.details,
-            message: result.remindersSent > 0
+            message: result.blockedByNonProdGuard
+                ? "Automatic renewal reminder emails are blocked on dev/beta builds to prevent accidental customer emails."
+                : result.remindersSent > 0
                 ? `Dispatched ${result.remindersSent} advance renewal reminder(s) across ${result.scannedUsers} member(s).`
                 : `Scan complete: Checked ${result.scannedUsers} active member(s). No renewal reminders due at this time.`
         };

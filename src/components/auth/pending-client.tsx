@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
+import { PaymentImportantNotice } from "@/components/payment-important-notice";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { Clock, MailCheck, LogOut, RefreshCw, ShieldAlert, AlertTriangle, CreditCard, DollarSign, Copy, Check, Calendar } from "lucide-react";
 import { withTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
@@ -165,8 +166,8 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                   <CreditCard className="h-4 w-4" />
                   <span>Choose Your Reactivation Plan</span>
                 </div>
-                <Badge variant="outline" className="bg-orange-500/20 text-orange-800 dark:text-orange-300 border-orange-500/40 text-xs font-bold">
-                  {selectedCadence === "yearly" ? `$${yearlyPrice} / yr` : `$${monthlyPrice} / mo`}
+                <Badge variant="outline" className="bg-orange-500/20 text-orange-800 dark:text-orange-300 border-orange-500/40 text-xs font-bold tabular-nums">
+                  {selectedCadence === "yearly" ? `$${yearlyPrice} / yr` : `$${Number(monthlyPrice).toFixed(2)} / mo`}
                 </Badge>
               </div>
 
@@ -210,11 +211,11 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                       Flexible
                     </Badge>
                   </div>
-                  <div className="text-base font-extrabold text-foreground">
-                    ${monthlyPrice} <span className="text-xs font-normal text-muted-foreground">/ mo</span>
+                  <div className="text-base font-extrabold text-foreground tabular-nums">
+                    ${Number(monthlyPrice).toFixed(2)} <span className="text-xs font-normal text-muted-foreground">/ mo</span>
                   </div>
-                  <div className="text-[11px] text-sky-700 dark:text-sky-400 font-medium mt-0.5">
-                    {prorated?.monthlyAmountDueText || `$${monthlyPrice}/mo due now`}
+                  <div className="text-[11px] text-sky-700 dark:text-sky-400 font-medium mt-0.5 tabular-nums">
+                    {prorated?.monthlyAmountDueText || `$${Number(monthlyPrice).toFixed(2)}/mo due now`}
                   </div>
                 </button>
               </div>
@@ -255,24 +256,23 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                       </span>
                       <span className="text-[10px] font-bold text-sky-700 dark:text-sky-400">Flexible Month-to-Month</span>
                     </div>
-                    <p className="text-base font-black text-foreground">
-                      {prorated?.monthlyAmountDueText || `$${monthlyPrice}.00 / month`}
+                    <p className="text-base font-black text-foreground tabular-nums">
+                      {prorated?.monthlyAmountDueText || `$${Number(monthlyPrice).toFixed(2)} / month`}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
                       Flexible month-to-month access, cancel anytime.
                     </p>
                   </div>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    {prorated?.monthlyBreakdownSummary || `Following your initial payment, the subscription renews monthly at $${monthlyPrice}/month on the 1st of each month.`}
+                    {prorated?.monthlyBreakdownSummary || `Following your initial payment, the subscription renews monthly at $${Number(monthlyPrice).toFixed(2)}/month on the 1st of each month.`}
                   </p>
                 </div>
               )}
 
-              {paymentConfig?.paymentInstructions && (
-                <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
-                  {paymentConfig.paymentInstructions}
-                </div>
-              )}
+              <PaymentImportantNotice
+                username={user?.username}
+                instructions={paymentConfig?.paymentInstructions}
+              />
 
               {/* PAYMENT HANDLES */}
               <div className="pt-1 border-t border-orange-500/20">
@@ -284,10 +284,6 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                   cadence={selectedCadence} 
                 />
               </div>
-
-              <p className="text-[11px] text-muted-foreground pt-1">
-                Include your username <strong className="text-foreground">({user?.username})</strong> in the payment note. Once received, your access will be restored immediately.
-              </p>
             </div>
           ) : isRejected ? (
             <div className="bg-red-500/5 border border-red-500/20 p-4 rounded-xl text-xs text-muted-foreground leading-relaxed">

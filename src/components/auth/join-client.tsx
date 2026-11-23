@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
+import { PaymentImportantNotice } from "@/components/payment-important-notice";
 import { 
     Sparkles, Gift, CheckCircle2, ChevronRight, ChevronLeft, Tv, Tv2, 
     Flame, Monitor, Smartphone, Globe, Shield, ShieldCheck, User, Mail, Lock, 
@@ -62,6 +63,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
     // Setup Guides state
     const [guides, setGuides] = useState<any[]>(initialGuides || []);
     const [activeGuideTab, setActiveGuideTab] = useState("appletv");
+    const [selectedPlanCadence, setSelectedPlanCadence] = useState<"yearly" | "monthly">("yearly");
 
     useEffect(() => {
         if (refParam) {
@@ -412,8 +414,8 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                                     Flexible
                                                 </Badge>
                                             </div>
-                                            <div className="text-lg font-black text-foreground pt-1">
-                                                ${config?.monthlyPrice ?? 17.50} <span className="text-xs font-normal text-muted-foreground">/ month</span>
+                                            <div className="text-lg font-black text-foreground pt-1 tabular-nums">
+                                                ${Number(config?.monthlyPrice ?? 17.50).toFixed(2)} <span className="text-xs font-normal text-muted-foreground">/ month</span>
                                             </div>
                                             <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
                                                 Pay-as-you-go month-to-month pass. Flexible and cancelable at any time.
@@ -793,47 +795,65 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                     </Badge>
                                 </div>
 
-                                {/* TWO PLAN CARDS: MONTHLY VS ANNUAL */}
+                                {/* TWO INTERACTIVE PLAN CARDS: MONTHLY VS ANNUAL */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     {/* MONTHLY PLAN CARD */}
-                                    <div className="p-3.5 rounded-xl bg-amber-500/[0.04] border border-amber-500/25 space-y-1.5 flex flex-col justify-between">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedPlanCadence("monthly")}
+                                        aria-pressed={selectedPlanCadence === "monthly"}
+                                        className={`p-3.5 rounded-xl border text-left space-y-1.5 flex flex-col justify-between transition-all cursor-pointer ${
+                                            selectedPlanCadence === "monthly"
+                                                ? "bg-amber-500/10 border-amber-500 ring-1 ring-amber-500/40 shadow-sm"
+                                                : "bg-amber-500/[0.04] border-amber-500/25 hover:border-amber-500/50"
+                                        }`}
+                                    >
                                         <div>
-                                            <div className="flex items-center justify-between">
+                                            <div className="flex items-center justify-between gap-2">
                                                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                                     <Calendar className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Monthly Plan
                                                 </span>
                                                 <Badge variant="outline" className="text-[10px] text-amber-800 dark:text-amber-300 border-amber-500/30">
-                                                    Flexible
+                                                    {selectedPlanCadence === "monthly" ? "Selected" : "Flexible"}
                                                 </Badge>
                                             </div>
-                                            <div className="text-xl font-black text-foreground pt-1">
-                                                {config?.proratedBilling?.monthlyAmountDueText || `${config?.monthlyPrice || 17.50}/mo`}
+                                            <div className="text-xl font-black text-foreground pt-1 tabular-nums">
+                                                {config?.proratedBilling?.monthlyAmountDueText || `$${Number(config?.monthlyPrice ?? 17.50).toFixed(2)}/mo`}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
-                                                {config?.proratedBilling?.monthlyBreakdownSummary || "Prorated for remaining days in current month, then $17.50/month."}
+                                                {config?.proratedBilling?.monthlyBreakdownSummary || `Prorated for remaining days in current month, then $${Number(config?.monthlyPrice ?? 17.50).toFixed(2)}/month.`}
                                             </p>
                                         </div>
-                                    </div>
+                                    </button>
 
                                     {/* ANNUAL REST-OF-YEAR PLAN CARD */}
-                                    <div className="p-3.5 rounded-xl bg-emerald-500/[0.04] border border-emerald-500/25 space-y-1.5 flex flex-col justify-between">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedPlanCadence("yearly")}
+                                        aria-pressed={selectedPlanCadence === "yearly"}
+                                        className={`p-3.5 rounded-xl border text-left space-y-1.5 flex flex-col justify-between transition-all cursor-pointer ${
+                                            selectedPlanCadence === "yearly"
+                                                ? "bg-emerald-500/10 border-emerald-500 ring-1 ring-emerald-500/40 shadow-sm"
+                                                : "bg-emerald-500/[0.04] border-emerald-500/25 hover:border-emerald-500/50"
+                                        }`}
+                                    >
                                         <div>
-                                            <div className="flex items-center justify-between">
+                                            <div className="flex items-center justify-between gap-2">
                                                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                                     <DollarSign className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Rest of Year (Annual Pass)
                                                 </span>
                                                 <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
-                                                    Best Value
+                                                    {selectedPlanCadence === "yearly" ? "Selected" : "Best Value"}
                                                 </Badge>
                                             </div>
-                                            <div className="text-xl font-black text-emerald-700 dark:text-emerald-400 pt-1">
+                                            <div className="text-xl font-black text-emerald-700 dark:text-emerald-400 pt-1 tabular-nums">
                                                 {config?.proratedBilling?.amountDueText || `$${config?.yearlyPrice ?? 180}/yr`}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
                                                 {config?.proratedBilling?.yearlyBreakdownText || "Prorated through the remainder of the calendar year."}
                                             </p>
                                         </div>
-                                    </div>
+                                    </button>
                                 </div>
 
                                 {config?.proratedBilling ? (
@@ -866,20 +886,25 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                     </p>
                                 )}
 
+                                <PaymentImportantNotice
+                                    username={username}
+                                    instructions={config?.paymentInstructions}
+                                    trialDisclaimer={true}
+                                />
+
                                 {/* PAYMENT METHODS GRID */}
                                 <div className="pt-2 border-t border-border/40">
-                                    <PaymentMethodsGrid config={config} username={username} />
+                                    <PaymentMethodsGrid
+                                        config={config}
+                                        username={username}
+                                        cadence={selectedPlanCadence}
+                                        amount={
+                                            selectedPlanCadence === "monthly"
+                                                ? (config?.proratedBilling?.monthlyAmountDueNow ?? config?.monthlyPrice ?? 17.50)
+                                                : (config?.proratedBilling?.amountDueNow ?? config?.yearlyPrice ?? 180)
+                                        }
+                                    />
                                 </div>
-
-                                {config?.paymentInstructions && (
-                                    <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
-                                        {config.paymentInstructions}
-                                    </div>
-                                )}
-
-                                <p className="text-[11px] text-muted-foreground pt-1">
-                                    No payment up front for your trial. When submitting future renewal payments, please include your username <strong className="text-foreground">({username || "your account name"})</strong> in the note or memo.
-                                </p>
                             </div>
                         </CardContent>
 

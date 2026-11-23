@@ -4857,6 +4857,341 @@ async function runTestSuite() {
         }
     });
 
+    // =========================================================================
+    // SUITE 30: Non-Production (dev & beta) Automatic Outbound Email Block
+    // =========================================================================
+    await assertTest("Suite 30: Non-Production (dev & beta) Automatic Email Guard", async () => {
+        const { getBuildTelemetry, getNonProdAutomaticEmailBlockReason } = await import("../src/lib/version");
+        const { sendOrQueueEmail } = await import("../src/lib/email-dispatcher");
+        const { notifyAdminsOnPendingApproval } = await import("../src/lib/admin-approvals");
+        const { sendSubscriptionRenewalRemindersInternal } = await import("../src/app/payment-actions");
+        const { sendAnnualThanksgivingRecapInternal } = await import("../src/lib/annual-recap");
+        const { encryptData } = await import("../src/lib/encryption");
+
+        const prevGitBranch = process.env.GIT_BRANCH;
+        const prevPublicGitBranch = process.env.NEXT_PUBLIC_GIT_BRANCH;
+        const originalSettings = await prisma.settings.findUnique({ where: { id: "global" } });
+
+        const marker = `nonprod_guard_${Date.now()}`;
+        const guardAdmin = await prisma.user.create({
+            data: {
+                username: `${marker}_admin`,
+                email: `${marker}_admin@example.com`,
+                password: "hash",
+                role: "ADMIN",
+                status: "APPROVED",
+                membershipTier: "ADMIN"
+            }
+        });
+        const expiringMember = await prisma.user.create({
+            data: {
+                username: `${marker}_member`,
+                email: `${marker}_member@example.com`,
+                password: "hash",
+                role: "USER",
+                status: "APPROVED",
+                membershipTier: "STANDARD",
+                subscriptionCadence: "MONTHLY",
+                subscriptionEndsAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+            }
+        });
+        const dummyApproval = await prisma.adminApproval.create({
+            data: {
+                type: "EMAIL",
+                status: "PENDING",
+                title: `Guard Test Approval ${marker}`,
+                description: "Verify dev/beta never auto-emails admins",
+                targetUser: expiringMember.username,
+                targetEmail: expiringMember.email,
+                userId: expiringMember.id,
+                payload: "{}"
+            }
+        });
+
+        try {
+            // Simulate a mounted prod database: global emails enabled, approval bypass disabled, and SMTP configured
+            // Note: SMTP points strictly to localhost port 1 so no external mail server could ever be contacted even on failure
+            const mockSmtpData = {
+                emailNotificationsEnabled: true,
+                requireApprovalForEmails: false,
+                adminApprovalEmailNotify: true,
+                notifySubscriptionRenewal: true,
+                notifyAnnualThanksgivingRecap: true,
+                emailProviderMode: "custom",
+                smtpHost: "127.0.0.1",
+                smtpPort: 1,
+                smtpUser: `${marker}_admin@example.com`,
+                smtpPass: encryptData("guard-test-pass"),
+                smtpFrom: `${marker}_admin@example.com`,
+                customSmtpHost: "127.0.0.1",
+                customSmtpPort: 1,
+                customSmtpUser: `${marker}_admin@example.com`,
+                customSmtpPass: encryptData("guard-test-pass"),
+                customSmtpFrom: `${marker}_admin@example.com`
+            };
+            await prisma.settings.upsert({
+                where: { id: "global" },
+                update: mockSmtpData,
+                create: { id: "global", ...mockSmtpData }
+            });
+
+            delete process.env.NEXT_PUBLIC_GIT_BRANCH;
+
+            for (const branchChannel of ["dev", "beta"] as const) {
+                process.env.GIT_BRANCH = branchChannel;
+                const telemetry = getBuildTelemetry();
+                if (telemetry.channel !== branchChannel) {
+                    throw new Error(`Expected channel="${branchChannel}" for GIT_BRANCH="${branchChannel}", got "${telemetry.channel}"`);
+                }
+                const blockReason = getNonProdAutomaticEmailBlockReason();
+                if (!blockReason) {
+                    throw new Error(`Expected getNonProdAutomaticEmailBlockReason() to return non-null for "${branchChannel}"`);
+                }
+
+                // 1. Direct/bypass automatic dispatch must be suppressed
+                const directAutoRes = await sendOrQueueEmail({
+                    to: expiringMember.email!,
+                    subject: `Direct Auto Test ${marker}`,
+                    html: "<p>Should never send on dev/beta</p>",
+                    templateId: "welcome",
+                    targetUser: expiringMember.username,
+                    userId: expiringMember.id,
+                    bypassApproval: true
+                });
+                if (!directAutoRes.success || directAutoRes.sent || directAutoRes.queued || !directAutoRes.blockedByNonProdGuard) {
+                    throw new Error(`Expected direct auto email to be blocked on ${branchChannel}, got: ${JSON.stringify(directAutoRes)}`);
+                }
+
+                // 2. Admin-only alert template must be suppressed
+                const adminAutoRes = await sendOrQueueEmail({
+                    to: guardAdmin.email!,
+                    subject: `Admin Alert ${marker}`,
+                    html: "<p>Admin alert should not send via SMTP on dev/beta</p>",
+                    templateId: "admin_payment_received",
+                    targetUser: guardAdmin.username,
+                    userId: guardAdmin.id
+                });
+                if (!adminAutoRes.success || adminAutoRes.sent || !adminAutoRes.blockedByNonProdGuard) {
+                    throw new Error(`Expected admin auto email to be blocked on ${branchChannel}, got: ${JSON.stringify(adminAutoRes)}`);
+                }
+
+                // 3. Pending approval admin SMTP notifier must send 0 emails
+                const approvalNotifyRes = await notifyAdminsOnPendingApproval({
+                    id: dummyApproval.id,
+                    type: dummyApproval.type,
+                    title: dummyApproval.title,
+                    description: dummyApproval.description,
+                    targetUser: dummyApproval.targetUser,
+                    targetEmail: dummyApproval.targetEmail,
+                    userId: dummyApproval.userId,
+                    payload: dummyApproval.payload
+                });
+                if (!approvalNotifyRes.success || approvalNotifyRes.adminsNotified !== 0) {
+                    throw new Error(`Expected 0 admins notified via SMTP on ${branchChannel}, got: ${JSON.stringify(approvalNotifyRes)}`);
+                }
+
+                // 4. Renewal reminders scheduler runner must skip on dev/beta
+                const renewalRes = await sendSubscriptionRenewalRemindersInternal();
+                if (!renewalRes.success || !renewalRes.blockedByNonProdGuard || renewalRes.remindersSent !== 0) {
+                    throw new Error(`Expected renewal reminder sweep blocked on ${branchChannel}, got: ${JSON.stringify(renewalRes)}`);
+                }
+
+                // 5. Annual Thanksgiving recap scheduler runner must skip automatically on dev/beta (even during the active window)
+                const activeWindowDate = new Date(2026, 10, 21, 12, 0, 0); // Saturday before Thanksgiving 2026
+                const annualRes = await sendAnnualThanksgivingRecapInternal({ force: false, now: activeWindowDate });
+                if (!annualRes.success || !annualRes.skipped || annualRes.sent !== 0 || annualRes.queued !== 0) {
+                    throw new Error(`Expected automatic annual recap skipped on ${branchChannel}, got: ${JSON.stringify(annualRes)}`);
+                }
+            }
+
+            // 6. Verify 0 SentEmailLog rows were written with our marker
+            const sentCount = await prisma.sentEmailLog.count({
+                where: { subject: { contains: marker } }
+            });
+            if (sentCount !== 0) {
+                throw new Error(`Expected 0 SentEmailLog entries on dev/beta, found ${sentCount}`);
+            }
+
+            // 7. Verify stable ("prod") channel lifts the non-prod block
+            process.env.GIT_BRANCH = "prod";
+            if (getBuildTelemetry().channel !== "stable") {
+                throw new Error(`Expected channel="stable" for GIT_BRANCH="prod"`);
+            }
+            if (getNonProdAutomaticEmailBlockReason() !== null) {
+                throw new Error("Expected getNonProdAutomaticEmailBlockReason() to return null on prod/stable");
+            }
+        } finally {
+            if (prevGitBranch !== undefined) process.env.GIT_BRANCH = prevGitBranch;
+            else delete process.env.GIT_BRANCH;
+            if (prevPublicGitBranch !== undefined) process.env.NEXT_PUBLIC_GIT_BRANCH = prevPublicGitBranch;
+            else delete process.env.NEXT_PUBLIC_GIT_BRANCH;
+
+            if (originalSettings) {
+                await prisma.settings.update({
+                    where: { id: "global" },
+                    data: {
+                        emailNotificationsEnabled: originalSettings.emailNotificationsEnabled,
+                        requireApprovalForEmails: originalSettings.requireApprovalForEmails,
+                        adminApprovalEmailNotify: originalSettings.adminApprovalEmailNotify,
+                        notifySubscriptionRenewal: originalSettings.notifySubscriptionRenewal,
+                        notifyAnnualThanksgivingRecap: originalSettings.notifyAnnualThanksgivingRecap,
+                        emailProviderMode: originalSettings.emailProviderMode,
+                        smtpHost: originalSettings.smtpHost,
+                        smtpPort: originalSettings.smtpPort,
+                        smtpUser: originalSettings.smtpUser,
+                        smtpPass: originalSettings.smtpPass,
+                        smtpFrom: originalSettings.smtpFrom,
+                        customSmtpHost: originalSettings.customSmtpHost,
+                        customSmtpPort: originalSettings.customSmtpPort,
+                        customSmtpUser: originalSettings.customSmtpUser,
+                        customSmtpPass: originalSettings.customSmtpPass,
+                        customSmtpFrom: originalSettings.customSmtpFrom
+                    }
+                }).catch(() => {});
+            }
+            await prisma.sentEmailLog.deleteMany({ where: { subject: { contains: marker } } }).catch(() => {});
+            await prisma.adminApproval.delete({ where: { id: dummyApproval.id } }).catch(() => {});
+            await prisma.user.delete({ where: { id: expiringMember.id } }).catch(() => {});
+            await prisma.user.delete({ where: { id: guardAdmin.id } }).catch(() => {});
+        }
+    });
+
+    // =========================================================================
+    // SUITE 31: Monthly vs Yearly Payment Links, Automations & Cadence Parity
+    // =========================================================================
+    await assertTest("Suite 31: Monthly vs Yearly Payment Methods & Automations", async () => {
+        const { getPaymentLink } = await import("../src/lib/payment-links");
+        const { evaluatePaymentThreshold } = await import("../src/lib/payment-threshold-engine");
+        const { calculateProratedBilling } = await import("../src/lib/prorated-billing");
+        const { setUserTrialOrSubscription } = await import("../src/app/actions");
+        const { updateUserSubscriptionCadenceAction } = await import("../src/app/payment-actions");
+
+        // 1. Payment deep links for Venmo, PayPal, Cash App, Zelle (Monthly vs Yearly amounts + memos)
+        const providers: Array<"venmo" | "paypal" | "cashapp" | "zelle"> = ["venmo", "paypal", "cashapp", "zelle"];
+        const handles: Record<string, string> = {
+            venmo: "@test-venmo",
+            paypal: "testpaypal",
+            cashapp: "$testcash",
+            zelle: "billing@example.com"
+        };
+        for (const cadence of ["monthly", "yearly"] as const) {
+            const amt = cadence === "monthly" ? 17.50 : 180.00;
+            for (const p of providers) {
+                const info = getPaymentLink(p, handles[p], { username: "cadenceTester", amount: amt, cadence });
+                if (!info) throw new Error(`Expected payment link for ${p} (${cadence})`);
+                if (info.memoTag !== "cadenceTester") {
+                    throw new Error(`Expected memoTag="cadenceTester" for ${p}, got "${info.memoTag}"`);
+                }
+                const expectedStr = amt.toFixed(2);
+                const encodedCheck = p === "zelle" ? encodeURIComponent(expectedStr) : expectedStr;
+                if (!info.url.includes(encodedCheck)) {
+                    throw new Error(`Expected ${p} (${cadence}) link URL to include amount ${encodedCheck}, got ${info.url}`);
+                }
+            }
+        }
+
+        // 2. Payment threshold engine for Standard + Tier 2 VIP Monthly vs Yearly
+        const baseSettings = { yearlyPrice: 180, monthlyPrice: 17.50, tier2YearlyPrice: 240, tier2MonthlyPrice: 25 };
+        const payDate = new Date(2026, 4, 10, 12, 0, 0);
+
+        const stdMonthly = evaluatePaymentThreshold({
+            user: { id: "u1", username: "std1", status: "TRIAL", membershipTier: "STANDARD", subscriptionCadence: "MONTHLY" },
+            payment: { amount: 17.50, emailDate: payDate, provider: "VENMO" },
+            settings: baseSettings
+        });
+        if (stdMonthly.action !== "FULL_MONTHLY" || stdMonthly.cadence !== "MONTHLY") {
+            throw new Error(`Expected Standard $17.50 -> FULL_MONTHLY, got ${JSON.stringify(stdMonthly)}`);
+        }
+
+        const stdYearly = evaluatePaymentThreshold({
+            user: { id: "u1", username: "std1", status: "TRIAL", membershipTier: "STANDARD", subscriptionCadence: "YEARLY" },
+            payment: { amount: 180, emailDate: payDate, provider: "VENMO" },
+            settings: baseSettings
+        });
+        if (stdYearly.action !== "FULL_YEARLY" || stdYearly.cadence !== "YEARLY") {
+            throw new Error(`Expected Standard $180 -> FULL_YEARLY, got ${JSON.stringify(stdYearly)}`);
+        }
+
+        const vipMonthly = evaluatePaymentThreshold({
+            user: { id: "u2", username: "vip1", status: "APPROVED", membershipTier: "TIER_2_VIP", subscriptionCadence: "MONTHLY" },
+            payment: { amount: 25, emailDate: payDate, provider: "PAYPAL" },
+            settings: baseSettings
+        });
+        if (vipMonthly.action !== "FULL_MONTHLY" || vipMonthly.cadence !== "MONTHLY") {
+            throw new Error(`Expected Tier 2 VIP $25 -> FULL_MONTHLY, got ${JSON.stringify(vipMonthly)}`);
+        }
+
+        const vipYearly = evaluatePaymentThreshold({
+            user: { id: "u2", username: "vip1", status: "APPROVED", membershipTier: "TIER_2_VIP", subscriptionCadence: "YEARLY" },
+            payment: { amount: 240, emailDate: payDate, provider: "PAYPAL" },
+            settings: baseSettings
+        });
+        if (vipYearly.action !== "FULL_YEARLY" || vipYearly.cadence !== "YEARLY") {
+            throw new Error(`Expected Tier 2 VIP $240 -> FULL_YEARLY, got ${JSON.stringify(vipYearly)}`);
+        }
+
+        // Explicit MONTHLY subscriber paying 2 months ($35.00) must get 2 months Monthly, NOT partial yearly
+        const twoMonths = evaluatePaymentThreshold({
+            user: { id: "u3", username: "mo2", status: "APPROVED", membershipTier: "STANDARD", subscriptionCadence: "MONTHLY" },
+            payment: { amount: 35, emailDate: payDate, provider: "ZELLE" },
+            settings: baseSettings
+        });
+        if (twoMonths.action !== "FULL_MONTHLY" || twoMonths.monthsGranted !== 2) {
+            throw new Error(`Expected 2x monthly ($35) -> FULL_MONTHLY with 2 monthsGranted, got ${JSON.stringify(twoMonths)}`);
+        }
+
+        // 3. Prorated billing calculations produce consistent Monthly & Yearly due amounts
+        const prorated = calculateProratedBilling({
+            startDate: payDate,
+            trialDays: 14,
+            yearlyPrice: 180,
+            monthlyPrice: 17.50
+        });
+        if (!(prorated.amountDueNow > 0 && prorated.amountDueNow <= 180)) {
+            throw new Error(`Invalid prorated yearly amountDueNow: ${prorated.amountDueNow}`);
+        }
+        if (!(prorated.monthlyAmountDueNow > 0 && prorated.monthlyAmountDueNow <= 17.50)) {
+            throw new Error(`Invalid prorated monthlyAmountDueNow: ${prorated.monthlyAmountDueNow}`);
+        }
+
+        // 4. Admin Monthly/Yearly grant & cadence update actions persist properly
+        const subUser = await prisma.user.create({
+            data: {
+                username: `cad_auto_${Date.now()}`,
+                email: `cad_auto_${Date.now()}@example.com`,
+                password: "hash",
+                status: "TRIAL",
+                role: "USER",
+                membershipTier: "STANDARD",
+                trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            }
+        });
+        try {
+            const grant30 = await setUserTrialOrSubscription(subUser.id, "30_DAYS");
+            if (!grant30.success) throw new Error(`setUserTrialOrSubscription(30_DAYS) failed: ${grant30.error}`);
+            const after30 = await prisma.user.findUnique({ where: { id: subUser.id }, select: { subscriptionCadence: true, status: true } });
+            if (after30?.subscriptionCadence !== "MONTHLY" || after30?.status !== "APPROVED") {
+                throw new Error(`Expected 30_DAYS to set MONTHLY/APPROVED, got ${JSON.stringify(after30)}`);
+            }
+
+            const grant1Y = await setUserTrialOrSubscription(subUser.id, "1_YEAR");
+            if (!grant1Y.success) throw new Error(`setUserTrialOrSubscription(1_YEAR) failed: ${grant1Y.error}`);
+            const after1Y = await prisma.user.findUnique({ where: { id: subUser.id }, select: { subscriptionCadence: true, status: true } });
+            if (after1Y?.subscriptionCadence !== "YEARLY" || after1Y?.status !== "APPROVED") {
+                throw new Error(`Expected 1_YEAR to set YEARLY/APPROVED, got ${JSON.stringify(after1Y)}`);
+            }
+
+            const switchMo = await updateUserSubscriptionCadenceAction(subUser.id, "MONTHLY");
+            if (!switchMo.success) throw new Error(`updateUserSubscriptionCadenceAction(MONTHLY) failed: ${switchMo.error}`);
+            const afterSwitch = await prisma.user.findUnique({ where: { id: subUser.id }, select: { subscriptionCadence: true } });
+            if (afterSwitch?.subscriptionCadence !== "MONTHLY") {
+                throw new Error(`Expected admin switch to MONTHLY, got ${afterSwitch?.subscriptionCadence}`);
+            }
+        } finally {
+            await prisma.user.delete({ where: { id: subUser.id } }).catch(() => {});
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
