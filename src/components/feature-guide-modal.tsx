@@ -380,15 +380,16 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
     "referral-rewards": {
         id: "referral-rewards",
         title: "Memberships, Plans & Payment Guide",
-        subtitle: "Annual vs monthly plan pricing, zero-fee direct P2P payments, and upcoming member perks.",
+        subtitle: "Annual vs monthly plan pricing, zero-fee direct P2P payments, referral rewards, and member perks.",
         category: "Membership",
         badgeColor: "bg-amber-500/10 text-amber-400 border-amber-500/30",
         icon: Gift,
         highlights: [
             "Annual Pass ($180/yr) vs Flexible Monthly ($17.50/mo)",
             "P2P direct renewal (Venmo, PayPal, Zelle)",
+            "Member Referral Rewards: +1 free month ($15 off annual) per friend",
             "Manage servers & library preferences on /profile",
-            "Coming Soon: Referral Rewards & Family Sub-Profiles"
+            "Coming Soon: Family Sub-Profiles"
         ],
         sections: [
             {
@@ -409,13 +410,13 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
                 ]
             },
             {
-                title: "3. Member Referral Rewards (Coming Soon)",
-                desc: "Upcoming reward program for active members to earn bonus months by sharing personal invite links:",
+                title: "3. Member Referral Rewards",
+                desc: "Active reward program for members to earn bonus months by sharing personal invite links:",
                 bullets: [
-                    "Personal Invite Link: Share your link (/join?ref=YOUR_CODE) with friends and family.",
-                    "Annual Subscribers: Earn $15.00 off your upcoming renewal per friend (12 friends = 100% free year).",
-                    "Monthly Subscribers: Monthly billing delayed by +1 full month per converted friend.",
-                    "Live Status: This feature is currently in development and will launch in an upcoming release."
+                    "Personal Invite Link: Share your link (/join?ref=YOUR_CODE) from /profile with friends and family.",
+                    "Annual Subscribers: Earn $15.00 off your upcoming renewal per converted friend (12 friends = 100% free year).",
+                    "Monthly Subscribers: Earn +1 free month (monthly billing delayed by 1 full month) per converted friend.",
+                    "Live Status: Active now — credits apply automatically toward renewals once your referred friend joins and subscribes."
                 ]
             },
             {

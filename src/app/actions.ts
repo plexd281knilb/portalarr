@@ -31,7 +31,11 @@ import { getAppUrl } from "@/lib/app-url";
 import { processEpubForKindle as validateEpubForKindle } from "@/lib/books/epub-validator";
 import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
-import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
+import {
+    calculateUserRenewalSummary,
+    computeReferralYearlyTarget,
+    formatReferralDiscountText
+} from "@/lib/referral-rewards";
 import { logger, maskToken } from "@/lib/logger";
 import {
     canonicalizeIdentifier,
@@ -4481,7 +4485,14 @@ export async function updateCurrentUserBillingCadenceAction(cadence: "MONTHLY" |
                 activatedExpiryIso = evalRes.newExpiryDate.toISOString();
                 customMessage = `Switched to Monthly and applied $${evalRes.creditedAmount.toFixed(2)} from credit (${evalRes.periodGrantedText}). Remaining credit: $${evalRes.newAccountCredit.toFixed(2)}.`;
             }
-        } else if (normalized === "YEARLY" && creditBalance >= yearlyRate) {
+        } else if (
+            normalized === "YEARLY" &&
+            creditBalance >= computeReferralYearlyTarget({
+                yearlyPrice: yearlyRate,
+                referralBonusMonths: target.referralBonusMonths,
+                referrals: target.referrals
+            }).effectiveYearlyTarget
+        ) {
             const evalRes = evaluatePaymentThreshold({
                 user: {
                     id: target.id,
@@ -6692,11 +6703,12 @@ export async function creditUserReferralAction(params: {
             console.warn("[REFERRAL-CREDIT-EMAIL-WARNING]:", emailErr.message || emailErr);
         }
 
-        revalidatePath("/settings/access");
-        revalidatePath("/profile");
-        revalidatePath("/settings/profile");
-        revalidatePath("/profile");
-        revalidatePath("/settings");
+        try {
+            revalidatePath("/settings/access");
+            revalidatePath("/profile");
+            revalidatePath("/settings/profile");
+            revalidatePath("/settings");
+        } catch {}
 
         return {
             success: true,
@@ -6733,11 +6745,12 @@ export async function unlinkUserReferralAction(referredUserId: string) {
 
         logger.addLog("INFO", "AUTH", `[REFERRAL-UNLINK] Admin unlinked referral for "${user.username}" (previously referred by "${prevReferrer || 'N/A'}").`);
 
-        revalidatePath("/settings/access");
-        revalidatePath("/profile");
-        revalidatePath("/settings/profile");
-        revalidatePath("/profile");
-        revalidatePath("/settings");
+        try {
+            revalidatePath("/settings/access");
+            revalidatePath("/profile");
+            revalidatePath("/settings/profile");
+            revalidatePath("/settings");
+        } catch {}
 
         return { success: true, message: `Successfully unlinked referral for @${user.username}.` };
     } catch (e: any) {
@@ -6865,9 +6878,7 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
         const renewalDateStr = summary.expirationDateFormatted || "Upcoming Renewal";
         const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
 
-        const referralDiscountText = summary.convertedReferralsCount > 0
-            ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
-            : "No active referral credits";
+        const referralDiscountText = formatReferralDiscountText(summary);
 
         const monthlyAlternativeText = summary.delayedMonthlyStartDate
             ? `$${monthlyPrice.toFixed(2)}/month starting ${summary.delayedMonthlyStartDate}`

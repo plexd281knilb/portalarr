@@ -38,6 +38,45 @@ const MONTH_NAMES = [
     "July", "August", "September", "October", "November", "December"
 ];
 
+export interface ReferralTargetInput {
+    yearlyPrice: number;
+    referralBonusMonths?: number | null;
+    referrals?: Array<{
+        status?: string | null;
+        convertedAt?: Date | string | null;
+    }> | null;
+}
+
+/**
+ * Single source of truth for annual referral discount math (+1 free month / yearlyPrice/12 off per converted referral or bonus month, capped at 12 months).
+ */
+export function computeReferralYearlyTarget(input: ReferralTargetInput): {
+    annualMonthlyBase: number;
+    convertedReferralsCount: number;
+    rewardMonths: number;
+    referralDiscount: number;
+    effectiveYearlyTarget: number;
+} {
+    const yearlyPrice = Math.max(0, Number(input.yearlyPrice || 0));
+    const annualMonthlyBase = Math.round((yearlyPrice / 12) * 100) / 100;
+    const convertedFromRefs = Array.isArray(input.referrals)
+        ? input.referrals.filter(r => r.status === "APPROVED" || Boolean(r.convertedAt)).length
+        : 0;
+    const bonusMonths = Math.max(0, Number(input.referralBonusMonths || 0));
+    const convertedReferralsCount = convertedFromRefs + bonusMonths;
+    const rewardMonths = Math.min(12, convertedReferralsCount);
+    const referralDiscount = Math.min(yearlyPrice, Math.round(rewardMonths * annualMonthlyBase * 100) / 100);
+    const effectiveYearlyTarget = Math.max(0, Math.round((yearlyPrice - referralDiscount) * 100) / 100);
+
+    return {
+        annualMonthlyBase,
+        convertedReferralsCount,
+        rewardMonths,
+        referralDiscount,
+        effectiveYearlyTarget
+    };
+}
+
 /**
  * Derives the renewal date, referral reward credits, and discounted amounts for a member.
  */
@@ -136,15 +175,18 @@ export function calculateUserRenewalSummary(options: {
 
     if (convertedReferralsCount > 0) {
         const monthWord = convertedReferralsCount === 1 ? "1 month" : `${convertedReferralsCount} months`;
-        const friendCreditNote = friendNamesStr 
-            ? `for referring ${friendNamesStr}` 
-            : `for ${convertedReferralsCount} converted referral(s)`;
+        const friendCreditNote = friendNamesStr
+            ? `for referring ${friendNamesStr}`
+            : `for ${convertedReferralsCount} referral reward credit(s)`;
+        const friendsClause = friendNamesStr
+            ? `referred ${convertedReferralsCount} friend${convertedReferralsCount === 1 ? "" : "s"} (${friendNamesStr}) who became full members`
+            : `earned ${convertedReferralsCount} referral reward credit(s)`;
 
         summaryText = `Referral Reward Applied: ${convertedReferralsCount} free month(s) earned ($${rewardDiscountAmount.toFixed(2)} total discount ${friendCreditNote}). Next annual renewal is $${discountedYearlyPrice.toFixed(2)}${delayedMonthlyStartDate ? `, or monthly billing delayed until ${delayedMonthlyStartDate}` : ""}.`;
 
         reminderNoticeText = isFullYearFree
-            ? `🎁 Referral Rewards Applied: You referred ${convertedReferralsCount} friends (${friendNamesStr}) who became full members! Your upcoming year is 100% FREE ($0.00 due).`
-            : `🎁 Referral Rewards Applied: You referred ${convertedReferralsCount} friend(s) (${friendNamesStr}) who joined as full members! You get ${monthWord} off ($${rewardDiscountAmount.toFixed(2)} discount). Your annual renewal is discounted to $${discountedYearlyPrice.toFixed(2)} (was $${baseYearlyPrice.toFixed(2)})${delayedMonthlyStartDate ? `, or if you prefer monthly ($${monthlyRate.toFixed(2)}/mo), your payments are delayed until ${delayedMonthlyStartDate}` : ""}.`;
+            ? `🎁 Referral Rewards Applied: You ${friendsClause}! Your upcoming year is 100% FREE ($0.00 due).`
+            : `🎁 Referral Rewards Applied: You ${friendsClause}! You get ${monthWord} off ($${rewardDiscountAmount.toFixed(2)} discount). Your annual renewal is discounted to $${discountedYearlyPrice.toFixed(2)} (was $${baseYearlyPrice.toFixed(2)})${delayedMonthlyStartDate ? `, or if you prefer monthly ($${monthlyRate.toFixed(2)}/mo), your payments are delayed until ${delayedMonthlyStartDate}` : ""}.`;
     } else {
         summaryText = `Standard subscription: $${baseYearlyPrice.toFixed(2)}/year renewal${expirationDateFormatted ? ` on ${expirationDateFormatted}` : ""}.`;
         reminderNoticeText = `Your DomsHomeLab membership is scheduled for renewal on ${expirationDateFormatted || 'upcoming renewal'}. Renewal rate: $${baseYearlyPrice.toFixed(2)}/year (or $${monthlyRate.toFixed(2)}/month).`;
@@ -167,4 +209,18 @@ export function calculateUserRenewalSummary(options: {
         summaryText,
         reminderNoticeText
     };
+}
+
+/**
+ * Formats the referral discount line item used in renewal reminder emails.
+ */
+export function formatReferralDiscountText(summary: UserRenewalReferralSummary): string {
+    if (summary.convertedReferralsCount <= 0) {
+        return "No active referral credits";
+    }
+    const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
+    if (friendNamesStr) {
+        return `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} credit${summary.convertedReferralsCount > 1 ? "s" : ""}: ${friendNamesStr})`;
+    }
+    return `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} bonus referral month${summary.convertedReferralsCount > 1 ? "s" : ""})`;
 }

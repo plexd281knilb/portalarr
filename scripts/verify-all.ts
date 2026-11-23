@@ -1008,10 +1008,239 @@ async function runTestSuite() {
             }
 
             // Referral stats API returns both totalUsers/totalReferred and totalConverted/totalConversions aliases
-            const { getReferralStats } = await import("../src/app/actions");
+            const { getReferralStats, creditUserReferralAction, updateCurrentUserBillingCadenceAction } = await import("../src/app/actions");
+            const { calculateUserRenewalSummary, formatReferralDiscountText } = await import("../src/lib/referral-rewards");
+            const { applySubscriptionForPayment } = await import("../src/lib/payment-email-scraper");
+            const fsMod = await import("node:fs");
+            const pathMod = await import("node:path");
             const refStatsRes: any = await getReferralStats();
             if (!refStatsRes?.success || typeof refStatsRes.stats?.totalReferred !== "number" || typeof refStatsRes.stats?.totalConversions !== "number") {
                 throw new Error(`Expected getReferralStats() to expose totalReferred & totalConversions aliases, got ${JSON.stringify(refStatsRes)}`);
+            }
+
+            // 8. Comprehensive Member Referral Rewards & Credit Scenarios + Coming Soon Removal Audit
+            // 8a. UI & email template copy must NOT advertise Referral Rewards as "Coming Soon"
+            for (const copyRelPath of [
+                "src/components/feature-guide-modal.tsx",
+                "src/components/auth/join-client.tsx",
+                "src/lib/email-templates.ts"
+            ]) {
+                const rawCopy = fsMod.readFileSync(pathMod.join(process.cwd(), copyRelPath), "utf8");
+                if (/Member Referral Rewards \(Coming Soon\)|Discord VIP & Referral Rewards \(Coming Soon\)|Referral Rewards \(Coming Soon\)|Coming Soon:\s*Referral Rewards|upcoming referral reward discounts/i.test(rawCopy)) {
+                    throw new Error(`Found stale Coming Soon referral copy in ${copyRelPath}`);
+                }
+            }
+
+            // 8b. Pending/TRIAL referrals must NOT grant discount; converted/APPROVED referrals grant $15/mo ($20/mo VIP)
+            const pendingRefOnly = evaluatePaymentThreshold({
+                user: {
+                    membershipTier: "STANDARD",
+                    subscriptionCadence: "YEARLY",
+                    referrals: [{ id: "r_pend", username: "trialFriend", status: "TRIAL", convertedAt: null }]
+                },
+                payment: { amount: 165, provider: "VENMO", emailDate: new Date("2026-12-20T12:00:00Z") },
+                settings: { yearlyPrice: 180, monthlyPrice: 17.5 }
+            });
+            if (pendingRefOnly.action === "FULL_YEARLY") {
+                throw new Error(`Unconverted TRIAL referral should NOT grant $165 annual fulfillment, got ${JSON.stringify(pendingRefOnly)}`);
+            }
+
+            // 8c. Paying full $180 while having 1 converted referral ($165 target) must preserve $15 overpayment as accountCredit
+            const fullOverDiscount = evaluatePaymentThreshold({
+                user: {
+                    membershipTier: "STANDARD",
+                    subscriptionCadence: "YEARLY",
+                    referrals: [{ id: "r_ok", username: "paidFriend", status: "APPROVED", convertedAt: new Date() }]
+                },
+                payment: { amount: 180, provider: "VENMO", emailDate: new Date("2026-12-20T12:00:00Z") },
+                settings: { yearlyPrice: 180, monthlyPrice: 17.5 }
+            });
+            if (fullOverDiscount.action !== "FULL_YEARLY" || fullOverDiscount.targetPrice !== 165 || fullOverDiscount.creditedAmount !== 165 || fullOverDiscount.newAccountCredit !== 15) {
+                throw new Error(`Expected $180 paid with $165 referral target to bank $15 excess credit, got ${JSON.stringify(fullOverDiscount)}`);
+            }
+
+            // 8d. Prepaying 2 years ($345 = $165 year 1 + $180 year 2) with 1 referral grants 2 years cleanly
+            const twoYrWithRef = evaluatePaymentThreshold({
+                user: {
+                    membershipTier: "STANDARD",
+                    subscriptionCadence: "YEARLY",
+                    referrals: [{ id: "r_2y", username: "friend2y", status: "APPROVED", convertedAt: new Date() }]
+                },
+                payment: { amount: 345, provider: "ZELLE", emailDate: new Date("2026-12-20T12:00:00Z") },
+                settings: { yearlyPrice: 180, monthlyPrice: 17.5 }
+            });
+            if (twoYrWithRef.action !== "FULL_YEARLY" || twoYrWithRef.yearsGranted !== 2 || twoYrWithRef.newAccountCredit !== 0) {
+                throw new Error(`Expected $345 with 1 referral to grant 2 full years with $0 excess credit, got ${JSON.stringify(twoYrWithRef)}`);
+            }
+
+            // 8e. Tier 2 VIP referral discount ($240 - $20 = $220) + partial installment flow ($100 -> $65 shortfall, then $65 -> FULL_YEARLY)
+            const vipRefEval = evaluatePaymentThreshold({
+                user: {
+                    membershipTier: "TIER_2_VIP",
+                    subscriptionCadence: "YEARLY",
+                    referrals: [{ id: "r_vip", username: "vipFriend", status: "APPROVED", convertedAt: new Date() }]
+                },
+                payment: { amount: 220, provider: "PAYPAL", emailDate: new Date("2026-12-20T12:00:00Z") },
+                settings: { yearlyPrice: 180, monthlyPrice: 17.5, tier2YearlyPrice: 240, tier2MonthlyPrice: 25 }
+            });
+            if (vipRefEval.action !== "FULL_YEARLY" || vipRefEval.targetPrice !== 220 || vipRefEval.newAccountCredit !== 0) {
+                throw new Error(`Expected VIP 1-referral renewal at $220 -> FULL_YEARLY, got ${JSON.stringify(vipRefEval)}`);
+            }
+
+            const partialWithRef1 = evaluatePaymentThreshold({
+                user: {
+                    status: "APPROVED",
+                    membershipTier: "STANDARD",
+                    subscriptionCadence: "YEARLY",
+                    subscriptionEndsAt: new Date(2026, 11, 31, 23, 59, 59, 999),
+                    referrals: [{ id: "r_p1", username: "partFriend", status: "APPROVED", convertedAt: new Date() }]
+                },
+                payment: { amount: 100, provider: "VENMO", emailDate: new Date("2026-11-20T12:00:00Z") },
+                settings: { yearlyPrice: 180, monthlyPrice: 17.5 }
+            });
+            if (partialWithRef1.action !== "PARTIAL_YEARLY" || partialWithRef1.shortfall !== 65 || partialWithRef1.newAccountCredit !== 100) {
+                throw new Error(`Expected $100 partial with 1 referral -> $65 shortfall, got ${JSON.stringify(partialWithRef1)}`);
+            }
+            const partialWithRef2 = evaluatePaymentThreshold({
+                user: {
+                    status: "APPROVED",
+                    membershipTier: "STANDARD",
+                    subscriptionCadence: "YEARLY",
+                    accountCredit: partialWithRef1.newAccountCredit,
+                    subscriptionEndsAt: new Date(2026, 11, 31, 23, 59, 59, 999),
+                    referrals: [{ id: "r_p1", username: "partFriend", status: "APPROVED", convertedAt: new Date() }]
+                },
+                payment: { amount: 65, provider: "VENMO", emailDate: new Date("2026-11-21T12:00:00Z") },
+                settings: { yearlyPrice: 180, monthlyPrice: 17.5 }
+            });
+            if (partialWithRef2.action !== "FULL_YEARLY" || partialWithRef2.creditedAmount !== 165 || partialWithRef2.newAccountCredit !== 0) {
+                throw new Error(`Expected $100 credit + $65 payment with 1 referral -> FULL_YEARLY, got ${JSON.stringify(partialWithRef2)}`);
+            }
+
+            // 8f. 12 referrals -> 100% Free Year + manual bonus-month formatting (no empty parens/colons) + delayed monthly date
+            const twelveRefs = Array.from({ length: 12 }, (_, idx) => ({
+                id: `f12_${idx}`,
+                username: `f12_${idx}`,
+                status: "APPROVED",
+                convertedAt: new Date()
+            }));
+            const freeYearSummary = calculateUserRenewalSummary({
+                user: { username: "super_ref", status: "APPROVED", subscriptionEndsAt: new Date(2026, 11, 31, 23, 59, 59), referrals: twelveRefs },
+                yearlyPrice: 180,
+                monthlyPrice: 17.5
+            });
+            if (!freeYearSummary.isFullYearFree || freeYearSummary.discountedYearlyPrice !== 0 || freeYearSummary.rewardDiscountAmount !== 180) {
+                throw new Error(`Expected 12 converted referrals -> 100% free year ($0), got ${JSON.stringify(freeYearSummary)}`);
+            }
+            const bonusOnlySummary = calculateUserRenewalSummary({
+                user: { username: "bonus_only", status: "APPROVED", subscriptionEndsAt: new Date(2026, 11, 31, 23, 59, 59), referralBonusMonths: 1, referrals: [] },
+                yearlyPrice: 180,
+                monthlyPrice: 17.5
+            });
+            const bonusDiscountStr = formatReferralDiscountText(bonusOnlySummary);
+            if (bonusOnlySummary.discountedYearlyPrice !== 165 || bonusOnlySummary.delayedMonthlyStartDate !== "February 1, 2027" || bonusOnlySummary.reminderNoticeText.includes("()") || /:\s*$/.test(bonusDiscountStr)) {
+                throw new Error(`Expected clean bonus-month summary & delay to Feb 1 2027, got summary=${bonusOnlySummary.reminderNoticeText} label=${bonusDiscountStr}`);
+            }
+
+            // 8g. Live DB end-to-end: (i) Monthly->Yearly switch with $165 credit + 1 referral, (ii) auto-conversion on payment, (iii) creditUserReferralAction monthly extension
+            const prevTestUidRef = process.env.PORTALARR_TEST_USER_ID;
+            const refSuffix = Date.now();
+            const refHost = await prisma.user.create({
+                data: {
+                    username: `ref_host_${refSuffix}`,
+                    email: `ref_host_${refSuffix}@test.com`,
+                    password: "mock",
+                    role: "USER",
+                    status: "APPROVED",
+                    membershipTier: "STANDARD",
+                    subscriptionCadence: "MONTHLY",
+                    accountCredit: 165,
+                    subscriptionEndsAt: new Date(2026, 11, 31, 23, 59, 59, 999)
+                }
+            });
+            const refFriend = await prisma.user.create({
+                data: {
+                    username: `ref_friend_${refSuffix}`,
+                    email: `ref_friend_${refSuffix}@test.com`,
+                    password: "mock",
+                    role: "USER",
+                    status: "TRIAL",
+                    membershipTier: "TRIAL",
+                    trialEndsAt: new Date(Date.now() + 7 * 86400000),
+                    referredByUserId: refHost.id
+                }
+            });
+            const monthlyRefUser = await prisma.user.create({
+                data: {
+                    username: `ref_monthly_${refSuffix}`,
+                    email: `ref_monthly_${refSuffix}@test.com`,
+                    password: "mock",
+                    role: "USER",
+                    status: "APPROVED",
+                    membershipTier: "STANDARD",
+                    subscriptionCadence: "MONTHLY",
+                    subscriptionEndsAt: new Date(2027, 0, 1, 23, 59, 59, 999)
+                }
+            });
+            const monthlyFriend = await prisma.user.create({
+                data: {
+                    username: `ref_mofriend_${refSuffix}`,
+                    email: `ref_mofriend_${refSuffix}@test.com`,
+                    password: "mock",
+                    role: "USER",
+                    status: "TRIAL",
+                    membershipTier: "TRIAL"
+                }
+            });
+            try {
+                // Auto-conversion via applySubscriptionForPayment converts refFriend -> marks convertedAt & credits refHost
+                await applySubscriptionForPayment(refFriend, {
+                    provider: "VENMO",
+                    externalTxId: `ref_conv_tx_${refSuffix}`,
+                    amount: 180,
+                    currency: "USD",
+                    emailSubject: "Payment",
+                    emailDate: new Date("2026-12-20T12:00:00Z"),
+                    emailUid: `uid_ref_${refSuffix}`,
+                    rawSnippet: "paid 180"
+                });
+                const friendAfterPay = await prisma.user.findUnique({ where: { id: refFriend.id }, select: { status: true, convertedAt: true } });
+                if (friendAfterPay?.status !== "APPROVED" || !friendAfterPay.convertedAt) {
+                    throw new Error(`Expected referred friend auto-payment to mark APPROVED + convertedAt, got ${JSON.stringify(friendAfterPay)}`);
+                }
+
+                // Now refHost (on MONTHLY with $165 credit + 1 converted referral) switches to YEARLY -> must apply $165 credit -> FULL_YEARLY!
+                process.env.PORTALARR_TEST_USER_ID = refHost.id;
+                const switchYearlyWithRefRes = await updateCurrentUserBillingCadenceAction("YEARLY");
+                if (prevTestUidRef === undefined) delete process.env.PORTALARR_TEST_USER_ID;
+                else process.env.PORTALARR_TEST_USER_ID = prevTestUidRef;
+                const hostAfterSwitch = await prisma.user.findUnique({
+                    where: { id: refHost.id },
+                    select: { subscriptionCadence: true, accountCredit: true, subscriptionEndsAt: true }
+                });
+                if (!switchYearlyWithRefRes.success || hostAfterSwitch?.subscriptionCadence !== "YEARLY" || hostAfterSwitch.accountCredit !== 0 || !hostAfterSwitch.subscriptionEndsAt || hostAfterSwitch.subscriptionEndsAt.getFullYear() < 2027) {
+                    throw new Error(`Expected Monthly->Yearly switch with $165 credit + 1 referral to apply credit and grant annual renewal, got ${JSON.stringify(hostAfterSwitch)}`);
+                }
+
+                // creditUserReferralAction on monthlyRefUser with extendSubscriptionExpiry extends Jan 1 -> Feb 1 2027
+                const manualCreditRes = await creditUserReferralAction({
+                    referrerUserId: monthlyRefUser.id,
+                    referredUserId: monthlyFriend.id,
+                    extendSubscriptionExpiry: true
+                });
+                if (!manualCreditRes.success) {
+                    throw new Error(`creditUserReferralAction failed: ${manualCreditRes.error}`);
+                }
+                const monthlyAfterCredit = await prisma.user.findUnique({ where: { id: monthlyRefUser.id }, select: { subscriptionEndsAt: true } });
+                if (!monthlyAfterCredit?.subscriptionEndsAt || monthlyAfterCredit.subscriptionEndsAt.getMonth() !== 1 || monthlyAfterCredit.subscriptionEndsAt.getFullYear() !== 2027) {
+                    throw new Error(`Expected creditUserReferralAction(extendSubscriptionExpiry=true) to extend Jan 1 -> Feb 1 2027, got ${monthlyAfterCredit?.subscriptionEndsAt?.toISOString()}`);
+                }
+            } finally {
+                if (prevTestUidRef === undefined) delete process.env.PORTALARR_TEST_USER_ID;
+                else process.env.PORTALARR_TEST_USER_ID = prevTestUidRef;
+                await prisma.user.deleteMany({
+                    where: { id: { in: [refFriend.id, refHost.id, monthlyFriend.id, monthlyRefUser.id] } }
+                }).catch(() => {});
             }
         } finally {
             process.env.PORTALARR_TEST_AUTH = prevBillingTestAuth;
