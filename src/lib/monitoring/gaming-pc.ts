@@ -97,14 +97,14 @@ export function parseGamingPcConfig(
     const telemetryUrls =
         customTelemetry.length > 0
             ? customTelemetry
-            : ["http://192.168.1.68:9178", "http://192.168.10.78:9101"];
+            : ["http://192.168.1.68:9178", "http://192.168.10.246:9101"];
 
     const ollamaUrls =
         customOllama.length > 0
             ? customOllama
-            : ["http://192.168.1.68:11434", "http://192.168.10.78:11434"];
+            : ["http://192.168.1.68:11434", "http://192.168.10.246:11434"];
 
-    let lanIp = "192.168.10.78";
+    let lanIp = "192.168.10.246";
     try {
         if (customTelemetry.length > 0) {
             lanIp = new URL(customTelemetry[0]).hostname;

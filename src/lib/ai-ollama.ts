@@ -1,5 +1,5 @@
 const DEFAULT_OLLAMA_MODELS = ["portalarr-plex-master", "qwen2.5:7b-instruct", "qwen2.5:3b"];
-const DEFAULT_OLLAMA_URLS = ["http://127.0.0.1:11434", "http://192.168.10.78:11434", "http://192.168.1.68:11434"];
+const DEFAULT_OLLAMA_URLS = ["http://127.0.0.1:11434", "http://192.168.10.246:11434", "http://192.168.1.68:11434"];
 
 let cachedEndpoint: { url: string | null; models: string[]; checkedAt: number } = {
     url: null,
