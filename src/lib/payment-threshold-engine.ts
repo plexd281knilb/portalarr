@@ -158,9 +158,14 @@ export function evaluatePaymentThreshold(params: {
     }
 
     // 1b. Rest-of-Year Prorated Annual Fulfillment
-    // Checks if a new, trial, expired, or yearly-cadence user is paying the Rest-of-Year prorated annual quote
+    // Checks if a new, trial, expired, or yearly-cadence user is paying the Rest-of-Year prorated annual quote.
+    // Never swallow installments from members already paid through end of year (Dec 31 / Jan 1) or active APPROVED Q4 members.
     // Explicit MONTHLY subscribers stay on monthly fulfillment unless paying full annual rate in Step 1.
-    const isAlreadyCoveredForUpcomingYear = existingExpiry && existingExpiry.getTime() >= new Date(payYear + 1, 0, 1).getTime();
+    const endOfYearBoundary = new Date(payYear, 11, 31, 0, 0, 0, 0).getTime();
+    const isAlreadyCoveredForUpcomingYear = Boolean(
+        (existingExpiry && existingExpiry.getTime() >= endOfYearBoundary) ||
+        (paymentDate.getMonth() >= 9 && user.status === "APPROVED" && existingExpiry && existingExpiry.getTime() > paymentDate.getTime())
+    );
     const monthsExactCount = monthlyPrice > 0 ? Math.round(totalCredit / monthlyPrice) : 0;
     const isExactMonthlyMultiple = monthsExactCount >= 1 && Math.abs(totalCredit - (monthsExactCount * monthlyPrice)) <= 0.05;
     if (!isAlreadyCoveredForUpcomingYear && explicitCadence !== "MONTHLY") {
@@ -231,9 +236,16 @@ export function evaluatePaymentThreshold(params: {
 
     // 2. Partial Yearly Payment (installment towards annual subscription)
     // Never trap explicit MONTHLY users or exact multi-month prepayments (e.g. 3x or 4x monthlyPrice) as underpaid yearly installments.
+    // Explicit YEARLY subscribers sending sub-monthly installments (e.g. $15 when monthlyPrice=$17.50) accumulate toward Annual Plan instead of "Partial Monthly".
+    const hasActiveSubOrApprovedYearly = Boolean(
+        explicitCadence === "YEARLY" &&
+        totalCredit < monthlyPrice &&
+        (user.status === "APPROVED" || (existingExpiry && existingExpiry.getTime() > paymentDate.getTime()))
+    );
     const isNearYearlyTarget = (effectiveYearlyTarget - totalCredit) <= 30;
     const isYearlyIntent = totalCredit < effectiveYearlyTarget && explicitCadence !== "MONTHLY" && (
         isNearYearlyTarget ||
+        hasActiveSubOrApprovedYearly ||
         (explicitCadence === "YEARLY" && totalCredit >= (effectiveYearlyTarget * 0.5)) ||
         (!isExactMonthlyMultiple && totalCredit >= 50 && totalCredit > (monthlyPrice * 2.5))
     );
