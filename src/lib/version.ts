@@ -112,3 +112,16 @@ export function getBuildTelemetry(): VersionInfo {
         containerIconUrl
     };
 }
+
+/**
+ * Blocks automatic outbound emails from running on non-production channels ("dev" or "beta")
+ * so mounting a production database or enabling notifications on dev/beta can never send real emails automatically.
+ * Returns null only when running on the "stable" (prod) release channel.
+ */
+export function getNonProdAutomaticEmailBlockReason(): string | null {
+    const telemetry = getBuildTelemetry();
+    if (telemetry.channel !== "stable") {
+        return `Blocked automatic outbound email on non-production "${telemetry.channel}" channel (branch="${telemetry.branch}", v${telemetry.version})`;
+    }
+    return null;
+}

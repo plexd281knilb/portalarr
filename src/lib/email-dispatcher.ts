@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { resolveSenderAddress, resolveEmailProviderConfig } from "@/lib/email-templates";
 import { notifyAdminsOnPendingApproval } from "@/lib/admin-approvals";
 import { resolveContainedPath } from "@/lib/book-route-auth";
+import { getNonProdAutomaticEmailBlockReason } from "@/lib/version";
 
 export function getNotificationCategoryForTemplate(templateId?: string): {
     field: "emailRequestApproved" | "emailMediaReady" | "emailSubscriptionReminders" | "emailAnnouncements" | "emailSupportTickets" | "emailReferralRewards";
@@ -177,7 +178,7 @@ export async function sendOrQueueEmail(options: {
     approvedBy?: string;
     approvedAt?: Date;
     isLinkedInboxDispatch?: boolean;
-}): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string; logId?: string }> {
+}): Promise<{ success: boolean; queued?: boolean; sent?: boolean; blockedByNonProdGuard?: boolean; approvalId?: string; error?: string; logId?: string }> {
     try {
         if (options.attachments && options.attachments.length > 0) {
             for (const att of options.attachments) {
@@ -377,6 +378,15 @@ export async function sendOrQueueEmail(options: {
                 notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
             }
             return { success: true, queued: true, approvalId: approval.id };
+        }
+
+        const nonProdBlockReason = options.sendMode !== "APPROVED_AND_SENT"
+            ? getNonProdAutomaticEmailBlockReason()
+            : null;
+        if (nonProdBlockReason) {
+            logger.addLog("INFO", "EMAIL", `[NON-PROD-EMAIL-GUARD] ${nonProdBlockReason} — suppressed "${options.subject}" to ${recipientStr}`);
+            console.log(`[NON-PROD-EMAIL-GUARD] ${nonProdBlockReason} — suppressed "${options.subject}" to ${recipientStr}`);
+            return { success: true, sent: false, queued: false, blockedByNonProdGuard: true };
         }
 
         if (!host || !user || !pass) {

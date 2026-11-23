@@ -114,18 +114,18 @@ export function PaymentQrModal({
                             size="sm"
                             variant={cadence === "yearly" ? "default" : "ghost"}
                             onClick={() => setCadence("yearly")}
-                            className="flex-1 text-xs font-semibold h-8 rounded-lg"
+                            className="flex-1 text-xs font-semibold h-8 rounded-lg tabular-nums"
                         >
-                            Annual (${yearlyAmount}/yr)
+                            Annual (${Number.isInteger(yearlyAmount) ? yearlyAmount : yearlyAmount.toFixed(2)}/yr)
                         </Button>
                         <Button
                             type="button"
                             size="sm"
                             variant={cadence === "monthly" ? "default" : "ghost"}
                             onClick={() => setCadence("monthly")}
-                            className="flex-1 text-xs font-semibold h-8 rounded-lg"
+                            className="flex-1 text-xs font-semibold h-8 rounded-lg tabular-nums"
                         >
-                            Monthly (${monthlyAmount}/mo)
+                            Monthly (${monthlyAmount.toFixed(2)}/mo)
                         </Button>
                     </div>
 
@@ -156,6 +156,7 @@ export function PaymentQrModal({
                                 username,
                                 amount: selectedAmount,
                                 memo: memoTag,
+                                cadence,
                             });
                             if (!linkInfo) return null;
 
