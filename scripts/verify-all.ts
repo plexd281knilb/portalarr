@@ -5140,6 +5140,27 @@ async function runTestSuite() {
             throw new Error(`Expected 2x monthly ($35) -> FULL_MONTHLY with 2 monthsGranted, got ${JSON.stringify(twoMonths)}`);
         }
 
+        // Approved YEARLY subscriber paid through end of year (Dec 31 / Jan 1) sending $15 installment in Q4:
+        // must bank $15 credit under PARTIAL_YEARLY (not "Partial Monthly" and never swallowed as Q4 Rest-of-Year)
+        const q4PayDate = new Date(2026, 10, 23, 12, 0, 0);
+        const dec31End = new Date(2026, 11, 31, 23, 59, 59, 999);
+        const stdPartialInstallment = evaluatePaymentThreshold({
+            user: { id: "u4", username: "yr_std", status: "APPROVED", membershipTier: "STANDARD", subscriptionCadence: "YEARLY", subscriptionEndsAt: dec31End },
+            payment: { amount: 15, emailDate: q4PayDate, provider: "VENMO" },
+            settings: baseSettings
+        });
+        if (stdPartialInstallment.action !== "PARTIAL_YEARLY" || stdPartialInstallment.cadence !== "YEARLY" || stdPartialInstallment.newAccountCredit !== 15 || stdPartialInstallment.shortfall !== 165) {
+            throw new Error(`Expected Standard YEARLY $15 installment -> PARTIAL_YEARLY ($15 credit, $165 shortfall), got ${JSON.stringify(stdPartialInstallment)}`);
+        }
+        const vipPartialInstallment = evaluatePaymentThreshold({
+            user: { id: "u5", username: "yr_vip", status: "APPROVED", membershipTier: "TIER_2_VIP", subscriptionCadence: "YEARLY", subscriptionEndsAt: dec31End },
+            payment: { amount: 15, emailDate: q4PayDate, provider: "VENMO" },
+            settings: baseSettings
+        });
+        if (vipPartialInstallment.action !== "PARTIAL_YEARLY" || vipPartialInstallment.cadence !== "YEARLY" || vipPartialInstallment.newAccountCredit !== 15 || vipPartialInstallment.shortfall !== 225) {
+            throw new Error(`Expected Tier 2 YEARLY $15 installment -> PARTIAL_YEARLY ($15 credit, $225 shortfall), got ${JSON.stringify(vipPartialInstallment)}`);
+        }
+
         // 3. Prorated billing calculations produce consistent Monthly & Yearly due amounts
         const prorated = calculateProratedBilling({
             startDate: payDate,
