@@ -1,5 +1,6 @@
 import { calculateAlignedExpiryDate } from "./payment-email-scraper";
 import { calculateProratedBilling } from "./prorated-billing";
+import { computeReferralYearlyTarget } from "./referral-rewards";
 
 export interface UserPaymentContext {
     id?: string;
@@ -106,15 +107,12 @@ export function evaluatePaymentThreshold(params: {
     const monthlyPrice = isTier2 
         ? (settings?.tier2MonthlyPrice || 25) 
         : (settings?.monthlyPrice || 17.50);
-    const annualMonthlyBase = Math.round((yearlyPrice / 12) * 100) / 100;
-
-    // Calculate active referral reward discount for annual renewals (+1 free month / $15 off per converted friend)
-    const convertedReferralsCount = Array.isArray(user.referrals)
-        ? user.referrals.filter(r => r.status === "APPROVED" || Boolean(r.convertedAt)).length
-        : 0;
-    const rewardMonths = Math.min(12, convertedReferralsCount + Math.max(0, Number(user.referralBonusMonths || 0)));
-    const referralDiscount = Math.min(yearlyPrice, Math.round(rewardMonths * annualMonthlyBase * 100) / 100);
-    const effectiveYearlyTarget = Math.max(annualMonthlyBase, Math.round((yearlyPrice - referralDiscount) * 100) / 100);
+    // Calculate active referral reward discount for annual renewals (+1 free month / yearlyPrice/12 off per converted friend)
+    const { referralDiscount, effectiveYearlyTarget } = computeReferralYearlyTarget({
+        yearlyPrice,
+        referralBonusMonths: user.referralBonusMonths,
+        referrals: user.referrals
+    });
 
     const amountPaidNow = Math.round(Number(payment.amount) * 100) / 100;
     const previousCredit = Math.max(0, Math.round(Number(user.accountCredit || 0) * 100) / 100);
@@ -126,10 +124,13 @@ export function evaluatePaymentThreshold(params: {
     const explicitCadence = (user.subscriptionCadence || "").toUpperCase();
 
     // 1. Full Yearly Fulfillment (meets or exceeds annual subscription threshold or referral-discounted annual target)
-    if (totalCredit >= yearlyPrice || (referralDiscount > 0 && totalCredit >= effectiveYearlyTarget)) {
-        const isReferralDiscountFulfillment = totalCredit < yearlyPrice && totalCredit >= effectiveYearlyTarget;
-        const yearsGranted = isReferralDiscountFulfillment ? 1 : Math.max(1, Math.floor(totalCredit / yearlyPrice));
-        const costUsed = isReferralDiscountFulfillment ? effectiveYearlyTarget : (yearsGranted * yearlyPrice);
+    // Year 1 applies effectiveYearlyTarget (preserving any overpayment like $180 sent on a $165 discounted renewal as accountCredit);
+    // extra prepaid years use standard yearlyPrice.
+    if (totalCredit >= yearlyPrice || (referralDiscount > 0 && totalCredit > 0 && totalCredit >= effectiveYearlyTarget)) {
+        const remainingAfterFirstYear = Math.max(0, Math.round((totalCredit - effectiveYearlyTarget) * 100) / 100);
+        const additionalYears = yearlyPrice > 0 ? Math.floor(remainingAfterFirstYear / yearlyPrice) : 0;
+        const yearsGranted = 1 + additionalYears;
+        const costUsed = Math.round((effectiveYearlyTarget + additionalYears * yearlyPrice) * 100) / 100;
         const excessCredit = Math.max(0, Math.round((totalCredit - costUsed) * 100) / 100);
 
         const { newExpiryDate, periodGrantedText } = calculateAlignedExpiryDate({
@@ -146,7 +147,7 @@ export function evaluatePaymentThreshold(params: {
             amountPaidNow,
             previousCredit,
             totalCredit,
-            targetPrice: isReferralDiscountFulfillment ? effectiveYearlyTarget : yearlyPrice,
+            targetPrice: effectiveYearlyTarget,
             creditedAmount: costUsed,
             newAccountCredit: excessCredit,
             periodGrantedText,

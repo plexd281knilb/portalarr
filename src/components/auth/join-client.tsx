@@ -372,7 +372,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <Gift className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
-                                            <span><strong className="text-foreground">Discord VIP & Referral Rewards (Coming Soon):</strong> Real-time server status alerts, direct support, and upcoming referral reward discounts.</span>
+                                            <span><strong className="text-foreground">Member Referral Rewards:</strong> Share your invite link to earn +1 free month ($15 off annual renewals) for every friend who joins.</span>
                                         </li>
                                     </ul>
                                 </div>
@@ -386,7 +386,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                 <div className="space-y-0.5">
                                     <h4 className="font-bold text-amber-900 dark:text-amber-200">The Trial is Just the Preview</h4>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                        Your free trial gives you full access to test out our movies and TV shows streaming. When you upgrade to full membership, you unlock all the premium perks — including our complete digital Ebook & Audiobook collection, priority bandwidth, and upcoming community rewards!
+                                        Your free trial gives you full access to test out our movies and TV shows streaming. When you upgrade to full membership, you unlock all the premium perks — including our complete digital Ebook & Audiobook collection, priority bandwidth, and member referral rewards!
                                     </p>
                                 </div>
                             </div>

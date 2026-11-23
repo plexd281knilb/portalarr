@@ -794,7 +794,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <li>🧒 <strong>Dedicated Kids & Living Room Profiles (Coming Soon):</strong> Child-safe accounts with custom PIN protection and age rating filters.</li>
     <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite reader, Plex audiobook streaming (in-browser player coming soon), & Send-to-Kindle delivery.</li>
     <li>⚡ <strong>Priority Bandwidth:</strong> High-priority dedicated streaming allocation for smooth playback anywhere.</li>
-    <li>🎁 <strong>Discord VIP & Referral Rewards (Coming Soon):</strong> Real-time server status alerts, direct support, and upcoming referral reward discounts.</li>
+    <li>🎁 <strong>Member Referral Rewards:</strong> Share your personal invite link from your profile to earn +1 free month ($15 off annual renewals) per converted friend.</li>
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">
@@ -854,7 +854,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <li>🧒 <strong>Dedicated Kids & Living Room Profiles (Coming Soon):</strong> Child-safe accounts with custom PIN protection.</li>
     <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite mode, Plex audiobooks, & Send-to-Kindle.</li>
     <li>⚡ <strong>Priority Bandwidth:</strong> High-priority dedicated streaming allocation for smooth playback anywhere.</li>
-    <li>🎁 <strong>Referral Rewards (Coming Soon):</strong> Earn +1 free month for every friend you refer to the server!</li>
+    <li>🎁 <strong>Referral Rewards:</strong> Earn +1 free month ($15 off annual renewals) for every friend you refer to the server!</li>
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">

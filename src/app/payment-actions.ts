@@ -1375,7 +1375,7 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
     const appUrl = await getAppUrl();
     const { renderEmailTemplate } = await import("@/lib/email-templates");
     const { sendOrQueueEmail } = await import("@/lib/email-dispatcher");
-    const { calculateUserRenewalSummary } = await import("@/lib/referral-rewards");
+    const { calculateUserRenewalSummary, formatReferralDiscountText } = await import("@/lib/referral-rewards");
     const { 
         parseReminderDays, 
         getDueReminderMilestone, 
@@ -1493,10 +1493,7 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
                 });
 
                 const renewalDateStr = summary.expirationDateFormatted || new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(expiryDate);
-                const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
-                const referralDiscountText = summary.convertedReferralsCount > 0
-                    ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
-                    : "No active referral credits";
+                const referralDiscountText = formatReferralDiscountText(summary);
                 const monthlyAlternativeText = summary.delayedMonthlyStartDate
                     ? `$${memberMonthlyPrice.toFixed(2)}/month starting ${summary.delayedMonthlyStartDate}`
                     : `$${memberMonthlyPrice.toFixed(2)}/month starting ${renewalDateStr}`;

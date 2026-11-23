@@ -767,6 +767,7 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
             membershipTier: true,
             subscriptionCadence: true,
             accountCredit: true,
+            referredByUserId: true,
             convertedAt: true,
             referralBonusMonths: true,
             trialEndsAt: true,
@@ -1008,6 +1009,75 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
             "SYSTEM", 
             `[PAYMENT-FULFILLMENT] Applied ${periodGrantedText} for user "${user.username}" (Amount: $${payment.amount.toFixed(2)}, Available Credit: $${thresholdResult.newAccountCredit.toFixed(2)}) via ${payment.provider}`
         );
+
+        // If this payment marks a referred user's first conversion, log and optionally notify the referrer
+        if (!user.convertedAt && user.referredByUserId && targetStatus === "APPROVED") {
+            try {
+                const referrer = await prisma.user.findUnique({
+                    where: { id: user.referredByUserId },
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                        membershipTier: true,
+                        subscriptionEndsAt: true,
+                        referralBonusMonths: true,
+                        referrals: {
+                            select: {
+                                id: true,
+                                username: true,
+                                name: true,
+                                status: true,
+                                convertedAt: true
+                            }
+                        }
+                    }
+                });
+                if (referrer) {
+                    const { calculateUserRenewalSummary } = await import("@/lib/referral-rewards");
+                    const isRefTier2 = referrer.membershipTier === "TIER_2_VIP";
+                    const refYearly = isRefTier2 ? (settings?.tier2YearlyPrice || 240) : (settings?.yearlyPrice || 180);
+                    const refMonthly = isRefTier2 ? (settings?.tier2MonthlyPrice || 25) : (settings?.monthlyPrice || 17.50);
+                    const rewardSummary = calculateUserRenewalSummary({
+                        user: referrer,
+                        yearlyPrice: refYearly,
+                        monthlyPrice: refMonthly
+                    });
+                    logger.addLog(
+                        "INFO",
+                        "AUTH",
+                        `[REFERRAL-CONVERTED] "${user.username}" converted via ${payment.provider} ($${payment.amount.toFixed(2)}) — credited referrer "${referrer.username}" (${rewardSummary.convertedReferralsCount} total credit(s), next annual renewal $${rewardSummary.discountedYearlyPrice.toFixed(2)}).`
+                    );
+                    if (referrer.email && settings?.emailNotificationsEnabled && settings?.notifyReferralReward) {
+                        const [{ renderEmailTemplate }, { sendOrQueueEmail }, { getAppUrl }] = await Promise.all([
+                            import("@/lib/email-templates"),
+                            import("@/lib/email-dispatcher"),
+                            import("@/lib/app-url")
+                        ]);
+                        const appUrl = await getAppUrl();
+                        const { subject, html } = await renderEmailTemplate("referral_reward_credited", {
+                            username: referrer.username,
+                            friendUsername: user.username,
+                            totalReferralsCount: rewardSummary.convertedReferralsCount,
+                            renewalImpactText: `1 Month Off Next Statement ($${rewardSummary.rewardDiscountAmount.toFixed(2)} discount)`,
+                            annualDiscountText: `$${rewardSummary.discountedYearlyPrice.toFixed(2)} instead of $${refYearly.toFixed(2)}`,
+                            delayedMonthDate: rewardSummary.delayedMonthlyStartDate || "Next Month",
+                            appUrl
+                        });
+                        await sendOrQueueEmail({
+                            to: referrer.email,
+                            subject,
+                            html,
+                            templateId: "referral_reward_credited",
+                            targetUser: referrer.username,
+                            userId: referrer.id
+                        });
+                    }
+                }
+            } catch (refErr: any) {
+                logger.addLog("WARN", "AUTH", `[REFERRAL-CONVERTED] Non-fatal error notifying referrer for "${user.username}": ${refErr?.message || refErr}`);
+            }
+        }
 
         // Dispatch payment confirmation receipt email to the user
         try {
