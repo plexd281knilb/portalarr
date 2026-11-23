@@ -32,7 +32,7 @@ export interface BillingCadenceSwitcherProps {
     pricing?: BillingPricingConfig | null;
     referralInfo?: any;
     variant?: "dashboard" | "settings";
-    onCadenceChanged?: (cadence: "MONTHLY" | "YEARLY") => void;
+    onCadenceChanged?: (cadence: "MONTHLY" | "YEARLY", updatedUser?: any) => void;
     className?: string;
 }
 
@@ -147,15 +147,17 @@ export function BillingCadenceSwitcher({
                 setFeedback({ type: "error", text: res.error || "Could not update billing plan." });
                 return;
             }
-            onCadenceChanged?.(nextCadence);
-            if (variant === "settings") {
+            onCadenceChanged?.(nextCadence, (res as any).updatedUser);
+            if (variant === "settings" || (res as any).recalculated) {
                 setFeedback({
                     type: "success",
-                    text: nextCadence === "MONTHLY"
+                    text: (res as any).recalculated && res.message
+                        ? res.message
+                        : nextCadence === "MONTHLY"
                         ? "Plan set to Monthly. Payment details updated below."
                         : "Plan set to Annual. Payment details updated below."
                 });
-                setTimeout(() => setFeedback(null), 4500);
+                setTimeout(() => setFeedback(null), 6500);
             }
             router.refresh();
         } catch (err: any) {

@@ -1576,8 +1576,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         pricing={paymentConfig}
                         referralInfo={referralInfo}
                         variant="settings"
-                        onCadenceChanged={(nextCadence) => {
-                            setUser((prev: any) => prev ? { ...prev, subscriptionCadence: nextCadence } : prev);
+                        onCadenceChanged={(nextCadence, updatedFields) => {
+                            setUser((prev: any) => prev ? {
+                                ...prev,
+                                ...(updatedFields || {}),
+                                subscriptionCadence: nextCadence
+                            } : prev);
                         }}
                     />
 

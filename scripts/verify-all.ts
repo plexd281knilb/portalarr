@@ -762,13 +762,27 @@ async function runTestSuite() {
             throw new Error(`Expected prorated monthly payment ($9.03) to fulfill FULL_MONTHLY, got: ${JSON.stringify(proratedMonthlyEval)}`);
         }
 
-        // 5e. Multi-month prepayment ($52.50 = 3 months @ $17.50) in Q4 (Nov) & Q3 (Sep) does not fall into PARTIAL_YEARLY or flip MONTHLY user
-        const novThreeMonthsEval = evaluatePaymentThreshold({
+        // 5e. Payments > 2x monthlyPrice ($45 or $52.50) accumulate toward PARTIAL_YEARLY unless user explicitly selected MONTHLY
+        const novFortyFiveYearlyEval = evaluatePaymentThreshold({
+            user: { status: "EXPIRED", membershipTier: "STANDARD" },
+            payment: { amount: 45, provider: "VENMO", emailDate: new Date("2026-11-16T12:00:00Z") }
+        });
+        if (novFortyFiveYearlyEval.action !== "PARTIAL_YEARLY" || novFortyFiveYearlyEval.cadence !== "YEARLY" || novFortyFiveYearlyEval.newAccountCredit !== 45) {
+            throw new Error(`Expected $45 (> 2 monthly payments) without MONTHLY preference to accrue PARTIAL_YEARLY, got: ${JSON.stringify(novFortyFiveYearlyEval)}`);
+        }
+        const novThreeMonthsUnsetEval = evaluatePaymentThreshold({
             user: { status: "EXPIRED", membershipTier: "STANDARD" },
             payment: { amount: 52.5, provider: "VENMO", emailDate: new Date("2026-11-16T12:00:00Z") }
         });
-        if (novThreeMonthsEval.action !== "FULL_MONTHLY" || novThreeMonthsEval.monthsGranted !== 3 || novThreeMonthsEval.cadence !== "MONTHLY") {
-            throw new Error(`Expected $52.50 in Nov to grant 3 monthly passes, got: ${JSON.stringify(novThreeMonthsEval)}`);
+        if (novThreeMonthsUnsetEval.action !== "PARTIAL_YEARLY" || novThreeMonthsUnsetEval.cadence !== "YEARLY" || novThreeMonthsUnsetEval.newAccountCredit !== 52.5) {
+            throw new Error(`Expected $52.50 without MONTHLY preference to accrue PARTIAL_YEARLY, got: ${JSON.stringify(novThreeMonthsUnsetEval)}`);
+        }
+        const novThreeMonthsMonthlyEval = evaluatePaymentThreshold({
+            user: { status: "EXPIRED", membershipTier: "STANDARD", subscriptionCadence: "MONTHLY" },
+            payment: { amount: 52.5, provider: "VENMO", emailDate: new Date("2026-11-16T12:00:00Z") }
+        });
+        if (novThreeMonthsMonthlyEval.action !== "FULL_MONTHLY" || novThreeMonthsMonthlyEval.monthsGranted !== 3 || novThreeMonthsMonthlyEval.cadence !== "MONTHLY") {
+            throw new Error(`Expected $52.50 for explicit MONTHLY user in Nov to grant 3 monthly passes, got: ${JSON.stringify(novThreeMonthsMonthlyEval)}`);
         }
         const sepMonthlyUserEval = evaluatePaymentThreshold({
             user: { status: "APPROVED", membershipTier: "STANDARD", subscriptionCadence: "MONTHLY", subscriptionEndsAt: new Date("2026-10-01T23:59:59Z") },
@@ -4040,6 +4054,30 @@ async function runTestSuite() {
             const yearlyRes = await updateCurrentUserBillingCadenceAction("YEARLY");
             if (!yearlyRes.success || yearlyRes.cadence !== "YEARLY") {
                 throw new Error(`Expected switching back to YEARLY to succeed, got: ${JSON.stringify(yearlyRes)}`);
+            }
+            // Auto-recalculation when user has banked accountCredit ($45) and flips from YEARLY -> MONTHLY
+            const settingsSnap = await prisma.settings.findUnique({ where: { id: "global" } });
+            const moRate = settingsSnap?.monthlyPrice ?? 17.5;
+            await prisma.user.update({
+                where: { id: cadenceUser.id },
+                data: { accountCredit: 45, subscriptionEndsAt: new Date(2027, 0, 1, 23, 59, 59) }
+            });
+            const recalcRes = await updateCurrentUserBillingCadenceAction("MONTHLY");
+            const expectedMos = Math.floor(45 / moRate);
+            const expectedRemCredit = Math.round((45 - expectedMos * moRate) * 100) / 100;
+            const afterRecalc = await prisma.user.findUnique({
+                where: { id: cadenceUser.id },
+                select: { subscriptionCadence: true, accountCredit: true, subscriptionEndsAt: true }
+            });
+            if (
+                !recalcRes.success ||
+                !recalcRes.recalculated ||
+                afterRecalc?.subscriptionCadence !== "MONTHLY" ||
+                Math.abs((afterRecalc?.accountCredit ?? -1) - expectedRemCredit) > 0.01 ||
+                !afterRecalc?.subscriptionEndsAt ||
+                afterRecalc.subscriptionEndsAt <= new Date(2027, 0, 1, 23, 59, 59)
+            ) {
+                throw new Error(`Expected switching to MONTHLY with $45 credit to auto-apply ${expectedMos} mos and leave $${expectedRemCredit} credit, got res=${JSON.stringify(recalcRes)}, db=${JSON.stringify(afterRecalc)}`);
             }
             const invalidRes = await updateCurrentUserBillingCadenceAction("WEEKLY" as any);
             if (invalidRes.success) {

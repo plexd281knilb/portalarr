@@ -235,19 +235,20 @@ export function evaluatePaymentThreshold(params: {
     }
 
     // 2. Partial Yearly Payment (installment towards annual subscription)
-    // Never trap explicit MONTHLY users or exact multi-month prepayments (e.g. 3x or 4x monthlyPrice) as underpaid yearly installments.
-    // Explicit YEARLY subscribers sending sub-monthly installments (e.g. $15 when monthlyPrice=$17.50) accumulate toward Annual Plan instead of "Partial Monthly".
+    // Never trap explicit MONTHLY subscribers as partial yearly; for non-monthly accounts, any payment > 2 monthly payments
+    // (or active YEARLY sub-monthly installment, near-yearly total, or >=50% YEARLY) accumulates toward the Annual Plan.
     const hasActiveSubOrApprovedYearly = Boolean(
         explicitCadence === "YEARLY" &&
         totalCredit < monthlyPrice &&
         (user.status === "APPROVED" || (existingExpiry && existingExpiry.getTime() > paymentDate.getTime()))
     );
+    const isGreaterThanTwoMonthlyPayments = monthlyPrice > 0 && totalCredit > Math.round((monthlyPrice * 2) * 100) / 100;
     const isNearYearlyTarget = (effectiveYearlyTarget - totalCredit) <= 30;
     const isYearlyIntent = totalCredit < effectiveYearlyTarget && explicitCadence !== "MONTHLY" && (
         isNearYearlyTarget ||
         hasActiveSubOrApprovedYearly ||
-        (explicitCadence === "YEARLY" && totalCredit >= (effectiveYearlyTarget * 0.5)) ||
-        (!isExactMonthlyMultiple && totalCredit >= 50 && totalCredit > (monthlyPrice * 2.5))
+        isGreaterThanTwoMonthlyPayments ||
+        (explicitCadence === "YEARLY" && totalCredit >= (effectiveYearlyTarget * 0.5))
     );
 
     if (isYearlyIntent) {

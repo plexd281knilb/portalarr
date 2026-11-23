@@ -4400,19 +4400,161 @@ export async function updateCurrentUserBillingCadenceAction(cadence: "MONTHLY" |
 
     const target = await prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, username: true, role: true, membershipTier: true, subscriptionCadence: true }
+        select: {
+            id: true,
+            username: true,
+            email: true,
+            role: true,
+            status: true,
+            membershipTier: true,
+            subscriptionCadence: true,
+            subscriptionEndsAt: true,
+            trialEndsAt: true,
+            accountCredit: true,
+            referralBonusMonths: true,
+            referrals: {
+                select: {
+                    id: true,
+                    username: true,
+                    status: true,
+                    convertedAt: true
+                }
+            }
+        }
     });
     if (!target) return { success: false, error: "Account not found." };
     if (target.role === "ADMIN" || target.membershipTier === "PERMANENT" || target.subscriptionCadence === "PERMANENT") {
         return { success: false, error: "Permanent accounts do not have a recurring billing plan." };
     }
 
-    await prisma.user.update({
+    const creditBalance = Math.max(0, Math.round(Number(target.accountCredit || 0) * 100) / 100);
+    let updateData: Record<string, any> = { subscriptionCadence: normalized };
+    let recalculated = false;
+    let customMessage = normalized === "MONTHLY" ? "Switched billing preference to Monthly Plan." : "Switched billing preference to Annual Pass.";
+    let shouldActivatePlex = false;
+    let activatedExpiryIso: string | null = null;
+
+    if (creditBalance > 0) {
+        const [{ evaluatePaymentThreshold }, settings] = await Promise.all([
+            import("@/lib/payment-threshold-engine"),
+            prisma.settings.findUnique({ where: { id: "global" } })
+        ]);
+        const now = new Date();
+        const isTier2 = target.membershipTier === "TIER_2_VIP";
+        const yearlyRate = isTier2 ? (settings?.tier2YearlyPrice ?? 240) : (settings?.yearlyPrice ?? 180);
+        const monthlyRate = isTier2 ? (settings?.tier2MonthlyPrice ?? 25) : (settings?.monthlyPrice ?? 17.50);
+
+        if (normalized === "MONTHLY" && creditBalance >= monthlyRate) {
+            const evalRes = evaluatePaymentThreshold({
+                user: {
+                    id: target.id,
+                    username: target.username,
+                    email: target.email,
+                    status: target.status,
+                    membershipTier: target.membershipTier,
+                    subscriptionCadence: "MONTHLY",
+                    accountCredit: creditBalance,
+                    subscriptionEndsAt: target.subscriptionEndsAt,
+                    trialEndsAt: target.trialEndsAt,
+                    referralBonusMonths: target.referralBonusMonths,
+                    referrals: target.referrals
+                },
+                payment: { amount: 0, emailDate: now, provider: "ACCOUNT_CREDIT" },
+                settings
+            });
+            if (evalRes.action === "FULL_MONTHLY") {
+                const isActive = evalRes.newExpiryDate > now;
+                const nextStatus = isActive ? "APPROVED" : target.status;
+                const nextTier = (target.membershipTier === "TRIAL" || !target.membershipTier) && nextStatus === "APPROVED"
+                    ? "STANDARD"
+                    : target.membershipTier;
+                updateData = {
+                    subscriptionCadence: "MONTHLY",
+                    subscriptionEndsAt: evalRes.newExpiryDate,
+                    accountCredit: evalRes.newAccountCredit,
+                    status: nextStatus,
+                    membershipTier: nextTier,
+                    trialEndsAt: nextStatus === "APPROVED" ? null : target.trialEndsAt
+                };
+                recalculated = true;
+                shouldActivatePlex = isActive && (target.status === "TRIAL" || target.status === "EXPIRED" || target.status === "SUSPENDED");
+                activatedExpiryIso = evalRes.newExpiryDate.toISOString();
+                customMessage = `Switched to Monthly and applied $${evalRes.creditedAmount.toFixed(2)} from credit (${evalRes.periodGrantedText}). Remaining credit: $${evalRes.newAccountCredit.toFixed(2)}.`;
+            }
+        } else if (normalized === "YEARLY" && creditBalance >= yearlyRate) {
+            const evalRes = evaluatePaymentThreshold({
+                user: {
+                    id: target.id,
+                    username: target.username,
+                    email: target.email,
+                    status: target.status,
+                    membershipTier: target.membershipTier,
+                    subscriptionCadence: "YEARLY",
+                    accountCredit: creditBalance,
+                    subscriptionEndsAt: target.subscriptionEndsAt,
+                    trialEndsAt: target.trialEndsAt,
+                    referralBonusMonths: target.referralBonusMonths,
+                    referrals: target.referrals
+                },
+                payment: { amount: 0, emailDate: now, provider: "ACCOUNT_CREDIT" },
+                settings
+            });
+            if (evalRes.action === "FULL_YEARLY") {
+                const isActive = evalRes.newExpiryDate > now;
+                const nextStatus = isActive ? "APPROVED" : target.status;
+                const nextTier = (target.membershipTier === "TRIAL" || !target.membershipTier) && nextStatus === "APPROVED"
+                    ? "STANDARD"
+                    : target.membershipTier;
+                updateData = {
+                    subscriptionCadence: "YEARLY",
+                    subscriptionEndsAt: evalRes.newExpiryDate,
+                    accountCredit: evalRes.newAccountCredit,
+                    status: nextStatus,
+                    membershipTier: nextTier,
+                    trialEndsAt: nextStatus === "APPROVED" ? null : target.trialEndsAt
+                };
+                recalculated = true;
+                shouldActivatePlex = isActive && (target.status === "TRIAL" || target.status === "EXPIRED" || target.status === "SUSPENDED");
+                activatedExpiryIso = evalRes.newExpiryDate.toISOString();
+                customMessage = `Switched to Annual and applied $${evalRes.creditedAmount.toFixed(2)} from credit (${evalRes.periodGrantedText}). Remaining credit: $${evalRes.newAccountCredit.toFixed(2)}.`;
+            }
+        }
+    }
+
+    const updatedUser = await prisma.user.update({
         where: { id: userId },
-        data: { subscriptionCadence: normalized }
+        data: updateData,
+        select: {
+            subscriptionCadence: true,
+            subscriptionEndsAt: true,
+            accountCredit: true,
+            status: true,
+            membershipTier: true,
+            trialEndsAt: true
+        }
     });
 
-    logger.addLog("INFO", "PLEX", `User "${target.username}" switched billing preference to ${normalized}.`);
+    if (recalculated) {
+        await prisma.user.updateMany({
+            where: { parentUserId: userId },
+            data: {
+                subscriptionCadence: updatedUser.subscriptionCadence,
+                subscriptionEndsAt: updatedUser.subscriptionEndsAt,
+                status: updatedUser.status,
+                membershipTier: updatedUser.membershipTier,
+                trialEndsAt: updatedUser.trialEndsAt
+            }
+        }).catch(() => {});
+
+        if (shouldActivatePlex && activatedExpiryIso) {
+            try {
+                const expIso = activatedExpiryIso;
+                await runAsServerInternal(() => setUserTrialOrSubscriptionInternal(userId, "CUSTOM", expIso));
+            } catch {}
+        }
+    }
+
+    logger.addLog("INFO", "PLEX", `User "${target.username}" switched billing preference to ${normalized}${recalculated ? " (auto-applied unused credit to subscription)" : ""}.`);
     try {
         revalidatePath("/");
         revalidatePath("/profile");
@@ -4422,7 +4564,16 @@ export async function updateCurrentUserBillingCadenceAction(cadence: "MONTHLY" |
     return {
         success: true,
         cadence: normalized as "MONTHLY" | "YEARLY",
-        message: normalized === "MONTHLY" ? "Switched billing preference to Monthly Plan." : "Switched billing preference to Annual Pass."
+        recalculated,
+        updatedUser: {
+            subscriptionCadence: updatedUser.subscriptionCadence,
+            subscriptionEndsAt: updatedUser.subscriptionEndsAt ? updatedUser.subscriptionEndsAt.toISOString() : null,
+            accountCredit: updatedUser.accountCredit,
+            status: updatedUser.status,
+            membershipTier: updatedUser.membershipTier,
+            trialEndsAt: updatedUser.trialEndsAt ? updatedUser.trialEndsAt.toISOString() : null
+        },
+        message: customMessage
     };
 }
 
