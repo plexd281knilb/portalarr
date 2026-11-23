@@ -4788,6 +4788,7 @@ async function runTestSuite() {
             throw new Error(`Expected subject to include 2026 and 2027, got: ${rendered.subject}`);
         }
         const requiredSnippets = [
+            "DomsHomeLab (PLEX)",
             "Did the price go up?",
             "January 1, 2027",
             "$180/year",
@@ -4809,6 +4810,30 @@ async function runTestSuite() {
         }
         if (/quick answers everyone asks first/i.test(rendered.html)) {
             throw new Error("Rendered annual_thanksgiving_recap HTML still contains overly meta intro phrasing");
+        }
+        if (/What's Coming Next|In-Browser Audiobook Player/i.test(rendered.html)) {
+            throw new Error("Rendered annual_thanksgiving_recap HTML must NOT include removed 'What's Coming Next' roadmap section");
+        }
+
+        // 4b. Recipient eligibility: strictly non-permanent approved members with a future due date
+        const { isEligibleForAnnualRecap } = await import("../src/lib/annual-recap");
+        const refNow = new Date(2026, 10, 23, 12, 0, 0);
+        const futureDue = new Date(2027, 0, 1, 23, 59, 59);
+        const pastDue = new Date(2026, 10, 1, 23, 59, 59);
+        if (!isEligibleForAnnualRecap({ email: "member@example.com", status: "APPROVED", role: "USER", membershipTier: "STANDARD", subscriptionCadence: "YEARLY", subscriptionEndsAt: futureDue }, refNow)) {
+            throw new Error("Expected future-due non-permanent APPROVED member to be eligible for annual recap");
+        }
+        for (const ineligible of [
+            { email: "perm_tier@example.com", status: "APPROVED", role: "USER", membershipTier: "PERMANENT", subscriptionCadence: "YEARLY", subscriptionEndsAt: futureDue },
+            { email: "perm_cad@example.com", status: "APPROVED", role: "USER", membershipTier: "STANDARD", subscriptionCadence: "PERMANENT", subscriptionEndsAt: futureDue },
+            { email: "admin@example.com", status: "APPROVED", role: "ADMIN", membershipTier: "ADMIN", subscriptionCadence: null, subscriptionEndsAt: futureDue },
+            { email: "nodate@example.com", status: "APPROVED", role: "USER", membershipTier: "STANDARD", subscriptionCadence: "YEARLY", subscriptionEndsAt: null },
+            { email: "expired@example.com", status: "APPROVED", role: "USER", membershipTier: "STANDARD", subscriptionCadence: "YEARLY", subscriptionEndsAt: pastDue },
+            { email: "trial@example.com", status: "TRIAL", role: "USER", membershipTier: "TRIAL", subscriptionCadence: null, subscriptionEndsAt: futureDue }
+        ]) {
+            if (isEligibleForAnnualRecap(ineligible, refNow)) {
+                throw new Error(`Expected ${ineligible.email} to be EXCLUDED from annual recap recipients`);
+            }
         }
         const priceIdx = rendered.html.indexOf("Did the price go up?");
         const compIdx = rendered.html.indexOf("How We Compare");

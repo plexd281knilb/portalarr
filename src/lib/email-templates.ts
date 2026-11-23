@@ -1592,13 +1592,13 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     {
         id: "annual_thanksgiving_recap",
         name: "Annual Thanksgiving Recap & Renewal Guide",
-        description: "Yearly broadcast sent automatically on the Saturday before Thanksgiving with pricing at a glance, due date, payment instructions, library totals, streaming competitor price comparisons, new features, and what's coming next.",
-        triggerEvent: "Sent automatically once per year on the Saturday before Thanksgiving (or manually from Broadcasts / System Schedules), staged in the Admin Approval Queue when enabled.",
+        description: "Yearly broadcast sent automatically on the Saturday before Thanksgiving with pricing at a glance, due date, payment instructions, library totals, streaming competitor price comparisons, and new features added this year.",
+        triggerEvent: "Sent automatically once per year on the Saturday before Thanksgiving (or manually from Broadcasts / System Schedules) to active non-permanent members with a future renewal due date, staged in the Admin Approval Queue when enabled.",
         category: "BROADCAST",
         defaultSubject: "{portalName} {currentYear} Year in Review — Same Price, {nextYear} Renewal & What's New",
         defaultBody: `<h2 class="email-heading" style="margin-top: 0; color: #0f172a;">Happy Thanksgiving Week, {username}!</h2>
 <p class="email-text" style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 16px;">
-    Thanks for watching along on <strong>{portalName}</strong> this year! Before the holiday rush kicks in, here's a quick rundown of {nextYear} renewal details, how rates compare elsewhere, and a look at what's new around the server.
+    Thanks for watching along on <strong>{portalName} (PLEX)</strong> this year! Before the holiday rush kicks in, here's a quick rundown of {nextYear} renewal details, how rates compare elsewhere, and a look at what's new around the server.
 </p>
 
 <!-- TOP QUICK ANSWERS -->
@@ -1689,15 +1689,6 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <li style="margin-bottom: 6px;"><strong>E-Books, Comics &amp; Audiobooks + Send-to-Kindle:</strong> Built-in browser reader, wireless 1-click Kindle delivery, automatic series tracking, and audiobook streaming in Plex.</li>
     <li style="margin-bottom: 6px;"><strong>24/7 AI Assistant &amp; Stream Diagnostics:</strong> Instant buffering checks, built-in speed test, device setup guides, and automatic audio/file replacement when something won't play cleanly.</li>
     <li style="margin-bottom: 6px;"><strong>Flexible Billing &amp; Linked Family Inboxes:</strong> Flip between Monthly and Annual billing anytime right from your dashboard or Account Settings to see exact amounts due, and route renewal or request alerts to a spouse or secondary inbox.</li>
-</ul>
-
-<!-- THINGS TO COME -->
-<h3 class="email-heading" style="color: #0f172a; font-size: 16px; margin: 22px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">What's Coming Next</h3>
-<ul class="email-text" style="color: #334155; font-size: 13.5px; line-height: 1.6; padding-left: 18px; margin: 0 0 20px 0;">
-    <li style="margin-bottom: 5px;"><strong>In-Browser Audiobook Player:</strong> Floating audio player with sleep timers and speed controls across pages.</li>
-    <li style="margin-bottom: 5px;"><strong>Member Referral Rewards:</strong> Earn free months and renewal discounts when friends join.</li>
-    <li style="margin-bottom: 5px;"><strong>Family &amp; Kids Sub-Profiles:</strong> Age-filtered shelves and optional PIN protection for shared TVs.</li>
-    <li style="margin-bottom: 5px;"><strong>1-Click Subtitle Sync, Personal Year-in-Review &amp; Mobile Alerts:</strong> Fix out-of-sync subtitles on the fly, view your yearly watch recap, and get instant alerts when requests finish.</li>
 </ul>
 
 <p class="email-muted" style="font-size: 13.5px; color: #475569; text-align: center; margin-top: 20px; word-break: break-word;">

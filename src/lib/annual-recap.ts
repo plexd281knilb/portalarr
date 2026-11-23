@@ -293,8 +293,42 @@ export async function buildAnnualRecapTemplateVars(options?: {
 }
 
 /**
+ * Only non-permanent approved members with a valid email address and a renewal due date strictly in the future
+ * should receive the Annual Thanksgiving Recap email.
+ */
+export function isEligibleForAnnualRecap(
+    user: {
+        email?: string | null;
+        status?: string | null;
+        role?: string | null;
+        membershipTier?: string | null;
+        subscriptionCadence?: string | null;
+        subscriptionEndsAt?: Date | string | null;
+    },
+    now: Date = new Date()
+): boolean {
+    if (!user.email || !user.email.includes("@")) return false;
+    if (String(user.status || "").toUpperCase() !== "APPROVED") return false;
+
+    const roleUpper = String(user.role || "").toUpperCase();
+    const tierUpper = String(user.membershipTier || "").toUpperCase();
+    const cadenceUpper = String(user.subscriptionCadence || "").toUpperCase();
+    if (roleUpper === "ADMIN" || tierUpper === "PERMANENT" || tierUpper === "ADMIN" || cadenceUpper === "PERMANENT") {
+        return false;
+    }
+
+    if (!user.subscriptionEndsAt) return false;
+    const due = new Date(user.subscriptionEndsAt);
+    if (isNaN(due.getTime()) || due.getTime() <= now.getTime()) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * Dispatches (or stages for Admin Approval) the Annual Thanksgiving Recap broadcast
- * to all approved members with valid email addresses, deduplicated once per year.
+ * to all eligible non-permanent approved members with a future due date, deduplicated once per year.
  */
 export async function sendAnnualThanksgivingRecapInternal(options?: {
     force?: boolean;
@@ -335,13 +369,17 @@ export async function sendAnnualThanksgivingRecapInternal(options?: {
     }
 
     const users = await prisma.user.findMany({
-        where: { status: "APPROVED" },
+        where: {
+            status: "APPROVED",
+            role: { not: "ADMIN" },
+            subscriptionEndsAt: { gt: now }
+        },
         include: { notificationPreference: true }
     });
 
-    const eligibleUsers = users.filter((u) => u.email && u.email.includes("@"));
+    const eligibleUsers = users.filter((u) => isEligibleForAnnualRecap(u, now));
     if (eligibleUsers.length === 0) {
-        return { success: true, skipped: true, reason: "No approved members with valid email addresses found.", total: 0, sent: 0, queued: 0, failed: 0 };
+        return { success: true, skipped: true, reason: "No non-permanent approved members with a future renewal due date found.", total: 0, sent: 0, queued: 0, failed: 0 };
     }
 
     const { renderEmailTemplate } = await import("@/lib/email-templates");

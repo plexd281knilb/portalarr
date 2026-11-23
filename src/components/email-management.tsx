@@ -2643,7 +2643,7 @@ export default function EmailManagement() {
                                             <Megaphone className="h-4 w-4 text-amber-500" /> Annual Thanksgiving Recap
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
-                                            Automatically sends once a year on the Saturday before Thanksgiving ({annualNextDate || "Sat before Thanksgiving"}) with pricing at a glance, due date, payment links, library counts, streaming comparisons, new features, and roadmap.
+                                            Automatically sends once a year on the Saturday before Thanksgiving ({annualNextDate || "Sat before Thanksgiving"}) to non-permanent members with a future due date, covering pricing, due date, payment links, library counts, streaming comparisons, and new features.
                                         </p>
                                     </div>
                                     <Switch
