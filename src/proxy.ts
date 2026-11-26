@@ -105,6 +105,7 @@ export async function proxy(req: NextRequest) {
     if (
       (pathname.startsWith("/admin") ||
        pathname.startsWith("/curation") ||
+       pathname.startsWith("/games") ||
        pathname.startsWith("/tautulli") ||
        pathname.startsWith("/streams") ||
        pathname.startsWith("/api/curation") ||
@@ -147,8 +148,8 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/admin/tautulli", req.url));
     }
 
-    // 6. Role-based protection for Radarr/Sonarr/Game Vault routes
-    if ((pathname.startsWith("/radarr") || pathname.startsWith("/sonarr") || pathname.startsWith("/games")) && payload.role !== "ADMIN" && payload.role !== "SUPER_USER") {
+    // 6. Role-based protection for Radarr/Sonarr routes
+    if ((pathname.startsWith("/radarr") || pathname.startsWith("/sonarr")) && payload.role !== "ADMIN" && payload.role !== "SUPER_USER") {
       if (pathname.startsWith("/api")) {
         return NextResponse.json({ error: "Forbidden: Admin or Super User access required" }, { status: 403 });
       }

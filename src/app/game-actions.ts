@@ -34,12 +34,8 @@ async function verifyGameVaultAccess() {
     throw new Error("Unauthorized");
   }
   const role = String(session.role || "").toUpperCase();
-  const status = String((session as any).status || "APPROVED").toUpperCase();
-  if (role !== "ADMIN" && role !== "SUPER_USER") {
-    throw new Error("Forbidden: Admin or Super User access required");
-  }
-  if (role !== "ADMIN" && ["PENDING", "REJECTED", "SUSPENDED", "EXPIRED"].includes(status)) {
-    throw new Error("Unauthorized");
+  if (role !== "ADMIN") {
+    throw new Error("Forbidden: Admin access required");
   }
   return session;
 }

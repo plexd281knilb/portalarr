@@ -5528,9 +5528,9 @@ async function runTestSuite() {
             }
         }
 
-        // 2. /games edge policy & proxy gating
-        if (!matchesCloudflareSuperUser("/games")) {
-            throw new Error("/games must be covered by CLOUDFLARE_SUPER_USER_PATHS");
+        // 2. /games strict Admin-only edge policy & proxy gating
+        if (!matchesCloudflareAdmin("/games") || matchesCloudflareSuperUser("/games") || matchesCloudflareBypass("/games")) {
+            throw new Error("/games must be strictly covered by CLOUDFLARE_ADMIN_PATHS");
         }
 
         // 3. Nintendo Switch platform strictness & Prowlarr release scoring

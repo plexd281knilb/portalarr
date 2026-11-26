@@ -305,17 +305,6 @@ function SidebarNavContent({ onItemClick, initialRole, initialIsTrial }: Sidebar
               inactiveHoverClass="hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-200"
               onClick={onItemClick}
             />
-
-            <NavItem
-              href="/games"
-              label="Game Vault"
-              icon={Gamepad2}
-              isActive={pathname.startsWith("/games")}
-              iconColor="text-rose-600 dark:text-rose-400 group-hover:text-rose-700 dark:group-hover:text-rose-300"
-              activeColorClass="bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.2)]"
-              inactiveHoverClass="hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-200"
-              onClick={onItemClick}
-            />
           </div>
         </div>
       )}
@@ -428,6 +417,17 @@ function SidebarNavContent({ onItemClick, initialRole, initialIsTrial }: Sidebar
               iconColor="text-teal-600 dark:text-teal-400 group-hover:text-teal-700 dark:group-hover:text-teal-300"
               activeColorClass="bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.2)]"
               inactiveHoverClass="hover:bg-teal-500/10 hover:text-teal-700 dark:hover:text-teal-200"
+              onClick={onItemClick}
+            />
+
+            <NavItem
+              href="/games"
+              label="Game Vault"
+              icon={Gamepad2}
+              isActive={pathname.startsWith("/games")}
+              iconColor="text-rose-600 dark:text-rose-400 group-hover:text-rose-700 dark:group-hover:text-rose-300"
+              activeColorClass="bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.2)]"
+              inactiveHoverClass="hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-200"
               onClick={onItemClick}
             />
 

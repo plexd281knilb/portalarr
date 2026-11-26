@@ -16,7 +16,7 @@ export default async function GamesPage() {
   if (!user) {
     redirect("/login");
   }
-  if (user.role !== "ADMIN" && user.role !== "SUPER_USER") {
+  if (user.role !== "ADMIN") {
     redirect("/");
   }
 
