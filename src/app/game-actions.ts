@@ -22,6 +22,8 @@ import {
   probeSabnzbdLive,
   pushGameNzbToSabnzbd,
   queryProwlarrForGame,
+  resolveGameDestinationPath,
+  scanLocalGamesLibrary,
   syncActiveGameDownloadsInternal,
 } from "@/lib/games/downloads";
 
@@ -73,6 +75,14 @@ export async function getGameVaultOverviewAction() {
     const portalarrDownloadsPath = settings?.downloadsPath || "/downloads";
     const portalarrGamesPath = settings?.gamesLibraryPath || "";
     const resolvedOwnfoilPrimaryPath = ownfoilProbe.libraryPaths[0] || "";
+    const effectiveDest = resolveGameDestinationPath({
+      configuredGamesLibraryPath: portalarrGamesPath,
+      ownfoilLibraryPaths: ownfoilProbe.libraryPaths,
+    });
+    const localScan = scanLocalGamesLibrary(effectiveDest.path);
+    const mergedOwnedTitles = Array.from(
+      new Set([...ownfoilProbe.ownedTitlesNormalized, ...localScan.normalizedTitles])
+    );
 
     const pathChecks = {
       portalarrDownloadsPath,
@@ -95,6 +105,8 @@ export async function getGameVaultOverviewAction() {
         existsInPortalarr: fs.existsSync(p),
       })),
       ownfoilPrimaryPath: resolvedOwnfoilPrimaryPath || null,
+      effectiveDestinationPath: effectiveDest.path,
+      effectiveDestinationSource: effectiveDest.source,
     };
 
     return {
@@ -130,7 +142,8 @@ export async function getGameVaultOverviewAction() {
         gamesLibraryPath: portalarrGamesPath,
         ownfoilScanOnDownload: settings?.ownfoilScanOnDownload !== false,
       },
-      ownedTitlesNormalized: ownfoilProbe.ownedTitlesNormalized,
+      ownedTitlesNormalized: mergedOwnedTitles,
+      localLibraryFiles: localScan.files.slice(0, 200),
       requests,
       platforms: GAME_PLATFORMS.map((p) => ({
         slug: p.slug,

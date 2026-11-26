@@ -25,6 +25,6 @@ services:
       # Host Docker Socket (Enables Scripts & Automation tab to inspect and restart host containers)
       - /var/run/docker.sock:/var/run/docker.sock
 
-      # Book Library Share (Read/Write mount for book upload & processing)
-      # Map this to your Unraid book share (e.g. /mnt/user/books:/books)
+      # Book & Switch Game Shares (Read/Write mounts for automatic download staging)
       # - /mnt/user/books:/books
+      # - /mnt/user/switch_games:/switch_games

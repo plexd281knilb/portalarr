@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import {
   cleanServiceBaseUrl,
   getOwnfoilInstance,
+  probeOwnfoilLive,
   triggerOwnfoilLibraryScan,
 } from "./ownfoil";
 import {
@@ -494,24 +495,212 @@ const GAME_ARCHIVE_OR_ROM_EXTS = new Set([
   ".smc", ".nes", ".gba", ".nds",
 ]);
 
-function copyCompletedGameFilesIfMounted(storagePath: string | undefined, gamesLibraryPath: string | null | undefined): number {
-  if (!storagePath || !gamesLibraryPath) return 0;
+function hasGameFileInsideDir(dirPath: string, depth = 0): boolean {
+  if (!fs.existsSync(dirPath) || depth > 3) return false;
   try {
-    const srcRoot = path.resolve(storagePath);
-    const destRoot = path.resolve(gamesLibraryPath);
+    const stat = fs.statSync(dirPath);
+    if (!stat.isDirectory()) {
+      return GAME_ARCHIVE_OR_ROM_EXTS.has(path.extname(dirPath).toLowerCase());
+    }
+    for (const entry of fs.readdirSync(dirPath)) {
+      if (entry.startsWith("_UNPACK_") || entry.startsWith("_FAILED_")) continue;
+      if (hasGameFileInsideDir(path.join(dirPath, entry), depth + 1)) return true;
+    }
+  } catch {}
+  return false;
+}
+
+export function resolveCompletedGameSourceDir(options: {
+  sabStorage?: string;
+  downloadsPath?: string | null;
+  sabCategory?: string | null;
+  releaseTitle?: string | null;
+  gameTitle?: string | null;
+}): string | null {
+  const { sabStorage, downloadsPath, sabCategory, releaseTitle, gameTitle } = options;
+
+  // 1. Direct SABnzbd reported storage path inside container
+  if (sabStorage && fs.existsSync(sabStorage)) {
+    return sabStorage;
+  }
+
+  // 2. Fallback across Settings.downloadsPath (matching Books download resolution)
+  const dlRoot = (downloadsPath || process.env.DOWNLOADS_DIR || "/downloads").trim();
+  const cat = (sabCategory || "").trim();
+  const jobFolderName = sabStorage ? path.basename(sabStorage.replace(/[/\\]+$/, "")) : "";
+
+  const baseSearchDirs = Array.from(
+    new Set(
+      [
+        ...(cat
+          ? [
+              path.join(dlRoot, cat),
+              path.join(dlRoot, "complete", cat),
+              path.join(dlRoot, "completed", cat),
+            ]
+          : []),
+        path.join(dlRoot, "complete"),
+        path.join(dlRoot, "completed"),
+        dlRoot,
+      ].filter(Boolean)
+    )
+  );
+
+  // 2a. Look for exact job folder name inside configured downloads paths
+  if (jobFolderName) {
+    for (const baseDir of baseSearchDirs) {
+      const candidate = path.join(baseDir, jobFolderName);
+      if (fs.existsSync(candidate) && hasGameFileInsideDir(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  // 2b. Fuzzy match job subfolder by release/game title words inside category/downloads folders
+  const matchTokens = (releaseTitle || gameTitle || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3);
+
+  if (matchTokens.length > 0) {
+    for (const baseDir of baseSearchDirs) {
+      if (!fs.existsSync(baseDir)) continue;
+      try {
+        for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
+          if (entry.name.startsWith("_UNPACK_") || entry.name.startsWith("_FAILED_")) continue;
+          const low = entry.name.toLowerCase();
+          const hits = matchTokens.filter((t) => low.includes(t)).length;
+          if (hits >= Math.max(1, Math.ceil(matchTokens.length * 0.6))) {
+            const candidate = path.join(baseDir, entry.name);
+            if (hasGameFileInsideDir(candidate)) return candidate;
+          }
+        }
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+export function resolveGameDestinationPath(options: {
+  configuredGamesLibraryPath?: string | null;
+  ownfoilLibraryPaths?: string[];
+  extraCandidatePaths?: string[];
+}): { path: string | null; source: "Vault Settings" | "Ownfoil Library (Auto)" | "Container Mount (Auto)" | "None Mounted" } {
+  const explicit = (options.configuredGamesLibraryPath || "").trim();
+  if (explicit && fs.existsSync(explicit)) {
+    return { path: explicit, source: "Vault Settings" };
+  }
+  for (const ownfoilPath of options.ownfoilLibraryPaths || []) {
+    const clean = (ownfoilPath || "").trim();
+    if (clean && fs.existsSync(clean)) {
+      return { path: clean, source: "Ownfoil Library (Auto)" };
+    }
+  }
+  const commonShareMounts = options.extraCandidatePaths || [
+    "/switch_games",
+    "/mnt/user/switch_games",
+    "/games",
+  ];
+  for (const cand of commonShareMounts) {
+    const clean = (cand || "").trim();
+    if (clean && fs.existsSync(clean)) {
+      return { path: clean, source: "Container Mount (Auto)" };
+    }
+  }
+  if (explicit) {
+    return { path: explicit, source: "None Mounted" };
+  }
+  return { path: null, source: "None Mounted" };
+}
+
+export function normalizeGameTitleForLibraryMatch(rawName: string): { cleanTitle: string; normalizedKey: string } {
+  const withoutExt = rawName.replace(/\.[^.]+$/, "");
+  const cleanTitle = withoutExt
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[._]+/g, " ")
+    .replace(/\bv?\d+(?:\.\d+)*$/i, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const normalizedKey = (cleanTitle || withoutExt).toLowerCase().replace(/[^a-z0-9]/g, "");
+  return { cleanTitle: cleanTitle || withoutExt, normalizedKey };
+}
+
+export interface LocalLibraryGameFile {
+  name: string;
+  cleanTitle: string;
+  normalizedKey: string;
+  ext: string;
+  sizeBytes: number;
+}
+
+export function scanLocalGamesLibrary(destPath: string | null | undefined): {
+  files: LocalLibraryGameFile[];
+  normalizedTitles: string[];
+} {
+  if (!destPath || !fs.existsSync(destPath)) {
+    return { files: [], normalizedTitles: [] };
+  }
+  const root = path.resolve(destPath);
+  const files: LocalLibraryGameFile[] = [];
+  const normSet = new Set<string>();
+
+  const walk = (dir: string, depth: number) => {
+    if (depth > 3) return;
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name.startsWith(".")) continue;
+        const full = path.resolve(dir, entry.name);
+        if (!full.startsWith(root + path.sep)) continue;
+        if (entry.isDirectory()) {
+          walk(full, depth + 1);
+          continue;
+        }
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!GAME_ARCHIVE_OR_ROM_EXTS.has(ext)) continue;
+        const stat = fs.statSync(full);
+        const { cleanTitle, normalizedKey } = normalizeGameTitleForLibraryMatch(entry.name);
+        if (normalizedKey) normSet.add(normalizedKey);
+        files.push({
+          name: entry.name,
+          cleanTitle,
+          normalizedKey,
+          ext: ext.replace(".", "").toUpperCase(),
+          sizeBytes: stat.size,
+        });
+      }
+    } catch {}
+  };
+
+  walk(root, 0);
+  files.sort((a, b) => a.cleanTitle.localeCompare(b.cleanTitle));
+  return { files, normalizedTitles: Array.from(normSet) };
+}
+
+export function moveCompletedGameFilesIfMounted(
+  sourcePath: string | null | undefined,
+  destDirPath: string | null | undefined,
+  downloadsRootPath?: string | null
+): number {
+  if (!sourcePath || !destDirPath) return 0;
+  try {
+    const srcRoot = path.resolve(sourcePath);
+    const destRoot = path.resolve(destDirPath);
+    const dlRoot = path.resolve((downloadsRootPath || process.env.DOWNLOADS_DIR || "/downloads").trim());
     if (!fs.existsSync(srcRoot) || !fs.existsSync(destRoot)) return 0;
 
     // Never move files into themselves
     if (srcRoot === destRoot || srcRoot.startsWith(destRoot + path.sep)) return 0;
 
-    let copiedCount = 0;
-    const collectAndCopy = (dirOrFile: string) => {
+    let movedCount = 0;
+    const collectAndMove = (dirOrFile: string) => {
       const resolvedItem = path.resolve(dirOrFile);
       if (resolvedItem !== srcRoot && !resolvedItem.startsWith(srcRoot + path.sep)) return;
       const stat = fs.statSync(resolvedItem);
       if (stat.isDirectory()) {
         for (const entry of fs.readdirSync(resolvedItem)) {
-          collectAndCopy(path.join(resolvedItem, entry));
+          collectAndMove(path.join(resolvedItem, entry));
         }
         return;
       }
@@ -520,16 +709,72 @@ function copyCompletedGameFilesIfMounted(storagePath: string | undefined, gamesL
       const safeName = path.basename(resolvedItem).replace(/[\\/:*?"<>|\x00-\x1f]/g, "_");
       const targetFile = path.resolve(destRoot, safeName);
       if (!targetFile.startsWith(destRoot + path.sep)) return;
-      if (!fs.existsSync(targetFile)) {
-        fs.copyFileSync(resolvedItem, targetFile);
-        copiedCount++;
+
+      if (fs.existsSync(targetFile)) {
+        // Destination already has verified copy — clear cache duplicate so cache disk frees up
+        try {
+          if (fs.statSync(targetFile).size === stat.size) {
+            fs.unlinkSync(resolvedItem);
+            movedCount++;
+          }
+        } catch {}
+        return;
+      }
+
+      try {
+        fs.renameSync(resolvedItem, targetFile);
+        movedCount++;
+      } catch (renameErr: any) {
+        // Cross-device move (e.g. Unraid /downloads cache -> /switch_games array): copy + verify size + remove cache source
+        const tmpTarget = `${targetFile}.tmp_${process.pid}_${Date.now()}`;
+        try {
+          fs.copyFileSync(resolvedItem, tmpTarget);
+          const tmpStat = fs.statSync(tmpTarget);
+          if (tmpStat.size !== stat.size) {
+            throw new Error(`Size verification mismatch (${tmpStat.size} vs ${stat.size})`);
+          }
+          fs.renameSync(tmpTarget, targetFile);
+          fs.unlinkSync(resolvedItem);
+          movedCount++;
+        } catch (copyErr) {
+          if (fs.existsSync(tmpTarget)) {
+            fs.unlinkSync(tmpTarget);
+          }
+          throw copyErr;
+        }
       }
     };
 
-    collectAndCopy(srcRoot);
-    return copiedCount;
+    collectAndMove(srcRoot);
+
+    // Clean empty job subfolder / SABnzbd sidecar clutter from /downloads cache once game files moved to array
+    if (movedCount > 0 && srcRoot !== dlRoot && fs.existsSync(srcRoot)) {
+      const pruneJobDir = (dir: string) => {
+        const resolved = path.resolve(dir);
+        if (resolved === dlRoot) return;
+        const st = fs.statSync(resolved);
+        if (!st.isDirectory()) return;
+        for (const entry of fs.readdirSync(resolved)) {
+          const child = path.join(resolved, entry);
+          const childSt = fs.statSync(child);
+          if (childSt.isDirectory()) {
+            pruneJobDir(child);
+          } else if (/\.(?:nfo|txt|sfv|par2|nzb|srr|srs|url)$/i.test(entry)) {
+            fs.unlinkSync(child);
+          }
+        }
+        if (fs.readdirSync(resolved).length === 0) {
+          fs.rmdirSync(resolved);
+        }
+      };
+      try {
+        pruneJobDir(srcRoot);
+      } catch {}
+    }
+
+    return movedCount;
   } catch (err: any) {
-    logger.addLog("WARN", "DOWNLOAD", `[Games] Path transfer warning: ${err?.message || err}`);
+    logger.addLog("WARN", "DOWNLOAD", `[Games] Path move warning: ${err?.message || err}`);
     return 0;
   }
 }
@@ -552,10 +797,15 @@ export async function syncActiveGameDownloadsInternal(): Promise<{
 
   const settings = await prisma.settings.findUnique({
     where: { id: "global" },
-    select: { ownfoilScanOnDownload: true, gamesLibraryPath: true },
+    select: { downloadsPath: true, ownfoilScanOnDownload: true, gamesLibraryPath: true, gamesSabCategory: true },
   });
   const shouldScanOwnfoil = settings?.ownfoilScanOnDownload !== false;
   const ownfoilConn = shouldScanOwnfoil ? await getOwnfoilInstance() : null;
+  const ownfoilProbe = ownfoilConn ? await probeOwnfoilLive() : null;
+  const destResolution = resolveGameDestinationPath({
+    configuredGamesLibraryPath: settings?.gamesLibraryPath,
+    ownfoilLibraryPaths: ownfoilProbe?.libraryPaths || [],
+  });
 
   let updatedCount = 0;
   let needsOwnfoilScan = false;
@@ -580,9 +830,20 @@ export async function syncActiveGameDownloadsInternal(): Promise<{
         });
         updatedCount++;
       } else if (sabStatus.state === "completed") {
-        const copied = copyCompletedGameFilesIfMounted(sabStatus.storage, settings?.gamesLibraryPath);
-        if (copied > 0) {
-          logger.addLog("SUCCESS", "DOWNLOAD", `[Games] Staged ${copied} game file(s) into "${settings?.gamesLibraryPath}" for "${req.title}".`);
+        const sourceDir = resolveCompletedGameSourceDir({
+          sabStorage: sabStatus.storage,
+          downloadsPath: settings?.downloadsPath,
+          sabCategory: req.sabCategory || settings?.gamesSabCategory,
+          releaseTitle: req.releaseTitle,
+          gameTitle: req.title,
+        });
+        const moved = moveCompletedGameFilesIfMounted(sourceDir, destResolution.path, settings?.downloadsPath);
+        if (moved > 0) {
+          logger.addLog(
+            "SUCCESS",
+            "DOWNLOAD",
+            `[Games] Moved ${moved} game file(s) from "${sourceDir}" -> "${destResolution.path}" (${destResolution.source}) and freed cache space for "${req.title}".`
+          );
         }
         await prisma.gameRequest.update({
           where: { id: req.id },

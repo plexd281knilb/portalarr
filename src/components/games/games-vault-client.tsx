@@ -125,6 +125,8 @@ interface OverviewPayload {
     portalarrGamesExists: boolean;
     ownfoilLibraryPaths: Array<{ path: string; existsInPortalarr: boolean }>;
     ownfoilPrimaryPath: string | null;
+    effectiveDestinationPath?: string | null;
+    effectiveDestinationSource?: string;
   };
   settings?: {
     gamesSabCategory: string;
@@ -132,6 +134,13 @@ interface OverviewPayload {
     ownfoilScanOnDownload: boolean;
   };
   ownedTitlesNormalized?: string[];
+  localLibraryFiles?: Array<{
+    name: string;
+    cleanTitle: string;
+    normalizedKey: string;
+    ext: string;
+    sizeBytes: number;
+  }>;
   requests?: GameRequestRow[];
   platforms?: PlatformSummary[];
 }
@@ -580,12 +589,10 @@ export default function GamesVaultClient({
                 </div>
                 <div className="text-[11px] text-muted-foreground tabular-nums truncate" title={integrations?.ownfoilError || integrations?.ownfoilLibraryPaths?.join(", ") || undefined}>
                   {integrations?.ownfoilOnline
-                    ? `${integrations.ownfoilTitleCount} titles • ${(integrations.ownfoilLibraryPaths || []).length} path(s)`
+                    ? `${integrations.ownfoilTitleCount} Ownfoil • ${(overview.localLibraryFiles || []).length} on disk`
                     : integrations?.ownfoilConfigured
                       ? integrations.ownfoilError || "Live probe failed"
-                      : cfgOwnfoilAutoScan
-                        ? "Auto-scan on finish"
-                        : "Manual scan mode"}
+                      : `${(overview.localLibraryFiles || []).length} on disk`}
                 </div>
               </div>
             </div>
@@ -908,20 +915,28 @@ export default function GamesVaultClient({
                     Category target: {pathChecks.sabCategoryFullPath}
                   </div>
                 )}
+                <div className="text-[11px] text-muted-foreground font-mono break-all">
+                  Portalarr downloadsPath: {pathChecks?.portalarrDownloadsPath || "/downloads"} ({pathChecks?.portalarrDownloadsExists ? "mounted" : "not mounted"})
+                </div>
               </div>
 
               <div className="rounded-md border border-border/60 bg-slate-950/60 p-3 space-y-1.5">
                 <div className="font-semibold text-foreground flex items-center justify-between">
-                  <span>Ownfoil &amp; Games Folder Paths</span>
-                  <Badge variant="outline" className={(pathChecks?.portalarrGamesExists || (pathChecks?.ownfoilLibraryPaths || []).length > 0) ? "text-emerald-400 border-emerald-500/40" : "text-amber-400 border-amber-500/40"}>
-                    {(pathChecks?.ownfoilLibraryPaths || []).length > 0 ? "Ownfoil Paths Loaded" : "No Ownfoil Path Found"}
+                  <span>Ownfoil &amp; Games Destination</span>
+                  <Badge variant="outline" className={pathChecks?.effectiveDestinationPath && pathChecks.effectiveDestinationSource !== "None Mounted" ? "text-emerald-400 border-emerald-500/40" : "text-amber-400 border-amber-500/40"}>
+                    {pathChecks?.effectiveDestinationSource || "Checking"}
                   </Badge>
                 </div>
+                {pathChecks?.effectiveDestinationPath && (
+                  <div className="text-[11px] font-mono text-emerald-300 break-all">
+                    Auto-move target (cache -&gt; array): {pathChecks.effectiveDestinationPath} ({(overview.localLibraryFiles || []).length} file(s) found)
+                  </div>
+                )}
                 {(pathChecks?.ownfoilLibraryPaths || []).length > 0 ? (
                   pathChecks!.ownfoilLibraryPaths.map((lp) => (
                     <div key={lp.path} className="font-mono text-muted-foreground flex items-center justify-between gap-2">
                       <span className="break-all">{lp.path}</span>
-                      <span className="text-[10px] shrink-0">{lp.existsInPortalarr ? "Mounted" : "Remote"}</span>
+                      <span className="text-[10px] shrink-0">{lp.existsInPortalarr ? "Mounted" : "Remote Only"}</span>
                     </div>
                   ))
                 ) : (
@@ -929,7 +944,7 @@ export default function GamesVaultClient({
                 )}
                 {pathChecks?.portalarrGamesPath && (
                   <div className="text-[11px] font-mono text-muted-foreground flex items-center justify-between gap-2">
-                    <span>Portalarr staging folder: {pathChecks.portalarrGamesPath}</span>
+                    <span>Override path: {pathChecks.portalarrGamesPath}</span>
                     <span>{pathChecks.portalarrGamesExists ? "Mounted" : "Not found"}</span>
                   </div>
                 )}
@@ -1189,7 +1204,7 @@ export default function GamesVaultClient({
                 id="cfg-games-path"
                 value={cfgGamesLibraryPath}
                 onChange={(e) => setCfgGamesLibraryPath(e.target.value)}
-                placeholder="/games (optional if SABnzbd downloads directly into Ownfoil folder)"
+                placeholder="/switch_games (auto-detected if mounted into container)"
                 className="font-mono text-sm"
               />
               <p className="text-[11px] text-muted-foreground">

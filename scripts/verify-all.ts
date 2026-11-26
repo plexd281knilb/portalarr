@@ -5515,7 +5515,7 @@ async function runTestSuite() {
     await assertTest("Suite 32: LAN HTTP Cookie Fix, Game Vault & Ownfoil", async () => {
         const { isPrivateOrLocalHostHeader } = await import("../src/lib/session-cookie");
         const { evaluateProwlarrGameRelease, getPlatformBySlug } = await import("../src/lib/games/platforms");
-        const { evaluateSabCategoryStatus } = await import("../src/lib/games/downloads");
+        const { evaluateSabCategoryStatus, moveCompletedGameFilesIfMounted, resolveCompletedGameSourceDir, resolveGameDestinationPath, scanLocalGamesLibrary } = await import("../src/lib/games/downloads");
 
         // 1. LAN IPv4 / local host detection for HTTP cookie delivery (e.g. http://192.168.1.87:3034)
         for (const lanHost of ["192.168.1.87:3034", "192.168.10.246", "10.0.0.15:3000", "172.16.4.2:3034", "localhost:3000", "127.0.0.1:3034", "tower.local:3034"]) {
@@ -5582,6 +5582,65 @@ async function runTestSuite() {
         const validCheck = evaluateSabCategoryStatus(sabCats, "switch");
         if (!validCheck.exists || validCheck.matchedDir !== "/games/switch") {
             throw new Error(`Expected 'switch' category match with dir '/games/switch', got ${JSON.stringify(validCheck)}`);
+        }
+
+        // 3c. Books-style downloadsPath job resolution + Ownfoil auto-detected destination
+        const os = await import("os");
+        const tmpGameRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portalarr_game_paths_"));
+        try {
+            const dlCatJob = path.join(tmpGameRoot, "downloads", "complete", "switch", "Mario.Kart.8.NSW");
+            const ownfoilLibDir = path.join(tmpGameRoot, "games_library");
+            fs.mkdirSync(dlCatJob, { recursive: true });
+            fs.mkdirSync(ownfoilLibDir, { recursive: true });
+            fs.writeFileSync(path.join(dlCatJob, "MarioKart8.nsz"), "mock-nsz");
+
+            const resolvedSrc = resolveCompletedGameSourceDir({
+                sabStorage: "/remote_sab_container/complete/switch/Mario.Kart.8.NSW",
+                downloadsPath: path.join(tmpGameRoot, "downloads"),
+                sabCategory: "switch",
+                releaseTitle: "Mario.Kart.8.NSW",
+                gameTitle: "Mario Kart 8",
+            });
+            if (resolvedSrc !== dlCatJob) {
+                throw new Error(`Expected fallback source "${dlCatJob}", got "${resolvedSrc}"`);
+            }
+
+            const resolvedDest = resolveGameDestinationPath({
+                configuredGamesLibraryPath: "",
+                ownfoilLibraryPaths: ["/nonexistent/remote", ownfoilLibDir],
+            });
+            if (resolvedDest.path !== ownfoilLibDir || resolvedDest.source !== "Ownfoil Library (Auto)") {
+                throw new Error(`Expected Ownfoil auto-detected destination "${ownfoilLibDir}", got ${JSON.stringify(resolvedDest)}`);
+            }
+
+            const switchShareDir = path.join(tmpGameRoot, "switch_games");
+            fs.mkdirSync(switchShareDir, { recursive: true });
+            const resolvedMount = resolveGameDestinationPath({
+                configuredGamesLibraryPath: "",
+                ownfoilLibraryPaths: [],
+                extraCandidatePaths: ["/nonexistent/switch_games", switchShareDir],
+            });
+            if (resolvedMount.path !== switchShareDir || resolvedMount.source !== "Container Mount (Auto)") {
+                throw new Error(`Expected mount auto-detected destination "${switchShareDir}", got ${JSON.stringify(resolvedMount)}`);
+            }
+
+            // Moving completed game from /downloads cache to /switch_games array removes cache copy and scans library
+            const movedCount = moveCompletedGameFilesIfMounted(resolvedSrc, switchShareDir, path.join(tmpGameRoot, "downloads"));
+            if (movedCount !== 1) {
+                throw new Error(`Expected 1 moved game file, got ${movedCount}`);
+            }
+            if (fs.existsSync(path.join(dlCatJob, "MarioKart8.nsz"))) {
+                throw new Error("Expected source game file in cache downloads dir to be removed after move");
+            }
+            if (!fs.existsSync(path.join(switchShareDir, "MarioKart8.nsz"))) {
+                throw new Error("Expected moved game file inside /switch_games destination");
+            }
+            const scanned = scanLocalGamesLibrary(switchShareDir);
+            if (scanned.files.length !== 1 || !scanned.normalizedTitles.includes("mariokart8")) {
+                throw new Error(`Expected local /switch_games library scan to detect 'mariokart8', got ${JSON.stringify(scanned)}`);
+            }
+        } finally {
+            fs.rmSync(tmpGameRoot, { recursive: true, force: true });
         }
 
         // 4. Settings MediaApp form stability check (never remounts <form> on App Type change)
