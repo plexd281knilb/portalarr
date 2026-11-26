@@ -1526,21 +1526,30 @@ function SettingsPageContent() {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
         const formData = new FormData(form);
-        
-        await action(formData); 
-        
-        const isEditor = form.querySelector('textarea[name="text"]') || form.querySelector('input[name="text"]');
-        if (!isEditor) {
-            form.reset();
-        }
+        try {
+            const res = await action(formData);
+            if (res && res.success === false && res.error) {
+                setAppFormTestResult({ success: false, err: String(res.error) });
+                return;
+            }
 
-        setEditingApp(null); 
-        setEditingBetaCard(null);
-        setEditingTautulli(null);
-        setEditingGlances(null);
-        setNewAppType("");
-        setBetaCardContent("");
-        loadAllData();
+            const isEditor = form.querySelector('textarea[name="text"]') || form.querySelector('input[name="text"]');
+            if (!isEditor && typeof form.reset === "function") {
+                form.reset();
+            }
+
+            setEditingApp(null);
+            setEditingBetaCard(null);
+            setEditingTautulli(null);
+            setEditingGlances(null);
+            setNewAppType("");
+            setBetaCardContent("");
+            setAppFormTestResult(null);
+            await loadAllData();
+        } catch (err: any) {
+            console.error("[Settings] Form submission error:", err);
+            setAppFormTestResult({ success: false, err: err?.message || "Failed saving configuration." });
+        }
     };
 
     const handleDelete = async (id: string, action: Function) => {
@@ -4189,7 +4198,7 @@ function SettingsPageContent() {
                                                         >
                                                             {testingAppId === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-700 dark:text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingApp(app); setArrMeta(null); }}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-700 dark:text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingApp(app); setNewAppType(app.type || ""); setArrMeta(null); setAppFormTestResult(null); }}>
                                                             <Pencil className="h-3.5 w-3.5"/>
                                                         </Button>
                                                         <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(app.id, removeMediaApp)}>
@@ -4209,13 +4218,8 @@ function SettingsPageContent() {
                                 )}
 
                                 <form 
-                                    key={editingApp ? `edit-app-${editingApp.id}` : `new-app-${newAppType || "default"}`}
-                                    onSubmit={(e) => {
-                                        handleForm(e, editingApp ? updateMediaApp : addMediaApp);
-                                        if (editingApp) setEditingApp(null);
-                                        setNewAppType("");
-                                        setAppFormTestResult(null);
-                                    }} 
+                                    key={editingApp ? `edit-app-${editingApp.id}` : "new-app"}
+                                    onSubmit={(e) => handleForm(e, editingApp ? updateMediaApp : addMediaApp)} 
                                     className={`space-y-3 ${!editingApp && "border-t pt-4 mt-auto"}`}
                                     autoComplete="off"
                                     data-1p-ignore="true"
@@ -4225,7 +4229,7 @@ function SettingsPageContent() {
                                     <Select 
                                         name="type" 
                                         required 
-                                        defaultValue={editingApp?.type}
+                                        value={newAppType || editingApp?.type || ""}
                                         onValueChange={(v) => setNewAppType(v)}
                                     >
                                         <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="App Type" /></SelectTrigger>

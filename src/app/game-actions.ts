@@ -1,12 +1,13 @@
 "use server";
 
+import fs from "fs";
+import path from "path";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getSession } from "@/app/auth-actions";
 import {
-  fetchOwnfoilOwnedTitles,
-  getOwnfoilInstance,
+  probeOwnfoilLive,
   testOwnfoilConnection,
   triggerOwnfoilLibraryScan,
 } from "@/lib/games/ownfoil";
@@ -17,6 +18,8 @@ import {
 } from "@/lib/games/platforms";
 import {
   launchGameDownloadMonitor,
+  probeProwlarrLive,
+  probeSabnzbdLive,
   pushGameNzbToSabnzbd,
   queryProwlarrForGame,
   syncActiveGameDownloadsInternal,
@@ -44,44 +47,90 @@ export async function getGameVaultOverviewAction() {
   try {
     await verifyGameVaultAccess();
 
-    const [prowlarrApp, sabApp, ownfoilApp, settings, requests, ownfoilInventory] = await Promise.all([
-      prisma.mediaApp.findFirst({ where: { OR: [{ type: "prowlarr" }, { name: { contains: "prowlarr" } }] } }),
-      prisma.mediaApp.findFirst({ where: { OR: [{ type: "sabnzbd" }, { name: { contains: "sabnzbd" } }] } }),
-      getOwnfoilInstance(),
-      prisma.settings.findUnique({
-        where: { id: "global" },
-        select: {
-          gamesSabCategory: true,
-          ownfoilScanOnDownload: true,
-          rawgApiKey: true,
-        },
-      }),
+    const settings = await prisma.settings.findUnique({
+      where: { id: "global" },
+      select: {
+        downloadsPath: true,
+        gamesSabCategory: true,
+        gamesLibraryPath: true,
+        ownfoilScanOnDownload: true,
+        rawgApiKey: true,
+      },
+    });
+
+    const configuredCategory = settings?.gamesSabCategory || "games";
+
+    const [prowlarrProbe, sabProbe, ownfoilProbe, requests] = await Promise.all([
+      probeProwlarrLive(),
+      probeSabnzbdLive(configuredCategory),
+      probeOwnfoilLive(),
       prisma.gameRequest.findMany({
         orderBy: { createdAt: "desc" },
         take: 40,
       }),
-      fetchOwnfoilOwnedTitles().catch(() => ({ connected: false, ownedTitlesNormalized: [] })),
     ]);
+
+    const portalarrDownloadsPath = settings?.downloadsPath || "/downloads";
+    const portalarrGamesPath = settings?.gamesLibraryPath || "";
+    const resolvedOwnfoilPrimaryPath = ownfoilProbe.libraryPaths[0] || "";
+
+    const pathChecks = {
+      portalarrDownloadsPath,
+      portalarrDownloadsExists: Boolean(portalarrDownloadsPath && fs.existsSync(portalarrDownloadsPath)),
+      sabCompleteDir: sabProbe.completeDir,
+      sabCompleteDirExistsInPortalarr: sabProbe.completeDirMountedInPortalarr,
+      sabCategoryDir: sabProbe.selectedCategoryDir,
+      sabCategoryFullPath:
+        sabProbe.selectedCategoryDir && path.isAbsolute(sabProbe.selectedCategoryDir)
+          ? sabProbe.selectedCategoryDir
+          : sabProbe.completeDir && sabProbe.selectedCategoryDir
+            ? path.posix.join(sabProbe.completeDir, sabProbe.selectedCategoryDir)
+            : sabProbe.completeDir && configuredCategory
+              ? path.posix.join(sabProbe.completeDir, configuredCategory)
+              : null,
+      portalarrGamesPath: portalarrGamesPath || null,
+      portalarrGamesExists: Boolean(portalarrGamesPath && fs.existsSync(portalarrGamesPath)),
+      ownfoilLibraryPaths: ownfoilProbe.libraryPaths.map((p) => ({
+        path: p,
+        existsInPortalarr: fs.existsSync(p),
+      })),
+      ownfoilPrimaryPath: resolvedOwnfoilPrimaryPath || null,
+    };
 
     return {
       success: true,
       integrations: {
-        prowlarrConfigured: Boolean(prowlarrApp),
-        prowlarrName: prowlarrApp?.name || null,
-        sabnzbdConfigured: Boolean(sabApp),
-        sabnzbdName: sabApp?.name || null,
-        ownfoilConfigured: Boolean(ownfoilApp),
-        ownfoilName: ownfoilApp?.name || null,
-        ownfoilUrl: ownfoilApp?.externalUrl || ownfoilApp?.baseUrl || null,
-        ownfoilConnected: ownfoilInventory.connected,
-        ownfoilTitleCount: ownfoilInventory.ownedTitlesNormalized.length,
+        prowlarrConfigured: prowlarrProbe.configured,
+        prowlarrOnline: prowlarrProbe.online,
+        prowlarrName: prowlarrProbe.name,
+        prowlarrIndexerCount: prowlarrProbe.indexerCount,
+        prowlarrError: prowlarrProbe.error || null,
+
+        sabnzbdConfigured: sabProbe.configured,
+        sabnzbdOnline: sabProbe.online,
+        sabnzbdName: sabProbe.name,
+        sabCategories: sabProbe.categories,
+        sabCategoryExists: sabProbe.categoryExists,
+        sabnzbdError: sabProbe.error || null,
+
+        ownfoilConfigured: ownfoilProbe.configured,
+        ownfoilOnline: ownfoilProbe.online,
+        ownfoilName: ownfoilProbe.name,
+        ownfoilUrl: ownfoilProbe.url,
+        ownfoilConnected: ownfoilProbe.online,
+        ownfoilTitleCount: ownfoilProbe.ownedTitlesNormalized.length,
+        ownfoilLibraryPaths: ownfoilProbe.libraryPaths,
+        ownfoilError: ownfoilProbe.error || null,
+
         hasRawgKey: Boolean(settings?.rawgApiKey),
       },
+      pathChecks,
       settings: {
-        gamesSabCategory: settings?.gamesSabCategory || "games",
+        gamesSabCategory: configuredCategory,
+        gamesLibraryPath: portalarrGamesPath,
         ownfoilScanOnDownload: settings?.ownfoilScanOnDownload !== false,
       },
-      ownedTitlesNormalized: ownfoilInventory.ownedTitlesNormalized,
+      ownedTitlesNormalized: ownfoilProbe.ownedTitlesNormalized,
       requests,
       platforms: GAME_PLATFORMS.map((p) => ({
         slug: p.slug,
@@ -297,6 +346,7 @@ export async function testOwnfoilConfigAction(url: string, credentials: string =
 
 export async function updateGameVaultSettingsAction(input: {
   gamesSabCategory?: string;
+  gamesLibraryPath?: string;
   ownfoilScanOnDownload?: boolean;
   rawgApiKey?: string;
 }) {
@@ -305,6 +355,10 @@ export async function updateGameVaultSettingsAction(input: {
     const data: Record<string, any> = {};
     if (typeof input.gamesSabCategory === "string" && input.gamesSabCategory.trim()) {
       data.gamesSabCategory = input.gamesSabCategory.trim().slice(0, 64);
+    }
+    if (typeof input.gamesLibraryPath === "string") {
+      const cleanPath = input.gamesLibraryPath.trim().slice(0, 260);
+      data.gamesLibraryPath = cleanPath || null;
     }
     if (typeof input.ownfoilScanOnDownload === "boolean") {
       data.ownfoilScanOnDownload = input.ownfoilScanOnDownload;

@@ -234,8 +234,35 @@ export async function fetchOwnfoilOwnedTitles(): Promise<{
   connected: boolean;
   ownedTitlesNormalized: string[];
 }> {
+  const probe = await probeOwnfoilLive();
+  return {
+    connected: probe.online,
+    ownedTitlesNormalized: probe.ownedTitlesNormalized,
+  };
+}
+
+export interface OwnfoilLiveProbe {
+  configured: boolean;
+  online: boolean;
+  name: string | null;
+  url: string | null;
+  libraryPaths: string[];
+  ownedTitlesNormalized: string[];
+  error?: string;
+}
+
+export async function probeOwnfoilLive(): Promise<OwnfoilLiveProbe> {
   const conn = await getOwnfoilInstance();
-  if (!conn) return { connected: false, ownedTitlesNormalized: [] };
+  if (!conn) {
+    return {
+      configured: false,
+      online: false,
+      name: null,
+      url: null,
+      libraryPaths: [],
+      ownedTitlesNormalized: [],
+    };
+  }
 
   try {
     const sessionCookie = await resolveOwnfoilSessionCookie(conn.baseUrl, conn.credentials);
@@ -244,47 +271,119 @@ export async function fetchOwnfoilOwnedTitles(): Promise<{
       ...(sessionCookie ? { Cookie: sessionCookie } : {}),
     };
 
-    // Attempt GraphQL title listing first (Ownfoil v2)
+    let online = false;
+    let authError = "";
+    const libraryPaths: string[] = [];
+    let ownedTitlesNormalized: string[] = [];
+
+    // 1. Check GraphQL (v2) for reachability + titles
     try {
       const gqlRes = await fetch(`${conn.baseUrl}/api/graphql`, {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: "{ titles { name } }",
-        }),
-        signal: AbortSignal.timeout(6000),
+        body: JSON.stringify({ query: "{ titles { name } }" }),
+        signal: AbortSignal.timeout(5000),
         cache: "no-store",
       });
-      if (gqlRes.ok) {
-        const json = await gqlRes.json();
+      if (gqlRes.status === 401 || gqlRes.status === 403) {
+        authError = "Ownfoil authentication failed (check username:password in Settings).";
+      } else if (gqlRes.ok) {
+        online = true;
+        const json = await gqlRes.json().catch(() => null);
         const rows = json?.data?.titles;
         if (Array.isArray(rows)) {
-          const names = rows
+          ownedTitlesNormalized = rows
             .map((r: any) => String(r?.name || "").toLowerCase().replace(/[^a-z0-9]/g, ""))
             .filter(Boolean);
-          return { connected: true, ownedTitlesNormalized: names };
         }
       }
     } catch {
-      // Fall through to legacy /api/titles
+      // Try REST endpoints below
     }
 
-    const legacyRes = await fetch(`${conn.baseUrl}/api/titles`, {
-      headers,
-      signal: AbortSignal.timeout(6000),
-      cache: "no-store",
-    });
-    if (legacyRes.ok) {
-      const json = await legacyRes.json().catch(() => null);
-      const list = Array.isArray(json) ? json : Array.isArray(json?.titles) ? json.titles : [];
-      const names = list
-        .map((r: any) => String(r?.name || r?.title || "").toLowerCase().replace(/[^a-z0-9]/g, ""))
-        .filter(Boolean);
-      return { connected: true, ownedTitlesNormalized: names };
+    // 2. Fetch configured library paths from /api/library/paths or /api/settings
+    for (const ep of ["/api/library/paths", "/api/settings"]) {
+      try {
+        const res = await fetch(`${conn.baseUrl}${ep}`, {
+          headers,
+          redirect: "manual",
+          signal: AbortSignal.timeout(5000),
+          cache: "no-store",
+        });
+        if (res.status === 401 || res.status === 403 || (res.status === 302 && (res.headers.get("location") || "").includes("login"))) {
+          if (!online) authError = "Ownfoil login required — enter username:password in Settings.";
+          continue;
+        }
+        if (res.ok) {
+          online = true;
+          const json = await res.json().catch(() => null);
+          const candidatePaths =
+            Array.isArray(json)
+              ? json.map((x: any) => (typeof x === "string" ? x : x?.path || "")).filter(Boolean)
+              : Array.isArray(json?.paths)
+                ? json.paths.map((x: any) => (typeof x === "string" ? x : x?.path || "")).filter(Boolean)
+                : Array.isArray(json?.library?.paths)
+                  ? json.library.paths.map((x: any) => (typeof x === "string" ? x : x?.path || "")).filter(Boolean)
+                  : [];
+          for (const p of candidatePaths) {
+            if (p && !libraryPaths.includes(p)) libraryPaths.push(String(p));
+          }
+          if (libraryPaths.length > 0) break;
+        }
+      } catch {
+        // Ignore single endpoint miss
+      }
     }
 
-    return { connected: false, ownedTitlesNormalized: [] };
-  } catch {
-    return { connected: false, ownedTitlesNormalized: [] };
+    // 3. Fallback legacy /api/titles or / reachability check if GraphQL failed
+    if (!online && !authError) {
+      for (const ep of ["/api/titles", "/"]) {
+        try {
+          const res = await fetch(`${conn.baseUrl}${ep}`, {
+            headers,
+            redirect: "manual",
+            signal: AbortSignal.timeout(5000),
+            cache: "no-store",
+          });
+          if (res.status === 401 || res.status === 403) {
+            authError = "Ownfoil authentication required.";
+            break;
+          }
+          if (res.ok || res.status === 302) {
+            online = true;
+            if (ep === "/api/titles") {
+              const json = await res.json().catch(() => null);
+              const list = Array.isArray(json) ? json : Array.isArray(json?.titles) ? json.titles : [];
+              ownedTitlesNormalized = list
+                .map((r: any) => String(r?.name || r?.title || "").toLowerCase().replace(/[^a-z0-9]/g, ""))
+                .filter(Boolean);
+            }
+            break;
+          }
+        } catch {
+          // Next candidate
+        }
+      }
+    }
+
+    return {
+      configured: true,
+      online,
+      name: conn.name,
+      url: conn.externalUrl || conn.baseUrl,
+      libraryPaths,
+      ownedTitlesNormalized,
+      error: authError || (!online ? `Could not reach Ownfoil at ${conn.baseUrl}` : undefined),
+    };
+  } catch (err: any) {
+    return {
+      configured: true,
+      online: false,
+      name: conn.name,
+      url: conn.externalUrl || conn.baseUrl,
+      libraryPaths: [],
+      ownedTitlesNormalized: [],
+      error: err?.message || "Failed probing Ownfoil.",
+    };
   }
 }

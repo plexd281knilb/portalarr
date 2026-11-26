@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { prisma } from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
@@ -25,6 +27,214 @@ async function getProwlarrInstance() {
     url: cleanServiceBaseUrl(app.url),
     apiKey: decryptData(app.apiKey || ""),
   };
+}
+
+export interface ProwlarrLiveProbe {
+  configured: boolean;
+  online: boolean;
+  name: string | null;
+  indexerCount: number;
+  error?: string;
+}
+
+export interface SabCategoryEntry {
+  name: string;
+  dir: string;
+}
+
+export interface SabnzbdLiveProbe {
+  configured: boolean;
+  online: boolean;
+  name: string | null;
+  categories: SabCategoryEntry[];
+  expectedCategory: string;
+  categoryExists: boolean;
+  selectedCategoryDir: string | null;
+  completeDir: string | null;
+  downloadDir: string | null;
+  completeDirMountedInPortalarr: boolean;
+  error?: string;
+}
+
+export function evaluateSabCategoryStatus(
+  categories: SabCategoryEntry[],
+  expectedCategory: string
+): { exists: boolean; matchedDir: string | null } {
+  const cleanTarget = (expectedCategory || "").trim().toLowerCase();
+  if (!cleanTarget) {
+    return { exists: true, matchedDir: null };
+  }
+  const found = categories.find(
+    (c) => c.name.trim().toLowerCase() === cleanTarget && c.name.trim() !== "*"
+  );
+  if (!found) {
+    return { exists: false, matchedDir: null };
+  }
+  return { exists: true, matchedDir: found.dir || null };
+}
+
+export async function probeProwlarrLive(): Promise<ProwlarrLiveProbe> {
+  const prowlarr = await getProwlarrInstance();
+  if (!prowlarr) {
+    return { configured: false, online: false, name: null, indexerCount: 0 };
+  }
+  try {
+    const [statusRes, idxRes] = await Promise.all([
+      fetch(`${prowlarr.url}/api/v1/system/status?apikey=${encodeURIComponent(prowlarr.apiKey)}`, {
+        headers: { "X-Api-Key": prowlarr.apiKey, Accept: "application/json" },
+        signal: AbortSignal.timeout(5000),
+        cache: "no-store",
+      }),
+      fetch(`${prowlarr.url}/api/v1/indexer?apikey=${encodeURIComponent(prowlarr.apiKey)}`, {
+        headers: { "X-Api-Key": prowlarr.apiKey, Accept: "application/json" },
+        signal: AbortSignal.timeout(5000),
+        cache: "no-store",
+      }).catch(() => null),
+    ]);
+    if (!statusRes.ok) {
+      return {
+        configured: true,
+        online: false,
+        name: prowlarr.name,
+        indexerCount: 0,
+        error: `Prowlarr returned HTTP ${statusRes.status}`,
+      };
+    }
+    const indexers = idxRes && idxRes.ok ? await idxRes.json().catch(() => []) : [];
+    const enabledCount = Array.isArray(indexers)
+      ? indexers.filter((i: any) => i?.enable !== false).length
+      : 0;
+    return {
+      configured: true,
+      online: true,
+      name: prowlarr.name,
+      indexerCount: enabledCount,
+    };
+  } catch (err: any) {
+    return {
+      configured: true,
+      online: false,
+      name: prowlarr.name,
+      indexerCount: 0,
+      error: err?.name === "AbortError" ? "Prowlarr check timed out" : err?.message || "Unreachable",
+    };
+  }
+}
+
+export async function probeSabnzbdLive(expectedCategory: string): Promise<SabnzbdLiveProbe> {
+  const sab = await getSabnzbdInstance();
+  if (!sab) {
+    return {
+      configured: false,
+      online: false,
+      name: null,
+      categories: [],
+      expectedCategory,
+      categoryExists: false,
+      selectedCategoryDir: null,
+      completeDir: null,
+      downloadDir: null,
+      completeDirMountedInPortalarr: false,
+    };
+  }
+
+  try {
+    const cfgRes = await fetch(
+      `${sab.url}/api?mode=get_config&output=json&apikey=${encodeURIComponent(sab.apiKey)}`,
+      { signal: AbortSignal.timeout(6000), cache: "no-store" }
+    );
+    if (!cfgRes.ok) {
+      return {
+        configured: true,
+        online: false,
+        name: sab.name,
+        categories: [],
+        expectedCategory,
+        categoryExists: false,
+        selectedCategoryDir: null,
+        completeDir: null,
+        downloadDir: null,
+        completeDirMountedInPortalarr: false,
+        error: `SABnzbd returned HTTP ${cfgRes.status}`,
+      };
+    }
+
+    const cfgJson = await cfgRes.json().catch(() => null);
+    if (!cfgJson || cfgJson.status === false) {
+      return {
+        configured: true,
+        online: false,
+        name: sab.name,
+        categories: [],
+        expectedCategory,
+        categoryExists: false,
+        selectedCategoryDir: null,
+        completeDir: null,
+        downloadDir: null,
+        completeDirMountedInPortalarr: false,
+        error: cfgJson?.error || "SABnzbd rejected config check (verify API key).",
+      };
+    }
+
+    const rawCats: any[] = Array.isArray(cfgJson?.config?.categories) ? cfgJson.config.categories : [];
+    const categories: SabCategoryEntry[] = rawCats
+      .map((c: any) => ({
+        name: String(c?.name || "").trim(),
+        dir: String(c?.dir || "").trim(),
+      }))
+      .filter((c) => c.name && c.name !== "*");
+
+    // Also pull get_cats fallback in case categories array wasn't populated
+    if (categories.length === 0) {
+      const catsRes = await fetch(
+        `${sab.url}/api?mode=get_cats&output=json&apikey=${encodeURIComponent(sab.apiKey)}`,
+        { signal: AbortSignal.timeout(5000), cache: "no-store" }
+      ).catch(() => null);
+      if (catsRes && catsRes.ok) {
+        const catsJson = await catsRes.json().catch(() => null);
+        const list: any[] = Array.isArray(catsJson?.categories) ? catsJson.categories : [];
+        for (const name of list) {
+          const clean = String(name || "").trim();
+          if (clean && clean !== "*") categories.push({ name: clean, dir: "" });
+        }
+      }
+    }
+
+    const completeDir = cfgJson?.config?.misc?.complete_dir ? String(cfgJson.config.misc.complete_dir).trim() : null;
+    const downloadDir = cfgJson?.config?.misc?.download_dir ? String(cfgJson.config.misc.download_dir).trim() : null;
+    const catCheck = evaluateSabCategoryStatus(categories, expectedCategory);
+    const completeDirMounted = Boolean(completeDir && fs.existsSync(completeDir));
+
+    return {
+      configured: true,
+      online: true,
+      name: sab.name,
+      categories,
+      expectedCategory,
+      categoryExists: catCheck.exists,
+      selectedCategoryDir: catCheck.matchedDir,
+      completeDir,
+      downloadDir,
+      completeDirMountedInPortalarr: completeDirMounted,
+      error: !catCheck.exists
+        ? `Category "${expectedCategory}" not found in SABnzbd (configured: ${categories.map((c) => c.name).join(", ") || "none"}).`
+        : undefined,
+    };
+  } catch (err: any) {
+    return {
+      configured: true,
+      online: false,
+      name: sab.name,
+      categories: [],
+      expectedCategory,
+      categoryExists: false,
+      selectedCategoryDir: null,
+      completeDir: null,
+      downloadDir: null,
+      completeDirMountedInPortalarr: false,
+      error: err?.name === "AbortError" ? "SABnzbd check timed out" : err?.message || "Unreachable",
+    };
+  }
 }
 
 async function getSabnzbdInstance() {
@@ -278,6 +488,52 @@ export async function checkSabnzbdGameJob(
   return { state: "unknown", progress: 0 };
 }
 
+const GAME_ARCHIVE_OR_ROM_EXTS = new Set([
+  ".nsp", ".nsz", ".xci", ".xcz", ".cia", ".3ds", ".cci", ".wua", ".wux", ".wud",
+  ".rvz", ".iso", ".chd", ".cso", ".pkg", ".fpkg", ".z64", ".n64", ".v64", ".sfc",
+  ".smc", ".nes", ".gba", ".nds",
+]);
+
+function copyCompletedGameFilesIfMounted(storagePath: string | undefined, gamesLibraryPath: string | null | undefined): number {
+  if (!storagePath || !gamesLibraryPath) return 0;
+  try {
+    const srcRoot = path.resolve(storagePath);
+    const destRoot = path.resolve(gamesLibraryPath);
+    if (!fs.existsSync(srcRoot) || !fs.existsSync(destRoot)) return 0;
+
+    // Never move files into themselves
+    if (srcRoot === destRoot || srcRoot.startsWith(destRoot + path.sep)) return 0;
+
+    let copiedCount = 0;
+    const collectAndCopy = (dirOrFile: string) => {
+      const resolvedItem = path.resolve(dirOrFile);
+      if (resolvedItem !== srcRoot && !resolvedItem.startsWith(srcRoot + path.sep)) return;
+      const stat = fs.statSync(resolvedItem);
+      if (stat.isDirectory()) {
+        for (const entry of fs.readdirSync(resolvedItem)) {
+          collectAndCopy(path.join(resolvedItem, entry));
+        }
+        return;
+      }
+      const ext = path.extname(resolvedItem).toLowerCase();
+      if (!GAME_ARCHIVE_OR_ROM_EXTS.has(ext)) return;
+      const safeName = path.basename(resolvedItem).replace(/[\\/:*?"<>|\x00-\x1f]/g, "_");
+      const targetFile = path.resolve(destRoot, safeName);
+      if (!targetFile.startsWith(destRoot + path.sep)) return;
+      if (!fs.existsSync(targetFile)) {
+        fs.copyFileSync(resolvedItem, targetFile);
+        copiedCount++;
+      }
+    };
+
+    collectAndCopy(srcRoot);
+    return copiedCount;
+  } catch (err: any) {
+    logger.addLog("WARN", "DOWNLOAD", `[Games] Path transfer warning: ${err?.message || err}`);
+    return 0;
+  }
+}
+
 export async function syncActiveGameDownloadsInternal(): Promise<{
   updatedCount: number;
   ownfoilTriggered: boolean;
@@ -296,7 +552,7 @@ export async function syncActiveGameDownloadsInternal(): Promise<{
 
   const settings = await prisma.settings.findUnique({
     where: { id: "global" },
-    select: { ownfoilScanOnDownload: true },
+    select: { ownfoilScanOnDownload: true, gamesLibraryPath: true },
   });
   const shouldScanOwnfoil = settings?.ownfoilScanOnDownload !== false;
   const ownfoilConn = shouldScanOwnfoil ? await getOwnfoilInstance() : null;
@@ -324,6 +580,10 @@ export async function syncActiveGameDownloadsInternal(): Promise<{
         });
         updatedCount++;
       } else if (sabStatus.state === "completed") {
+        const copied = copyCompletedGameFilesIfMounted(sabStatus.storage, settings?.gamesLibraryPath);
+        if (copied > 0) {
+          logger.addLog("SUCCESS", "DOWNLOAD", `[Games] Staged ${copied} game file(s) into "${settings?.gamesLibraryPath}" for "${req.title}".`);
+        }
         await prisma.gameRequest.update({
           where: { id: req.id },
           data: {

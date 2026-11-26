@@ -2871,53 +2871,91 @@ export async function getMediaApps() {
 }
 
 export async function addMediaApp(formData: FormData) {
-  await verifyAdmin();
-  const type = formData.get("type") as string;
-  const name = formData.get("name") as string;
-  const url = formData.get("url") as string;
-  const externalUrl = formData.get("externalUrl") as string; 
-  const rawApiKey = formData.get("apiKey") as string;
-  const enabledForUsers = formData.get("enabledForUsers") === "true";
-  const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
-  const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
-  const monitoredParam = formData.get("monitored");
-  const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
-  
-  // Encrypt before saving
-  await prisma.mediaApp.create({ 
-      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds, monitored } 
-  });
-  revalidatePath("/settings");
-  revalidatePath("/");
-  logger.addLog("INFO", "MONITORING", `Added Media App "${name}" (${type}) [Monitored: ${monitored}]`);
-}
-
-export async function updateMediaApp(formData: FormData) {
+  try {
     await verifyAdmin();
-    const id = formData.get("id") as string;
-    const type = formData.get("type") as string;
-    const name = formData.get("name") as string;
-    const url = formData.get("url") as string;
-    const externalUrl = formData.get("externalUrl") as string;
-    const rawApiKey = formData.get("apiKey") as string;
+    const type = String(formData.get("type") || "").trim();
+    const name = String(formData.get("name") || "").trim();
+    const url = String(formData.get("url") || "").trim();
+    const externalUrl = String(formData.get("externalUrl") || "").trim();
+    const rawApiKey = String(formData.get("apiKey") || "");
     const enabledForUsers = formData.get("enabledForUsers") === "true";
-    const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
-    const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
+    const allowedQualityProfileIds = String(formData.get("allowedQualityProfileIds") || "");
+    const allowedRootFolderIds = String(formData.get("allowedRootFolderIds") || "");
+    const monitoredParam = formData.get("monitored");
+    const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
 
-    const updateData: any = { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds };
-    if (formData.has("monitored")) {
-        const monitoredParam = formData.get("monitored");
-        updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+    if (!type || !name || !url) {
+      return { success: false, error: "App Type, Display Name, and Internal URL are required." };
     }
 
-    // Encrypt before saving
-    await prisma.mediaApp.update({
-        where: { id },
-        data: updateData
+    await prisma.mediaApp.create({
+      data: {
+        type,
+        name,
+        url,
+        externalUrl: externalUrl || null,
+        apiKey: rawApiKey ? encryptData(rawApiKey) : "",
+        enabledForUsers,
+        allowedQualityProfileIds,
+        allowedRootFolderIds,
+        monitored,
+      },
     });
     revalidatePath("/settings");
     revalidatePath("/");
+    revalidatePath("/games");
+    logger.addLog("INFO", "MONITORING", `Added Media App "${name}" (${type}) [Monitored: ${monitored}]`);
     return { success: true };
+  } catch (err: any) {
+    console.error("[addMediaApp] Failed creating app:", err);
+    return { success: false, error: err?.message || "Failed adding application." };
+  }
+}
+
+export async function updateMediaApp(formData: FormData) {
+  try {
+    await verifyAdmin();
+    const id = String(formData.get("id") || "").trim();
+    const type = String(formData.get("type") || "").trim();
+    const name = String(formData.get("name") || "").trim();
+    const url = String(formData.get("url") || "").trim();
+    const externalUrl = String(formData.get("externalUrl") || "").trim();
+    const rawApiKey = String(formData.get("apiKey") || "");
+    const enabledForUsers = formData.get("enabledForUsers") === "true";
+    const allowedQualityProfileIds = String(formData.get("allowedQualityProfileIds") || "");
+    const allowedRootFolderIds = String(formData.get("allowedRootFolderIds") || "");
+
+    if (!id || !type || !name || !url) {
+      return { success: false, error: "App ID, Type, Display Name, and Internal URL are required." };
+    }
+
+    const updateData: any = {
+      type,
+      name,
+      url,
+      externalUrl: externalUrl || null,
+      apiKey: rawApiKey ? encryptData(rawApiKey) : "",
+      enabledForUsers,
+      allowedQualityProfileIds,
+      allowedRootFolderIds,
+    };
+    if (formData.has("monitored")) {
+      const monitoredParam = formData.get("monitored");
+      updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+    }
+
+    await prisma.mediaApp.update({
+      where: { id },
+      data: updateData,
+    });
+    revalidatePath("/settings");
+    revalidatePath("/");
+    revalidatePath("/games");
+    return { success: true };
+  } catch (err: any) {
+    console.error("[updateMediaApp] Failed updating app:", err);
+    return { success: false, error: err?.message || "Failed updating application." };
+  }
 }
 
 export async function toggleMediaAppMonitoringAction(id: string, monitored: boolean) {

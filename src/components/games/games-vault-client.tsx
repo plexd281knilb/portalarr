@@ -81,23 +81,54 @@ interface GameRequestRow {
   createdAt: string | Date;
 }
 
+interface SabCategoryOption {
+  name: string;
+  dir: string;
+}
+
 interface OverviewPayload {
   success: boolean;
   error?: string;
   integrations?: {
     prowlarrConfigured: boolean;
+    prowlarrOnline?: boolean;
     prowlarrName: string | null;
+    prowlarrIndexerCount?: number;
+    prowlarrError?: string | null;
+
     sabnzbdConfigured: boolean;
+    sabnzbdOnline?: boolean;
     sabnzbdName: string | null;
+    sabCategories?: SabCategoryOption[];
+    sabCategoryExists?: boolean;
+    sabnzbdError?: string | null;
+
     ownfoilConfigured: boolean;
+    ownfoilOnline?: boolean;
     ownfoilName: string | null;
     ownfoilUrl: string | null;
     ownfoilConnected: boolean;
     ownfoilTitleCount: number;
+    ownfoilLibraryPaths?: string[];
+    ownfoilError?: string | null;
+
     hasRawgKey: boolean;
+  };
+  pathChecks?: {
+    portalarrDownloadsPath: string;
+    portalarrDownloadsExists: boolean;
+    sabCompleteDir: string | null;
+    sabCompleteDirExistsInPortalarr: boolean;
+    sabCategoryDir: string | null;
+    sabCategoryFullPath: string | null;
+    portalarrGamesPath: string | null;
+    portalarrGamesExists: boolean;
+    ownfoilLibraryPaths: Array<{ path: string; existsInPortalarr: boolean }>;
+    ownfoilPrimaryPath: string | null;
   };
   settings?: {
     gamesSabCategory: string;
+    gamesLibraryPath?: string;
     ownfoilScanOnDownload: boolean;
   };
   ownedTitlesNormalized?: string[];
@@ -161,11 +192,13 @@ export default function GamesVaultClient({
   // Vault Settings State
   const [settingsModalOpen, setSettingsModalOpen] = useState<boolean>(false);
   const [cfgSabCategory, setCfgSabCategory] = useState<string>(overview.settings?.gamesSabCategory || "games");
+  const [cfgGamesLibraryPath, setCfgGamesLibraryPath] = useState<string>(overview.settings?.gamesLibraryPath || "");
   const [cfgOwnfoilAutoScan, setCfgOwnfoilAutoScan] = useState<boolean>(
     overview.settings?.ownfoilScanOnDownload !== false
   );
   const [cfgRawgKey, setCfgRawgKey] = useState<string>("");
   const [savingSettings, setSavingSettings] = useState<boolean>(false);
+  const [recheckingHealth, setRecheckingHealth] = useState<boolean>(false);
 
   const ownedSet = useMemo(
     () => new Set(overview.ownedTitlesNormalized || []),
@@ -368,19 +401,34 @@ export default function GamesVaultClient({
     }
   }
 
+  async function refreshOverviewHealth() {
+    setRecheckingHealth(true);
+    try {
+      const refreshed = await getGameVaultOverviewAction();
+      if (refreshed.success) {
+        setOverview(refreshed as OverviewPayload);
+        if (refreshed.requests) setRequests(refreshed.requests as GameRequestRow[]);
+      }
+    } finally {
+      setRecheckingHealth(false);
+    }
+  }
+
   async function handleSaveSettings(e: React.FormEvent) {
     e.preventDefault();
     setSavingSettings(true);
     try {
       const res = await updateGameVaultSettingsAction({
         gamesSabCategory: cfgSabCategory,
+        gamesLibraryPath: cfgGamesLibraryPath,
         ownfoilScanOnDownload: cfgOwnfoilAutoScan,
         ...(cfgRawgKey.trim() ? { rawgApiKey: cfgRawgKey.trim() } : {}),
       });
       if (res.success) {
         setSabCategoryOverride(cfgSabCategory);
         setSettingsModalOpen(false);
-        setStatusNotice({ type: "success", text: "Game Vault settings saved." });
+        await refreshOverviewHealth();
+        setStatusNotice({ type: "success", text: "Game Vault settings saved and integration paths re-checked." });
       } else {
         setStatusNotice({ type: "error", text: res.error || "Failed saving settings." });
       }
@@ -390,6 +438,9 @@ export default function GamesVaultClient({
   }
 
   const integrations = overview.integrations;
+  const pathChecks = overview.pathChecks;
+  const sabCategories = integrations?.sabCategories || [];
+  const sabCategoryMissing = Boolean(integrations?.sabnzbdOnline && integrations?.sabCategoryExists === false);
   const activePlatformObj = platforms.find((p) => p.slug === selectedPlatform) || platforms[0];
   const quickPlatformSlugs = ["nintendo-switch", "nintendo-switch-2", "nintendo-3ds", "wii-u", "gamecube", "n64", "ps5", "ps4", "pc"];
 
@@ -448,23 +499,35 @@ export default function GamesVaultClient({
                 <div className="text-xs font-semibold text-foreground truncate">
                   {integrations?.prowlarrName || "Prowlarr Indexer"}
                 </div>
-                <div className="text-[11px] text-muted-foreground">NZB &amp; Release Search</div>
+                <div className="text-[11px] text-muted-foreground tabular-nums truncate" title={integrations?.prowlarrError || undefined}>
+                  {integrations?.prowlarrOnline
+                    ? `${integrations.prowlarrIndexerCount ?? 0} active indexer(s)`
+                    : integrations?.prowlarrConfigured
+                      ? integrations.prowlarrError || "Live probe failed"
+                      : "NZB & Release Search"}
+                </div>
               </div>
             </div>
             <Badge
               variant="outline"
               className={
-                integrations?.prowlarrConfigured
+                integrations?.prowlarrOnline
                   ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                  : integrations?.prowlarrConfigured
+                    ? "border-rose-500/40 bg-rose-500/10 text-rose-400"
+                    : "border-amber-500/40 bg-amber-500/10 text-amber-400"
               }
             >
-              {integrations?.prowlarrConfigured ? "Ready" : "Not Added"}
+              {integrations?.prowlarrOnline
+                ? "Online"
+                : integrations?.prowlarrConfigured
+                  ? "Offline"
+                  : "Not Added"}
             </Badge>
           </CardContent>
         </Card>
 
-        <Card className="bg-card/90 border-border/60 rounded-lg">
+        <Card className={`bg-card/90 rounded-lg ${sabCategoryMissing ? "border-amber-500/60" : "border-border/60"}`}>
           <CardContent className="p-3.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <ArrowDownCircle className="h-4 w-4 text-emerald-400 shrink-0" />
@@ -472,18 +535,37 @@ export default function GamesVaultClient({
                 <div className="text-xs font-semibold text-foreground truncate">
                   {integrations?.sabnzbdName || "SABnzbd Client"}
                 </div>
-                <div className="text-[11px] text-muted-foreground font-mono">cat: {cfgSabCategory}</div>
+                <div
+                  className="text-[11px] text-muted-foreground font-mono truncate"
+                  title={integrations?.sabnzbdError || pathChecks?.sabCompleteDir || undefined}
+                >
+                  {sabCategoryMissing
+                    ? `cat "${cfgSabCategory}" missing`
+                    : pathChecks?.sabCategoryFullPath
+                      ? `${cfgSabCategory} -> ${pathChecks.sabCategoryFullPath}`
+                      : `cat: ${cfgSabCategory}`}
+                </div>
               </div>
             </div>
             <Badge
               variant="outline"
               className={
-                integrations?.sabnzbdConfigured
+                integrations?.sabnzbdOnline && !sabCategoryMissing
                   ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                  : sabCategoryMissing
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                    : integrations?.sabnzbdConfigured
+                      ? "border-rose-500/40 bg-rose-500/10 text-rose-400"
+                      : "border-amber-500/40 bg-amber-500/10 text-amber-400"
               }
             >
-              {integrations?.sabnzbdConfigured ? "Ready" : "Not Added"}
+              {integrations?.sabnzbdOnline && !sabCategoryMissing
+                ? "Online"
+                : sabCategoryMissing
+                  ? "Missing Cat"
+                  : integrations?.sabnzbdConfigured
+                    ? "Offline"
+                    : "Not Added"}
             </Badge>
           </CardContent>
         </Card>
@@ -496,12 +578,14 @@ export default function GamesVaultClient({
                 <div className="text-xs font-semibold text-foreground truncate">
                   {integrations?.ownfoilName || "Ownfoil Switch Shop"}
                 </div>
-                <div className="text-[11px] text-muted-foreground tabular-nums">
-                  {integrations?.ownfoilConnected
-                    ? `${integrations.ownfoilTitleCount} titles indexed`
-                    : cfgOwnfoilAutoScan
-                      ? "Auto-scan on finish"
-                      : "Manual scan mode"}
+                <div className="text-[11px] text-muted-foreground tabular-nums truncate" title={integrations?.ownfoilError || integrations?.ownfoilLibraryPaths?.join(", ") || undefined}>
+                  {integrations?.ownfoilOnline
+                    ? `${integrations.ownfoilTitleCount} titles • ${(integrations.ownfoilLibraryPaths || []).length} path(s)`
+                    : integrations?.ownfoilConfigured
+                      ? integrations.ownfoilError || "Live probe failed"
+                      : cfgOwnfoilAutoScan
+                        ? "Auto-scan on finish"
+                        : "Manual scan mode"}
                 </div>
               </div>
             </div>
@@ -520,17 +604,46 @@ export default function GamesVaultClient({
               <Badge
                 variant="outline"
                 className={
-                  integrations?.ownfoilConfigured
+                  integrations?.ownfoilOnline
                     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                    : "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                    : integrations?.ownfoilConfigured
+                      ? "border-rose-500/40 bg-rose-500/10 text-rose-400"
+                      : "border-amber-500/40 bg-amber-500/10 text-amber-400"
                 }
               >
-                {integrations?.ownfoilConfigured ? "Linked" : "Not Added"}
+                {integrations?.ownfoilOnline
+                  ? "Online"
+                  : integrations?.ownfoilConfigured
+                    ? "Offline"
+                    : "Not Added"}
               </Badge>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {sabCategoryMissing && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs sm:text-sm text-amber-200">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5 sm:mt-0" />
+            <span>
+              Category <strong className="font-mono">{cfgSabCategory}</strong> was not found in SABnzbd.{" "}
+              {sabCategories.length > 0
+                ? `Configured SABnzbd categories: ${sabCategories.map((c) => c.name).join(", ")}.`
+                : "No custom categories found in SABnzbd."}
+            </span>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setSettingsModalOpen(true)}
+            className="shrink-0 h-8 text-xs border-amber-500/40"
+          >
+            Choose Category
+          </Button>
+        </div>
+      )}
 
       {statusNotice && (
         <div
@@ -758,6 +871,72 @@ export default function GamesVaultClient({
         </TabsContent>
 
         <TabsContent value="downloads" className="space-y-4">
+          {/* Live Path & Folder Diagnostics */}
+          <Card className="bg-card/90 border-border/60 rounded-lg">
+            <CardHeader className="py-3.5 px-4 flex flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-sm font-semibold">Folder Paths &amp; Category Alignment</CardTitle>
+                <CardDescription className="text-xs">
+                  Verifies live SABnzbd download directories, categories, and Ownfoil game library paths.
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={refreshOverviewHealth}
+                disabled={recheckingHealth}
+                className="h-8 text-xs gap-1.5"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${recheckingHealth ? "animate-spin" : ""}`} />
+                <span>Re-check Live</span>
+              </Button>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="rounded-md border border-border/60 bg-slate-950/60 p-3 space-y-1.5">
+                <div className="font-semibold text-foreground flex items-center justify-between">
+                  <span>SABnzbd Completed Downloads Dir</span>
+                  <Badge variant="outline" className={pathChecks?.sabCompleteDirExistsInPortalarr ? "text-emerald-400 border-emerald-500/40" : "text-muted-foreground"}>
+                    {pathChecks?.sabCompleteDirExistsInPortalarr ? "Mounted in Portalarr" : "SABnzbd Internal"}
+                  </Badge>
+                </div>
+                <div className="font-mono text-muted-foreground break-all">
+                  {pathChecks?.sabCompleteDir || "Unavailable (check SABnzbd connection)"}
+                </div>
+                {pathChecks?.sabCategoryFullPath && (
+                  <div className="text-[11px] text-muted-foreground font-mono break-all">
+                    Category target: {pathChecks.sabCategoryFullPath}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border border-border/60 bg-slate-950/60 p-3 space-y-1.5">
+                <div className="font-semibold text-foreground flex items-center justify-between">
+                  <span>Ownfoil &amp; Games Folder Paths</span>
+                  <Badge variant="outline" className={(pathChecks?.portalarrGamesExists || (pathChecks?.ownfoilLibraryPaths || []).length > 0) ? "text-emerald-400 border-emerald-500/40" : "text-amber-400 border-amber-500/40"}>
+                    {(pathChecks?.ownfoilLibraryPaths || []).length > 0 ? "Ownfoil Paths Loaded" : "No Ownfoil Path Found"}
+                  </Badge>
+                </div>
+                {(pathChecks?.ownfoilLibraryPaths || []).length > 0 ? (
+                  pathChecks!.ownfoilLibraryPaths.map((lp) => (
+                    <div key={lp.path} className="font-mono text-muted-foreground flex items-center justify-between gap-2">
+                      <span className="break-all">{lp.path}</span>
+                      <span className="text-[10px] shrink-0">{lp.existsInPortalarr ? "Mounted" : "Remote"}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="font-mono text-muted-foreground">Ownfoil reported no paths via /api/library/paths</div>
+                )}
+                {pathChecks?.portalarrGamesPath && (
+                  <div className="text-[11px] font-mono text-muted-foreground flex items-center justify-between gap-2">
+                    <span>Portalarr staging folder: {pathChecks.portalarrGamesPath}</span>
+                    <span>{pathChecks.portalarrGamesExists ? "Mounted" : "Not found"}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">
               Queued SABnzbd downloads automatically trigger an Ownfoil library scan as soon as unpacking finishes.
@@ -866,12 +1045,30 @@ export default function GamesVaultClient({
             <Label htmlFor="sab-cat-override" className="text-xs font-medium text-muted-foreground">
               SABnzbd Category
             </Label>
-            <Input
-              id="sab-cat-override"
-              value={sabCategoryOverride}
-              onChange={(e) => setSabCategoryOverride(e.target.value)}
-              className="h-8 w-44 font-mono text-xs"
-            />
+            {sabCategories.length > 0 ? (
+              <Select value={sabCategoryOverride} onValueChange={setSabCategoryOverride}>
+                <SelectTrigger id="sab-cat-override" className="h-8 w-52 font-mono text-xs">
+                  <SelectValue placeholder="Choose SAB category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {!sabCategories.some((c) => c.name === sabCategoryOverride) && (
+                    <SelectItem value={sabCategoryOverride}>{sabCategoryOverride} (missing in SABnzbd)</SelectItem>
+                  )}
+                  {sabCategories.map((cat) => (
+                    <SelectItem key={cat.name} value={cat.name}>
+                      {cat.name}{cat.dir ? ` (${cat.dir})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                id="sab-cat-override"
+                value={sabCategoryOverride}
+                onChange={(e) => setSabCategoryOverride(e.target.value)}
+                className="h-8 w-44 font-mono text-xs"
+              />
+            )}
             <span className="text-xs text-muted-foreground ml-auto tabular-nums">
               {searchingReleases ? "Searching indexers..." : `${releases.length} release(s)`}
             </span>
@@ -957,13 +1154,49 @@ export default function GamesVaultClient({
           <form onSubmit={handleSaveSettings} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="cfg-sab-cat">Default SABnzbd Games Category</Label>
+              {sabCategories.length > 0 && (
+                <Select value={sabCategories.some((c) => c.name === cfgSabCategory) ? cfgSabCategory : "__custom__"} onValueChange={(v) => { if (v !== "__custom__") setCfgSabCategory(v); }}>
+                  <SelectTrigger className="h-9 font-mono text-xs">
+                    <SelectValue placeholder="Select category from SABnzbd" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sabCategories.map((c) => (
+                      <SelectItem key={c.name} value={c.name}>
+                        {c.name}{c.dir ? ` -> ${c.dir}` : ""}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">Custom category name...</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               <Input
                 id="cfg-sab-cat"
                 value={cfgSabCategory}
                 onChange={(e) => setCfgSabCategory(e.target.value)}
-                placeholder="games"
+                placeholder="e.g. switch or games"
                 className="font-mono text-sm"
               />
+              {sabCategories.length > 0 && !sabCategories.some((c) => c.name.toLowerCase() === cfgSabCategory.trim().toLowerCase()) && (
+                <p className="text-[11px] text-amber-400">
+                  Category &quot;{cfgSabCategory}&quot; was not returned by SABnzbd. Pick one from the dropdown above or create it in SABnzbd.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="cfg-games-path">Optional Portalarr Games Folder Path (Auto-Copy / Mount Check)</Label>
+              <Input
+                id="cfg-games-path"
+                value={cfgGamesLibraryPath}
+                onChange={(e) => setCfgGamesLibraryPath(e.target.value)}
+                placeholder="/games (optional if SABnzbd downloads directly into Ownfoil folder)"
+                className="font-mono text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Downloads folder: <span className="font-mono">{pathChecks?.portalarrDownloadsPath || "/downloads"}</span>{" "}
+                ({pathChecks?.portalarrDownloadsExists ? "mounted" : "not mounted"})
+                {pathChecks?.sabCompleteDir ? ` • SABnzbd complete_dir: ${pathChecks.sabCompleteDir}` : ""}
+              </p>
             </div>
 
             <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 p-3">

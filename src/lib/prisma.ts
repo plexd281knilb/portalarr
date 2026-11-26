@@ -674,6 +674,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["maxConcurrentStreamsPerUser", `ALTER TABLE "Settings" ADD COLUMN "maxConcurrentStreamsPerUser" INTEGER DEFAULT 3;`],
                 ["tautulliBackfillLastRun", `ALTER TABLE "Settings" ADD COLUMN "tautulliBackfillLastRun" DATETIME;`],
                 ["gamesSabCategory", `ALTER TABLE "Settings" ADD COLUMN "gamesSabCategory" TEXT DEFAULT 'games';`],
+                ["gamesLibraryPath", `ALTER TABLE "Settings" ADD COLUMN "gamesLibraryPath" TEXT;`],
                 ["ownfoilScanOnDownload", `ALTER TABLE "Settings" ADD COLUMN "ownfoilScanOnDownload" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["rawgApiKey", `ALTER TABLE "Settings" ADD COLUMN "rawgApiKey" TEXT;`]
             ];

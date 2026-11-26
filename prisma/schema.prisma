@@ -306,6 +306,7 @@ model Settings {
 
   // Native Game Vault (Retroarr Replacement) & Ownfoil Automation
   gamesSabCategory                 String?   @default("games") // Default SABnzbd category for game downloads
+  gamesLibraryPath                 String?                     // Optional local/mounted games folder path inside Portalarr (e.g. /games)
   ownfoilScanOnDownload            Boolean   @default(true)    // Trigger Ownfoil library scan when download finishes
   rawgApiKey                       String?                     // Optional encrypted RAWG API key for expanded cross-platform metadata
 }

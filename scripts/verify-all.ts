@@ -5515,6 +5515,7 @@ async function runTestSuite() {
     await assertTest("Suite 32: LAN HTTP Cookie Fix, Game Vault & Ownfoil", async () => {
         const { isPrivateOrLocalHostHeader } = await import("../src/lib/session-cookie");
         const { evaluateProwlarrGameRelease, getPlatformBySlug } = await import("../src/lib/games/platforms");
+        const { evaluateSabCategoryStatus } = await import("../src/lib/games/downloads");
 
         // 1. LAN IPv4 / local host detection for HTTP cookie delivery (e.g. http://192.168.1.87:3034)
         for (const lanHost of ["192.168.1.87:3034", "192.168.10.246", "10.0.0.15:3000", "172.16.4.2:3034", "localhost:3000", "127.0.0.1:3034", "tower.local:3034"]) {
@@ -5568,7 +5569,28 @@ async function runTestSuite() {
             throw new Error(`Expected wrong-platform PS5 release to be mismatch for Switch, got ${JSON.stringify(wrongPlatRel)}`);
         }
 
-        // 4. GameRequest DB persistence round-trip
+        // 3b. SABnzbd category verification detects missing category vs configured category directory
+        const sabCats = [
+            { name: "movies", dir: "/downloads/movies" },
+            { name: "tv", dir: "/downloads/tv" },
+            { name: "switch", dir: "/games/switch" },
+        ];
+        const missingCheck = evaluateSabCategoryStatus(sabCats, "games");
+        if (missingCheck.exists) {
+            throw new Error("Expected 'games' to be flagged as missing when only movies/tv/switch exist");
+        }
+        const validCheck = evaluateSabCategoryStatus(sabCats, "switch");
+        if (!validCheck.exists || validCheck.matchedDir !== "/games/switch") {
+            throw new Error(`Expected 'switch' category match with dir '/games/switch', got ${JSON.stringify(validCheck)}`);
+        }
+
+        // 4. Settings MediaApp form stability check (never remounts <form> on App Type change)
+        const settingsSrc = fs.readFileSync(path.join(process.cwd(), "src/app/settings/page.tsx"), "utf8");
+        if (settingsSrc.includes('new-app-${newAppType')) {
+            throw new Error("MediaApp form key must not depend on newAppType or Radix Select remounts and crashes");
+        }
+
+        // 5. GameRequest DB persistence round-trip
         const createdReq = await prisma.gameRequest.create({
             data: {
                 title: "Metroid Dread",
