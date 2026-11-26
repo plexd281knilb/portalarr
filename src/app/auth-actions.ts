@@ -9,7 +9,7 @@ import { getPlexServerFriends, getPlexOwnerUser } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
 import { getJwtSecret } from "@/lib/auth-secret";
-import { createSession } from "@/lib/session-cookie";
+import { createSession, getAdaptiveCookieOptions } from "@/lib/session-cookie";
 import { getAppUrl } from "@/lib/app-url";
 import { renderEmailTemplate } from "@/lib/email-templates";
 import { sendOrQueueEmail } from "@/lib/email-dispatcher";
@@ -235,32 +235,7 @@ export async function logout() {
 
 // --- HELPER: GET ADAPTIVE COOKIE OPTIONS ---
 export async function getAuthCookieOptions(customMaxAge?: number) {
-  let isSecure = process.env.NODE_ENV === "production";
-  try {
-    const h = await headers();
-    const proto = (h.get("x-forwarded-proto") || "").split(",")[0].trim().toLowerCase();
-    const host = (h.get("host") || "").trim().toLowerCase();
-    const isLocalHost = /^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)(:|$)/.test(host);
-
-    // Only omit Secure when running on an explicit HTTP proxy or local LAN IP without HTTPS
-    if (proto === "https") {
-      isSecure = true;
-    } else if (isLocalHost && proto !== "https") {
-      isSecure = false;
-    } else if (proto === "http" && process.env.NODE_ENV !== "production") {
-      isSecure = false;
-    }
-  } catch {
-    // In contexts where headers() cannot be read, fallback safely
-  }
-
-  return {
-    httpOnly: true,
-    secure: isSecure,
-    path: "/",
-    sameSite: "lax" as const,
-    ...(customMaxAge !== undefined ? { maxAge: customMaxAge } : {})
-  };
+  return getAdaptiveCookieOptions(customMaxAge);
 }
 
 // --- HELPER: GET SESSION ---

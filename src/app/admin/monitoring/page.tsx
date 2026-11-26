@@ -32,7 +32,7 @@ import {
     AlertTriangle, CheckCircle2, PauseCircle, ExternalLink, 
     Search, Terminal, Play, Square, Bell, Settings, ArrowDownCircle,
     Check, X, HardDrive, Clock, Flame, Radio, Zap,
-    Tv, Film, Image, FileText, BarChart2, Database, Shield, Box, Home, ArrowUpDown
+    Tv, Film, Image, FileText, BarChart2, Database, Shield, Box, Home, ArrowUpDown, Gamepad2
 } from "lucide-react";
 
 interface AppBranding {
@@ -70,6 +70,9 @@ function getContainerAppBranding(name: any, image: any): AppBranding {
     }
     if (combined.includes("prowlarr")) {
         return { icon: Radio, color: "text-rose-700 dark:text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30" };
+    }
+    if (combined.includes("ownfoil") || combined.includes("retroarr")) {
+        return { icon: Gamepad2, color: "text-rose-700 dark:text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30" };
     }
     if (combined.includes("tautulli")) {
         return { icon: Activity, color: "text-orange-700 dark:text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" };

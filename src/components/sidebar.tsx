@@ -30,6 +30,7 @@ import {
   Activity, 
   Layers, 
   Bot,
+  Gamepad2,
 } from "lucide-react";
 
 interface SidebarNavContentProps {
@@ -302,6 +303,17 @@ function SidebarNavContent({ onItemClick, initialRole, initialIsTrial }: Sidebar
               iconColor="text-sky-600 dark:text-sky-400 group-hover:text-sky-700 dark:group-hover:text-sky-300"
               activeColorClass="bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)]"
               inactiveHoverClass="hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-200"
+              onClick={onItemClick}
+            />
+
+            <NavItem
+              href="/games"
+              label="Game Vault"
+              icon={Gamepad2}
+              isActive={pathname.startsWith("/games")}
+              iconColor="text-rose-600 dark:text-rose-400 group-hover:text-rose-700 dark:group-hover:text-rose-300"
+              activeColorClass="bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.2)]"
+              inactiveHoverClass="hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-200"
               onClick={onItemClick}
             />
           </div>

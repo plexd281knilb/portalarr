@@ -672,7 +672,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["nativeStreamMonitoringEnabled", `ALTER TABLE "Settings" ADD COLUMN "nativeStreamMonitoringEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["detectPasswordSharing", `ALTER TABLE "Settings" ADD COLUMN "detectPasswordSharing" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["maxConcurrentStreamsPerUser", `ALTER TABLE "Settings" ADD COLUMN "maxConcurrentStreamsPerUser" INTEGER DEFAULT 3;`],
-                ["tautulliBackfillLastRun", `ALTER TABLE "Settings" ADD COLUMN "tautulliBackfillLastRun" DATETIME;`]
+                ["tautulliBackfillLastRun", `ALTER TABLE "Settings" ADD COLUMN "tautulliBackfillLastRun" DATETIME;`],
+                ["gamesSabCategory", `ALTER TABLE "Settings" ADD COLUMN "gamesSabCategory" TEXT DEFAULT 'games';`],
+                ["ownfoilScanOnDownload", `ALTER TABLE "Settings" ADD COLUMN "ownfoilScanOnDownload" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["rawgApiKey", `ALTER TABLE "Settings" ADD COLUMN "rawgApiKey" TEXT;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -2375,6 +2378,43 @@ export async function ensureSchemaColumns(): Promise<void> {
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvChannelRequest_requestedByUserId_idx" ON "IptvChannelRequest"("requestedByUserId");`).catch(() => {});
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] IPTV tables check error:", e.message || e);
+        }
+
+        // --- NATIVE GAME VAULT (RETROARR REPLACEMENT) TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "GameRequest" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "title" TEXT NOT NULL,
+                    "platform" TEXT NOT NULL,
+                    "platformSlug" TEXT NOT NULL,
+                    "externalId" TEXT,
+                    "coverUrl" TEXT,
+                    "releaseDate" TEXT,
+                    "publisher" TEXT,
+                    "summary" TEXT,
+                    "sabCategory" TEXT DEFAULT 'games',
+                    "status" TEXT NOT NULL DEFAULT 'Requested',
+                    "releaseTitle" TEXT,
+                    "indexer" TEXT,
+                    "sizeBytes" REAL,
+                    "downloadId" TEXT,
+                    "downloadProgress" INTEGER DEFAULT 0,
+                    "ownfoilRefreshed" BOOLEAN NOT NULL DEFAULT 0,
+                    "ownfoilRefreshedAt" DATETIME,
+                    "errorMessage" TEXT,
+                    "requestedBy" TEXT NOT NULL,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "GameRequest_platformSlug_idx" ON "GameRequest"("platformSlug");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "GameRequest_status_idx" ON "GameRequest"("status");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "GameRequest_requestedBy_idx" ON "GameRequest"("requestedBy");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "GameRequest_downloadId_idx" ON "GameRequest"("downloadId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "GameRequest_createdAt_idx" ON "GameRequest"("createdAt");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] GameRequest table check error:", e.message || e);
         }
 
         // Performance indexes for frequent filters across SQLite tables

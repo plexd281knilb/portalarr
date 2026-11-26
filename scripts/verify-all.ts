@@ -4781,6 +4781,7 @@ async function runTestSuite() {
             "pending/page.tsx",
             "radarr/page.tsx",
             "sonarr/page.tsx",
+            "games/page.tsx",
             "admin/monitoring/page.tsx",
             "admin/scripts/page.tsx",
             "admin/streams/page.tsx",
@@ -4807,6 +4808,7 @@ async function runTestSuite() {
             "library/loading.tsx",
             "tickets/loading.tsx",
             "settings/loading.tsx",
+            "games/loading.tsx",
             "admin/monitoring/loading.tsx",
             "admin/scripts/loading.tsx",
             "admin/tautulli/loading.tsx"
@@ -4823,6 +4825,7 @@ async function runTestSuite() {
             "src/components/seerr/request-manager.tsx",
             "src/components/arr/radarr-client.tsx",
             "src/components/arr/sonarr-client.tsx",
+            "src/components/games/games-vault-client.tsx",
             "src/app/library/page.tsx"
         ];
         for (const relConsumer of emptyStateConsumers) {
@@ -4853,7 +4856,8 @@ async function runTestSuite() {
             "src/components/sent-email-audit-log.tsx",
             "src/components/error-ticket-modal.tsx",
             "src/components/curation/server-guard-rails-modal.tsx",
-            "src/components/curation/plex-poster-picker-modal.tsx"
+            "src/components/curation/plex-poster-picker-modal.tsx",
+            "src/components/games/games-vault-client.tsx"
         ];
         const bannedUiEmojiRe = /[⚡🎬📚📖🎧🧸📌🧪🛡📋💡🌐📉✨💬🔥🚨🏡📱🔁🤖⏱👑🧒⭐👶📁🔄📤📥🎨📍🧬🥞📄🎫🎯⚠🗑🔍✅]/u;
         for (const relComp of emojiFreeComponents) {
@@ -5502,6 +5506,88 @@ async function runTestSuite() {
             }
         } finally {
             await prisma.user.delete({ where: { id: subUser.id } }).catch(() => {});
+        }
+    });
+
+    // =========================================================================
+    // SUITE 32: LAN HTTP Cookie Fix, Game Vault Platform Filtering & Ownfoil
+    // =========================================================================
+    await assertTest("Suite 32: LAN HTTP Cookie Fix, Game Vault & Ownfoil", async () => {
+        const { isPrivateOrLocalHostHeader } = await import("../src/lib/session-cookie");
+        const { evaluateProwlarrGameRelease, getPlatformBySlug } = await import("../src/lib/games/platforms");
+
+        // 1. LAN IPv4 / local host detection for HTTP cookie delivery (e.g. http://192.168.1.87:3034)
+        for (const lanHost of ["192.168.1.87:3034", "192.168.10.246", "10.0.0.15:3000", "172.16.4.2:3034", "localhost:3000", "127.0.0.1:3034", "tower.local:3034"]) {
+            if (!isPrivateOrLocalHostHeader(lanHost)) {
+                throw new Error(`Expected LAN host "${lanHost}" to match isPrivateOrLocalHostHeader()`);
+            }
+        }
+        for (const publicHost of ["dev.domshomelab.com", "home.domshomelab.com", "192.169.1.1", "172.32.0.1", "example.com:3034"]) {
+            if (isPrivateOrLocalHostHeader(publicHost)) {
+                throw new Error(`Public host "${publicHost}" must NOT match isPrivateOrLocalHostHeader()`);
+            }
+        }
+
+        // 2. /games edge policy & proxy gating
+        if (!matchesCloudflareSuperUser("/games")) {
+            throw new Error("/games must be covered by CLOUDFLARE_SUPER_USER_PATHS");
+        }
+
+        // 3. Nintendo Switch platform strictness & Prowlarr release scoring
+        const switchCfg = getPlatformBySlug("nintendo-switch");
+        if (switchCfg.nintendoSystemCode !== "hac") {
+            throw new Error(`Expected Switch system code 'hac', got ${switchCfg.nintendoSystemCode}`);
+        }
+        const goodSwitchRel = evaluateProwlarrGameRelease(
+            {
+                title: "Mario Kart 8 Deluxe [0100152000022000][NSW][NSZ]",
+                downloadUrl: "https://prowlarr.local/1/download?id=1",
+                indexer: "NZBgeek",
+                size: 7_200_000_000,
+                protocol: "usenet",
+            },
+            "Mario Kart 8 Deluxe",
+            "nintendo-switch"
+        );
+        if (goodSwitchRel.matchQuality !== "match" || goodSwitchRel.formatTag !== "NSZ") {
+            throw new Error(`Expected Switch NSZ release to match, got ${JSON.stringify(goodSwitchRel)}`);
+        }
+
+        const wrongPlatRel = evaluateProwlarrGameRelease(
+            {
+                title: "God of War Ragnarok PS5 [FPKG] ElAmigos",
+                downloadUrl: "https://prowlarr.local/1/download?id=2",
+                indexer: "NZBgeek",
+                size: 90_000_000_000,
+                protocol: "usenet",
+            },
+            "Mario Kart 8 Deluxe",
+            "nintendo-switch"
+        );
+        if (wrongPlatRel.matchQuality !== "mismatch") {
+            throw new Error(`Expected wrong-platform PS5 release to be mismatch for Switch, got ${JSON.stringify(wrongPlatRel)}`);
+        }
+
+        // 4. GameRequest DB persistence round-trip
+        const createdReq = await prisma.gameRequest.create({
+            data: {
+                title: "Metroid Dread",
+                platform: "Nintendo Switch",
+                platformSlug: "nintendo-switch",
+                status: "Downloading",
+                releaseTitle: "Metroid Dread [NSZ]",
+                indexer: "NZBgeek",
+                downloadProgress: 42,
+                requestedBy: "dom",
+            }
+        });
+        try {
+            const loaded = await prisma.gameRequest.findUnique({ where: { id: createdReq.id } });
+            if (!loaded || loaded.platformSlug !== "nintendo-switch" || loaded.downloadProgress !== 42) {
+                throw new Error("GameRequest persistence check failed");
+            }
+        } finally {
+            await prisma.gameRequest.delete({ where: { id: createdReq.id } }).catch(() => {});
         }
     });
 

@@ -45,7 +45,8 @@ export const CLOUDFLARE_BYPASS_PATHS: string[] = [
 
 export const CLOUDFLARE_SUPER_USER_PATHS: string[] = [
     "/radarr*",
-    "/sonarr*"
+    "/sonarr*",
+    "/games*"
 ];
 
 export const CLOUDFLARE_ADMIN_PATHS: string[] = [

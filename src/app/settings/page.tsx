@@ -97,7 +97,8 @@ const DEFAULT_PORTS: Record<string, string> = {
     sabnzbd: "8080",
     nzbget: "6789",
     qBittorrent: "8080",
-    maintainerr: "6246"
+    maintainerr: "6246",
+    ownfoil: "8465"
 };
 
 function SettingsPageContent() {
@@ -4253,6 +4254,7 @@ function SettingsPageContent() {
                                                 <SelectItem value="bazarr">Bazarr</SelectItem>
                                                 <SelectItem value="lidarr">Lidarr</SelectItem>
                                                 <SelectItem value="maintainerr">Maintainerr</SelectItem>
+                                                <SelectItem value="ownfoil">Ownfoil (Switch Shop)</SelectItem>
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>

@@ -47,7 +47,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   3. **Access & Members (`access`)**:
      - Access Control, Admin Approval Gates, User Accounts, Role Assignments, and Pending Action Reviews (`<AccessSettingsPage />`).
   4. **Integrations & Servarr (`integrations`)**:
-     - `servarr`: Servarr Stack & Downloaders (Radarr, Sonarr, Lidarr, Readarr, SABnzbd, qBittorrent connection testing and API keys).
+     - `servarr`: Servarr Stack & Downloaders (Radarr, Sonarr, Lidarr, Readarr, Prowlarr, SABnzbd, qBittorrent, and Ownfoil Switch Shop connection testing and API keys/credentials; powers Media Apps including `/games` Game Vault).
      - `requests`: Media Requests (Seerr / Jellyseerr / Overseerr synchronization, auto-approval rules, default request limits).
      - `ai`: AI Agent & Curation Keys (Google Gemini API keys, OpenAI tokens, Kometa, Agregarr, Maintainerr curation webhooks).
   5. **Communications & Alerts (`communications`)**:

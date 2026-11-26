@@ -3,19 +3,24 @@ import { SignJWT } from "jose";
 import prisma from "@/lib/prisma";
 import { getJwtSecret } from "@/lib/auth-secret";
 
-async function getAdaptiveCookieOptions(customMaxAge?: number) {
+export function isPrivateOrLocalHostHeader(rawHost: string): boolean {
+  const host = (rawHost || "").trim().toLowerCase();
+  if (!host) return false;
+  return /^(localhost|127\.0\.0\.1|\[::1\]|[a-z0-9-]+\.local|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/.test(host);
+}
+
+export async function getAdaptiveCookieOptions(customMaxAge?: number) {
   let isSecure = process.env.NODE_ENV === "production";
   try {
     const h = await headers();
     const proto = (h.get("x-forwarded-proto") || "").split(",")[0].trim().toLowerCase();
-    const host = (h.get("host") || "").trim().toLowerCase();
-    const isLocalHost = /^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)(:|$)/.test(host);
+    const host = (h.get("x-forwarded-host") || h.get("host") || "").split(",")[0].trim().toLowerCase();
+    const origin = (h.get("origin") || h.get("referer") || "").trim().toLowerCase();
+    const isLocalHost = isPrivateOrLocalHostHeader(host);
 
-    if (proto === "https") {
+    if (proto === "https" || origin.startsWith("https://")) {
       isSecure = true;
-    } else if (isLocalHost && proto !== "https") {
-      isSecure = false;
-    } else if (proto === "http" && process.env.NODE_ENV !== "production") {
+    } else if (origin.startsWith("http://") || proto === "http" || isLocalHost) {
       isSecure = false;
     }
   } catch {

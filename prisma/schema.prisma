@@ -303,6 +303,11 @@ model Settings {
   // Direct Plex SQLite Snapshot & Delta-Sync Engine
   plexSnapshotEnabled              Boolean   @default(true) // Enable atomic SQLite snapshots to eliminate PMS locks
   plexSnapshotDir                  String?   @default("/tmp/portalarr_snapshots") // Temp snapshot storage directory
+
+  // Native Game Vault (Retroarr Replacement) & Ownfoil Automation
+  gamesSabCategory                 String?   @default("games") // Default SABnzbd category for game downloads
+  ownfoilScanOnDownload            Boolean   @default(true)    // Trigger Ownfoil library scan when download finishes
+  rawgApiKey                       String?                     // Optional encrypted RAWG API key for expanded cross-platform metadata
 }
 
 model PlexServer {
@@ -1311,4 +1316,35 @@ model IptvChannelRequest {
 
   @@index([status])
   @@index([requestedByUserId])
+}
+
+model GameRequest {
+  id                 String    @id @default(cuid())
+  title              String
+  platform           String
+  platformSlug       String
+  externalId         String?
+  coverUrl           String?
+  releaseDate        String?
+  publisher          String?
+  summary            String?
+  sabCategory        String?   @default("games")
+  status             String    @default("Requested") // "Requested", "Searching", "Downloading", "Completed", "Ownfoil Refreshed", "Failed"
+  releaseTitle       String?
+  indexer            String?
+  sizeBytes          Float?
+  downloadId         String?
+  downloadProgress   Int?      @default(0)
+  ownfoilRefreshed   Boolean   @default(false)
+  ownfoilRefreshedAt DateTime?
+  errorMessage       String?
+  requestedBy        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([platformSlug])
+  @@index([status])
+  @@index([requestedBy])
+  @@index([downloadId])
+  @@index([createdAt])
 }

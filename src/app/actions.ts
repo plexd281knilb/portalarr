@@ -3035,6 +3035,15 @@ export async function testMediaAppConfigAction(type: string, rawUrl: string, raw
             testUrls.push({ url: `${cleanBase}/api/version`, headers: { "X-API-KEY": apiKey } });
             testUrls.push({ url: `${cleanBase}/api/rules`, headers: { "X-API-KEY": apiKey } });
             testUrls.push({ url: `${cleanBase}/api/health` });
+        } else if (appType === "ownfoil") {
+            const { testOwnfoilConnection } = await import("@/lib/games/ownfoil");
+            const ownfoilRes = await testOwnfoilConnection(cleanBase, apiKey);
+            if (ownfoilRes.success) {
+                logger.addLog("SUCCESS", "APPS", ownfoilRes.message || "Connected to Ownfoil!", `URL: ${cleanBase}`);
+                return { success: true, message: ownfoilRes.message || "Successfully connected to Ownfoil!" };
+            }
+            logger.addLog("ERROR", "APPS", `Ownfoil connection failed: ${ownfoilRes.error}`, `URL: ${cleanBase}`);
+            return { success: false, error: ownfoilRes.error || "Failed to connect to Ownfoil." };
         } else {
             testUrls.push({ 
                 url: `${cleanBase}/api/v3/system/status?apikey=${encodeURIComponent(apiKey)}`,
@@ -9685,6 +9694,10 @@ async function checkMediaAppReachability(app: { name: string; type?: string | nu
         const headers = apiKey ? { "X-API-KEY": apiKey } : undefined;
         candidates.push({ url: `${cleanBase}/api/version`, headers });
         candidates.push({ url: `${cleanBase}/api/health` });
+    } else if (typeStr.includes("ownfoil") || nameStr.includes("ownfoil")) {
+        candidates.push({ url: `${cleanBase}/api/settings` });
+        candidates.push({ url: `${cleanBase}/api/titles` });
+        candidates.push({ url: `${cleanBase}/` });
     } else {
         const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
         const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
