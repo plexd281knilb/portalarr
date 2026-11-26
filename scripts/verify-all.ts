@@ -5609,6 +5609,67 @@ async function runTestSuite() {
         if (letsGoMatch.matchQuality !== "match") {
             throw new Error(`Expected apostrophe/punctuation title 'Pokémon: Let's Go, Pikachu!' to match, got ${JSON.stringify(letsGoMatch)}`);
         }
+        const galaxyBundleMatch = evaluateProwlarrGameRelease(
+            {
+                title: "Super.Mario.Galaxy.2.NSW.NSP",
+                downloadUrl: "https://prowlarr.local/1/download?id=4c",
+                indexer: "NZBgeek",
+                size: 2_200_000_000,
+                protocol: "usenet",
+            },
+            "Super Mario Galaxy + Super Mario Galaxy 2",
+            "nintendo-switch"
+        );
+        if (galaxyBundleMatch.matchQuality !== "match") {
+            throw new Error(`Expected '+' bundle title 'Super Mario Galaxy + Super Mario Galaxy 2' to match sub-title release, got ${JSON.stringify(galaxyBundleMatch)}`);
+        }
+
+        // 3d. Ownfoil v2 GraphQL scanLibrary + TitleConnection probe check
+        const httpMod = await import("http");
+        const { triggerOwnfoilLibraryScan, probeOwnfoilLive } = await import("../src/lib/games/ownfoil");
+        const ownfoilMock = httpMod.createServer((req, res) => {
+            if (req.url === "/api/graphql" && req.method === "POST") {
+                let body = "";
+                req.on("data", (c) => (body += c));
+                req.on("end", () => {
+                    res.setHeader("Content-Type", "application/json");
+                    if (body.includes("scanLibrary")) {
+                        res.end(JSON.stringify({ data: { scanLibrary: { id: "1", status: "QUEUED" } } }));
+                    } else {
+                        res.end(JSON.stringify({
+                            data: {
+                                titles: { items: [{ name: "Animal Crossing: New Horizons" }] },
+                                libraries: [{ path: "/switch_games" }],
+                            },
+                        }));
+                    }
+                });
+                return;
+            }
+            if (req.url === "/api/library/scan") {
+                res.statusCode = 405;
+                res.end("Method Not Allowed");
+                return;
+            }
+            res.statusCode = 404;
+            res.end("Not Found");
+        });
+        await new Promise<void>((resolve) => ownfoilMock.listen(0, "127.0.0.1", resolve));
+        const mockAddr: any = ownfoilMock.address();
+        try {
+            const scanRes = await triggerOwnfoilLibraryScan({
+                id: "mock-ownfoil",
+                name: "Mock Ownfoil",
+                baseUrl: `http://127.0.0.1:${mockAddr.port}`,
+                externalUrl: null,
+                credentials: "",
+            });
+            if (!scanRes.success || !scanRes.message.includes("GraphQL")) {
+                throw new Error(`Expected Ownfoil v2 scanLibrary GraphQL trigger to succeed cleanly, got ${JSON.stringify(scanRes)}`);
+            }
+        } finally {
+            ownfoilMock.close();
+        }
         const switchUpdateOnly = evaluateProwlarrGameRelease(
             {
                 title: "Animal Crossing New Horizons [01006F8002326800][v2031616].NSP",
@@ -5620,8 +5681,31 @@ async function runTestSuite() {
             "Animal Crossing: New Horizons",
             "nintendo-switch"
         );
-        if (!switchUpdateOnly.isUpdateOrDlc) {
-            throw new Error(`Expected [01006F8002326800] (ending in 800) to be tagged as Update/DLC, got ${JSON.stringify(switchUpdateOnly)}`);
+        const switchNumericUpdate = evaluateProwlarrGameRelease(
+            {
+                title: "v-animal crossing new horizons v2031616",
+                downloadUrl: "https://prowlarr.local/1/download?id=5b",
+                indexer: "NzbPlanet",
+                size: 4_400_000_000,
+                protocol: "usenet",
+            },
+            "Animal Crossing: New Horizons",
+            "nintendo-switch"
+        );
+        const mangaFalseHit = evaluateProwlarrGameRelease(
+            {
+                title: "VIZ.Media-Animal.Crossing.New.Horizons.Vol.11.2026.HYBRID.MANGA",
+                downloadUrl: "https://prowlarr.local/1/download?id=5c",
+                indexer: "NZBgeek",
+                size: 83_000_000,
+                protocol: "usenet",
+                categories: [7030],
+            },
+            "Animal Crossing: New Horizons",
+            "nintendo-switch"
+        );
+        if (!switchUpdateOnly.isUpdateOrDlc || !switchNumericUpdate.isUpdateOrDlc || mangaFalseHit.matchQuality !== "mismatch") {
+            throw new Error(`Expected Switch updates to be flagged and Manga to be mismatch, got ${JSON.stringify({ switchUpdateOnly, switchNumericUpdate, mangaFalseHit })}`);
         }
 
         // 3b. SABnzbd category verification detects missing category vs configured category directory

@@ -641,10 +641,10 @@ function normalizeGameMatchTokens(title: string): string[] {
     .replace(/['’ʼ`]/g, "")
     .replace(/\b([a-z0-9])\s*[-–—]\s*([a-z0-9])\b/g, "$1$2");
   return folded
-    .replace(/[™®©:,!?&\-_./\\()[\]]+/g, " ")
+    .replace(/[™®©:,!?&+\-_./\\()[\]]+/g, " ")
     .split(/\s+/)
     .map((w) => w.trim())
-    .filter((w) => w.length >= 2 && !["the", "and", "for", "of", "edition", "nsw", "nsp", "nsz", "xci"].includes(w));
+    .filter((w) => (w.length >= 2 || /^\d+$/.test(w)) && !["the", "and", "for", "of", "edition", "nsw", "nsp", "nsz", "xci"].includes(w));
 }
 
 export function detectReleaseFormatTag(releaseTitle: string): string {
@@ -668,11 +668,18 @@ export function evaluateProwlarrGameRelease(
   const titleLower = foldAsciiLower(title);
   const titleCompact = titleLower.replace(/[^a-z0-9]/g, "");
   const formatTag = detectReleaseFormatTag(title);
+  const hasBaseMarker = /\[0100[0-9a-f]{9}000\]|\b(?:base|basegame)\b|\+\s*(?:upd|update|dlc)/i.test(titleLower);
   const hasSwitchUpdateTitleId =
-    /\[0100[0-9a-f]{9}8[0-9a-f]{2}\]/i.test(titleLower) &&
-    !/\[0100[0-9a-f]{9}000\]|\b(?:base|basegame)\b/i.test(titleLower);
+    /\[0100[0-9a-f]{9}8[0-9a-f]{2}\]/i.test(titleLower) && !hasBaseMarker;
+  const switchNumericVerMatch = titleLower.match(/(?:^|[\s.\[_-])v([1-9]\d{4,})(?:[\s.\]_$-]|$)/i);
+  const hasSwitchUpdateVersion = Boolean(
+    switchNumericVerMatch &&
+      Number(switchNumericVerMatch[1]) % 65536 === 0 &&
+      !hasBaseMarker
+  );
   const isUpdateOrDlc =
     hasSwitchUpdateTitleId ||
+    hasSwitchUpdateVersion ||
     /\b(?:update|dlc|patch|addon|expansion\s+pass)\b/i.test(titleLower);
 
   const rawCategories: number[] = Array.isArray(raw?.categories)
@@ -682,13 +689,23 @@ export function evaluateProwlarrGameRelease(
   let score = 0;
   const reasons: string[] = [];
 
-  // 1. Expected game title token matching (ASCII-folded + compact hyphenated check for titles like Pokémon Legends: Z-A)
-  const targetTokens = normalizeGameMatchTokens(expectedTitle);
-  let matchedCount = 0;
-  for (const tok of targetTokens) {
-    if (titleLower.includes(tok) || titleCompact.includes(tok)) matchedCount++;
+  // 1. Expected game title token matching (ASCII-folded + compact hyphenated + '+' bundle sub-title support)
+  const titleCandidates = expectedTitle.includes("+")
+    ? [expectedTitle, ...expectedTitle.split(/\s*\+\s*/).filter((s) => s.trim().length >= 3)]
+    : [expectedTitle];
+  let tokenRatio = 0;
+  for (const cand of titleCandidates) {
+    const tokens = normalizeGameMatchTokens(cand);
+    if (tokens.length === 0) continue;
+    let hits = 0;
+    for (const tok of tokens) {
+      if (titleLower.includes(tok) || titleCompact.includes(tok)) hits++;
+    }
+    tokenRatio = Math.max(tokenRatio, hits / tokens.length);
   }
-  const tokenRatio = targetTokens.length > 0 ? matchedCount / targetTokens.length : 1;
+  if (titleCandidates.every((c) => normalizeGameMatchTokens(c).length === 0)) {
+    tokenRatio = 1;
+  }
 
   if (tokenRatio >= 0.85) {
     score += 55;
@@ -727,8 +744,21 @@ export function evaluateProwlarrGameRelease(
     reasons.push("Update / DLC");
   }
 
-  // Exclude obvious non-game audio/video/ebook junk
-  if (/\b(?:soundtrack|ost|flac|mp3|pdf|epub|mkv|mp4|1080p|2160p|x264|x265|hevc|web-dl|bluray)\b/i.test(titleLower)) {
+  // Exclude obvious non-game audio/video/ebook/manga junk (regex + Prowlarr Books/Audio/Video category guard)
+  const hasNonGameCategoryOnly =
+    rawCategories.length > 0 &&
+    rawCategories.every(
+      (cat) =>
+        (cat >= 2000 && cat < 4000) ||
+        (cat >= 5000 && cat < 6000) ||
+        (cat >= 7000 && cat < 8000)
+    );
+  const isNonGameMedia =
+    hasNonGameCategoryOnly ||
+    /\b(?:soundtrack|ost|flac|mp3|pdf|epub|mobi|azw3|cbz|cbr|ebook|manga|comic|comics|artbook|guidebook|audiobook|viz[\s._-]+media|mkv|mp4|1080p|2160p|x264|x265|hevc|web-dl|bluray)\b/i.test(
+      titleLower
+    );
+  if (isNonGameMedia) {
     score -= 80;
     reasons.push("Non-Game Media");
   }

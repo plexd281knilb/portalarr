@@ -940,7 +940,7 @@ export default function GamesVaultClient({
                     </div>
                   ))
                 ) : (
-                  <div className="font-mono text-muted-foreground">Ownfoil reported no paths via /api/library/paths</div>
+                  <div className="font-mono text-muted-foreground">Ownfoil reported no paths via /api/settings/library/paths</div>
                 )}
                 {pathChecks?.portalarrGamesPath && (
                   <div className="text-[11px] font-mono text-muted-foreground flex items-center justify-between gap-2">
@@ -1218,7 +1218,7 @@ export default function GamesVaultClient({
               <div className="space-y-0.5">
                 <Label htmlFor="cfg-ownfoil-auto">Auto-Refresh Ownfoil on Download</Label>
                 <p className="text-xs text-muted-foreground">
-                  Automatically trigger Ownfoil POST /api/library/scan when SABnzbd finishes a download.
+                  Automatically trigger Ownfoil library scan (GraphQL scanLibrary) when SABnzbd finishes a download.
                 </p>
               </div>
               <Switch

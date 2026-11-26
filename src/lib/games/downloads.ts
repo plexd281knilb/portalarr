@@ -258,7 +258,7 @@ function cleanGameSearchTitle(rawTitle: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[™®©'’ʼ`]/g, "")
-    .replace(/[,!?&/:–—]+/g, " ")
+    .replace(/[,!?&+/:–—]+/g, " ")
     .replace(/\s+-\s+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -268,7 +268,11 @@ function buildGameSearchQueryVariants(rawTitle: string): string[] {
   const base = cleanGameSearchTitle(rawTitle);
   const compactHyphens = base.replace(/\b([A-Za-z0-9])\s*-\s*([A-Za-z0-9])\b/g, "$1$2").trim();
   const spaceHyphens = base.replace(/-/g, " ").replace(/\s+/g, " ").trim();
-  return Array.from(new Set([base, compactHyphens, spaceHyphens].filter(Boolean)));
+  const bundleParts = (rawTitle || "")
+    .split(/\s+\+\s+|\s+\/\s+/)
+    .map((part) => cleanGameSearchTitle(part))
+    .filter((part) => part.length >= 4);
+  return Array.from(new Set([base, compactHyphens, spaceHyphens, ...bundleParts].filter(Boolean)));
 }
 
 export async function queryProwlarrForGame(

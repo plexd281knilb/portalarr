@@ -63,6 +63,11 @@ async function resolveOwnfoilSessionCookie(baseUrl: string, credentials: string)
 
   const loginEndpoints: Array<{ url: string; headers: Record<string, string>; body: string }> = [
     {
+      url: `${baseUrl}/login`,
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json, text/html" },
+      body: new URLSearchParams({ user: username, password, remember: "on" }).toString(),
+    },
+    {
       url: `${baseUrl}/api/auth/login`,
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ user: username, username, password }),
@@ -71,11 +76,6 @@ async function resolveOwnfoilSessionCookie(baseUrl: string, credentials: string)
       url: `${baseUrl}/api/login`,
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ user: username, username, password }),
-    },
-    {
-      url: `${baseUrl}/login`,
-      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json, text/html" },
-      body: new URLSearchParams({ user: username, username, password }).toString(),
     },
   ];
 
@@ -89,10 +89,20 @@ async function resolveOwnfoilSessionCookie(baseUrl: string, credentials: string)
         signal: AbortSignal.timeout(5000),
         cache: "no-store",
       });
-      const setCookie = res.headers.get("set-cookie");
-      if (setCookie && (res.ok || res.status === 302 || res.status === 303)) {
-        const cookiePairs = setCookie
-          .split(/,(?=\s*[^;,\s]+=[^;]+)/)
+      const setCookies: string[] =
+        typeof (res.headers as any).getSetCookie === "function"
+          ? (res.headers as any).getSetCookie()
+          : res.headers.get("set-cookie")
+            ? [res.headers.get("set-cookie") as string]
+            : [];
+      const loc = (res.headers.get("location") || "").toLowerCase();
+      // Flask-Login redirects back to /login on bad credentials, or / on success
+      if (candidate.url.endsWith("/login") && res.status === 302 && loc.includes("/login")) {
+        continue;
+      }
+      if (setCookies.length > 0 && (res.ok || res.status === 302 || res.status === 303)) {
+        const cookiePairs = setCookies
+          .flatMap((raw) => raw.split(/,(?=\s*[^;,\s]+=[^;]+)/))
           .map((c) => c.split(";")[0].trim())
           .filter(Boolean);
         if (cookiePairs.length > 0) {
@@ -127,7 +137,7 @@ export async function testOwnfoilConnection(
     const gqlRes = await fetch(`${baseUrl}/api/graphql`, {
       method: "POST",
       headers: { ...authHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ query: "{ __typename }" }),
+      body: JSON.stringify({ query: "{ __typename libraries { path } }" }),
       signal: AbortSignal.timeout(6000),
       cache: "no-store",
     });
@@ -144,7 +154,7 @@ export async function testOwnfoilConnection(
     // Fall through to HTTP probes
   }
 
-  for (const path of ["/api/settings", "/api/titles", "/"]) {
+  for (const path of ["/api/settings/library/paths", "/api/settings", "/api/titles", "/"]) {
     try {
       const res = await fetch(`${baseUrl}${path}`, {
         headers: authHeaders,
@@ -188,6 +198,77 @@ export async function triggerOwnfoilLibraryScan(
       ...(sessionCookie ? { Cookie: sessionCookie } : {}),
     };
 
+    // 1. Modern Ownfoil v2 GraphQL mutation (`scanLibrary`)
+    let tryLegacyRest = false;
+    let gqlHttpStatus = 0;
+    try {
+      const gqlRes = await fetch(`${conn.baseUrl}/api/graphql`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: "mutation { scanLibrary { id status } }",
+        }),
+        signal: AbortSignal.timeout(12000),
+        cache: "no-store",
+      });
+      gqlHttpStatus = gqlRes.status;
+
+      if (gqlRes.status === 401 || gqlRes.status === 403) {
+        const msg = "Ownfoil rejected scan request (authentication failed). Check admin username:password credentials in Settings.";
+        logger.addLog("ERROR", "APPS", `[Ownfoil] ${msg}`);
+        return { success: false, message: msg };
+      }
+
+      if (gqlRes.ok) {
+        const gqlJson: any = await gqlRes.json().catch(() => null);
+        const gqlErrors: any[] = Array.isArray(gqlJson?.errors) ? gqlJson.errors : [];
+        if (gqlErrors.length > 0) {
+          const errText = gqlErrors.map((e) => String(e?.message || "")).filter(Boolean).join("; ");
+          if (/admin|auth|forbidden|unauthorized/i.test(errText)) {
+            const msg = "Ownfoil requires admin credentials (username:password) in Settings to run library scans.";
+            logger.addLog("ERROR", "APPS", `[Ownfoil] ${msg}`);
+            return { success: false, message: msg };
+          }
+          // If field name doesn't exist on an older fork, allow REST fallback below
+          if (/cannot query field|scanLibrary/i.test(errText)) {
+            tryLegacyRest = true;
+          } else {
+            logger.addLog("WARN", "APPS", `[Ownfoil] GraphQL scan error: ${errText}`);
+            return { success: false, message: `Ownfoil scan failed: ${errText}` };
+          }
+        } else if (gqlJson && "data" in gqlJson) {
+          const task = gqlJson.data?.scanLibrary;
+          if (!task) {
+            const msg = "Ownfoil has no library paths configured yet. Add your Switch games folder in Ownfoil Admin -> Settings.";
+            logger.addLog("WARN", "APPS", `[Ownfoil] ${msg}`);
+            return { success: false, message: msg };
+          }
+          const taskStatus = String(task?.status || "").toUpperCase();
+          const alreadyRunning = taskStatus === "RUNNING";
+          const msg = alreadyRunning
+            ? "Ownfoil library scan is already in progress."
+            : "Triggered Ownfoil library scan successfully (GraphQL).";
+          logger.addLog("SUCCESS", "APPS", `[Ownfoil] ${msg}`, `Target: ${conn.baseUrl}`);
+          return { success: true, message: msg, alreadyRunning };
+        } else {
+          tryLegacyRest = true;
+        }
+      } else if (gqlRes.status === 404 || gqlRes.status === 405) {
+        tryLegacyRest = true;
+      } else {
+        const errMsg = `Ownfoil GraphQL scan returned HTTP ${gqlHttpStatus}.`;
+        logger.addLog("WARN", "APPS", `[Ownfoil] ${errMsg}`);
+        return { success: false, message: errMsg };
+      }
+    } catch {
+      tryLegacyRest = true;
+    }
+
+    if (!tryLegacyRest) {
+      return { success: false, message: `Ownfoil scan failed (HTTP ${gqlHttpStatus || "unknown"}).` };
+    }
+
+    // 2. Legacy Ownfoil v1 REST fallback (`POST /api/library/scan`)
     const res = await fetch(`${conn.baseUrl}/api/library/scan`, {
       method: "POST",
       headers,
@@ -276,12 +357,12 @@ export async function probeOwnfoilLive(): Promise<OwnfoilLiveProbe> {
     const libraryPaths: string[] = [];
     let ownedTitlesNormalized: string[] = [];
 
-    // 1. Check GraphQL (v2) for reachability + titles
+    // 1. Check GraphQL (Ownfoil v2 TitleConnection { items { name } } + libraries { path })
     try {
       const gqlRes = await fetch(`${conn.baseUrl}/api/graphql`, {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ query: "{ titles { name } }" }),
+        body: JSON.stringify({ query: "{ titles(owned: true, pageSize: 500) { items { name } } libraries { path } }" }),
         signal: AbortSignal.timeout(5000),
         cache: "no-store",
       });
@@ -290,19 +371,28 @@ export async function probeOwnfoilLive(): Promise<OwnfoilLiveProbe> {
       } else if (gqlRes.ok) {
         online = true;
         const json = await gqlRes.json().catch(() => null);
-        const rows = json?.data?.titles;
-        if (Array.isArray(rows)) {
+        const rows = Array.isArray(json?.data?.titles?.items)
+          ? json.data.titles.items
+          : Array.isArray(json?.data?.titles)
+            ? json.data.titles
+            : [];
+        if (rows.length > 0) {
           ownedTitlesNormalized = rows
             .map((r: any) => String(r?.name || "").toLowerCase().replace(/[^a-z0-9]/g, ""))
             .filter(Boolean);
+        }
+        const libs = Array.isArray(json?.data?.libraries) ? json.data.libraries : [];
+        for (const lib of libs) {
+          const p = typeof lib?.path === "string" ? lib.path.trim() : "";
+          if (p && !libraryPaths.includes(p)) libraryPaths.push(p);
         }
       }
     } catch {
       // Try REST endpoints below
     }
 
-    // 2. Fetch configured library paths from /api/library/paths or /api/settings
-    for (const ep of ["/api/library/paths", "/api/settings"]) {
+    // 2. Fetch configured library paths from /api/settings/library/paths (Ownfoil v2) or legacy fallbacks
+    for (const ep of ["/api/settings/library/paths", "/api/library/paths", "/api/settings"]) {
       try {
         const res = await fetch(`${conn.baseUrl}${ep}`, {
           headers,
