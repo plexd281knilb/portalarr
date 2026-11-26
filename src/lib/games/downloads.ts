@@ -255,10 +255,20 @@ async function getSabnzbdInstance() {
 
 function cleanGameSearchTitle(rawTitle: string): string {
   return (rawTitle || "")
-    .replace(/[™®©]/g, "")
-    .replace(/\s*[:\-–—]\s*/g, " ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[™®©'’ʼ`]/g, "")
+    .replace(/[,!?&/:–—]+/g, " ")
+    .replace(/\s+-\s+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function buildGameSearchQueryVariants(rawTitle: string): string[] {
+  const base = cleanGameSearchTitle(rawTitle);
+  const compactHyphens = base.replace(/\b([A-Za-z0-9])\s*-\s*([A-Za-z0-9])\b/g, "$1$2").trim();
+  const spaceHyphens = base.replace(/-/g, " ").replace(/\s+/g, " ").trim();
+  return Array.from(new Set([base, compactHyphens, spaceHyphens].filter(Boolean)));
 }
 
 export async function queryProwlarrForGame(
@@ -279,14 +289,19 @@ export async function queryProwlarrForGame(
   }
 
   const platform = getPlatformBySlug(platformSlug);
-  const cleanTitle = cleanGameSearchTitle(rawTitle);
+  const queryVariants = buildGameSearchQueryVariants(rawTitle);
+  const primaryQuery = queryVariants[0] || rawTitle.trim();
   const catParams = platform.prowlarrCategories.map((c) => `categories=${c}`).join("&");
 
-  const searchAttempts: string[] = [
-    `${prowlarr.url}/api/v1/search?query=${encodeURIComponent(cleanTitle)}${catParams ? `&${catParams}` : ""}&apikey=${encodeURIComponent(prowlarr.apiKey)}`,
-    `${prowlarr.url}/api/v1/search?query=${encodeURIComponent(`${cleanTitle} ${platform.shortName}`)}&apikey=${encodeURIComponent(prowlarr.apiKey)}`,
-    `${prowlarr.url}/api/v1/search?query=${encodeURIComponent(cleanTitle)}&apikey=${encodeURIComponent(prowlarr.apiKey)}`,
-  ];
+  const searchAttempts: string[] = Array.from(
+    new Set([
+      `${prowlarr.url}/api/v1/search?query=${encodeURIComponent(primaryQuery)}${catParams ? `&${catParams}` : ""}&apikey=${encodeURIComponent(prowlarr.apiKey)}`,
+      `${prowlarr.url}/api/v1/search?query=${encodeURIComponent(`${primaryQuery} ${platform.shortName}`)}&apikey=${encodeURIComponent(prowlarr.apiKey)}`,
+      ...queryVariants.map(
+        (q) => `${prowlarr.url}/api/v1/search?query=${encodeURIComponent(q)}&apikey=${encodeURIComponent(prowlarr.apiKey)}`
+      ),
+    ])
+  );
 
   const allRaw: any[] = [];
   let lastError = "";

@@ -629,10 +629,19 @@ export function formatBytesCompact(bytes: number): string {
   return `${val >= 10 || idx <= 1 ? val.toFixed(0) : val.toFixed(2)} ${units[idx]}`;
 }
 
+function foldAsciiLower(input: string): string {
+  return (input || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 function normalizeGameMatchTokens(title: string): string[] {
-  return (title || "")
-    .toLowerCase()
-    .replace(/[™®©:'’\-_,./\\()[\]]+/g, " ")
+  const folded = foldAsciiLower(title)
+    .replace(/['’ʼ`]/g, "")
+    .replace(/\b([a-z0-9])\s*[-–—]\s*([a-z0-9])\b/g, "$1$2");
+  return folded
+    .replace(/[™®©:,!?&\-_./\\()[\]]+/g, " ")
     .split(/\s+/)
     .map((w) => w.trim())
     .filter((w) => w.length >= 2 && !["the", "and", "for", "of", "edition", "nsw", "nsp", "nsz", "xci"].includes(w));
@@ -656,9 +665,15 @@ export function evaluateProwlarrGameRelease(
 ): EvaluatedGameRelease {
   const platform = getPlatformBySlug(platformSlug);
   const title = String(raw?.title || "");
-  const titleLower = title.toLowerCase();
+  const titleLower = foldAsciiLower(title);
+  const titleCompact = titleLower.replace(/[^a-z0-9]/g, "");
   const formatTag = detectReleaseFormatTag(title);
-  const isUpdateOrDlc = /\b(?:update|dlc|patch|addon|expansion\s+pass)\b/i.test(titleLower);
+  const hasSwitchUpdateTitleId =
+    /\[0100[0-9a-f]{9}8[0-9a-f]{2}\]/i.test(titleLower) &&
+    !/\[0100[0-9a-f]{9}000\]|\b(?:base|basegame)\b/i.test(titleLower);
+  const isUpdateOrDlc =
+    hasSwitchUpdateTitleId ||
+    /\b(?:update|dlc|patch|addon|expansion\s+pass)\b/i.test(titleLower);
 
   const rawCategories: number[] = Array.isArray(raw?.categories)
     ? raw.categories.map((c: any) => Number(typeof c === "object" ? c.id : c)).filter((n: number) => Number.isFinite(n))
@@ -667,11 +682,11 @@ export function evaluateProwlarrGameRelease(
   let score = 0;
   const reasons: string[] = [];
 
-  // 1. Expected game title token matching
+  // 1. Expected game title token matching (ASCII-folded + compact hyphenated check for titles like Pokémon Legends: Z-A)
   const targetTokens = normalizeGameMatchTokens(expectedTitle);
   let matchedCount = 0;
   for (const tok of targetTokens) {
-    if (titleLower.includes(tok)) matchedCount++;
+    if (titleLower.includes(tok) || titleCompact.includes(tok)) matchedCount++;
   }
   const tokenRatio = targetTokens.length > 0 ? matchedCount / targetTokens.length : 1;
 
@@ -732,6 +747,15 @@ export function evaluateProwlarrGameRelease(
     : typeof raw?.age === "number"
       ? raw.age
       : null;
+
+  // Favor fresher Usenet uploads / higher-grab releases as a ranking tiebreaker to reduce DMCA / incomplete grabs
+  if (ageDays !== null) {
+    if (ageDays <= 365) score += 5;
+    else if (ageDays > 1500) score -= 4;
+  }
+  if (typeof raw?.grabs === "number" && raw.grabs >= 10) {
+    score += 3;
+  }
 
   return {
     title,

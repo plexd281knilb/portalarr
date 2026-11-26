@@ -5569,6 +5569,61 @@ async function runTestSuite() {
             throw new Error(`Expected wrong-platform PS5 release to be mismatch for Switch, got ${JSON.stringify(wrongPlatRel)}`);
         }
 
+        // Diacritic folding + hyphenated initials (e.g. Pokémon Legends: Z-A) + Switch 800 update Title ID detection
+        const zaBase = evaluateProwlarrGameRelease(
+            {
+                title: "Pokemon.Legends.Z-A.[0100F43008C44000][v0].NSZ",
+                downloadUrl: "https://prowlarr.local/1/download?id=3",
+                indexer: "NZBgeek",
+                size: 4_500_000_000,
+                protocol: "usenet",
+            },
+            "Pokémon Legends: Z-A",
+            "nintendo-switch"
+        );
+        const zaCompact = evaluateProwlarrGameRelease(
+            {
+                title: "Pokemon Legends ZA NSW NSP",
+                downloadUrl: "https://prowlarr.local/1/download?id=4",
+                indexer: "NZBgeek",
+                size: 4_500_000_000,
+                protocol: "usenet",
+            },
+            "Pokémon Legends: Z-A",
+            "nintendo-switch"
+        );
+        if (zaBase.matchQuality !== "match" || zaBase.isUpdateOrDlc || zaCompact.matchQuality !== "match") {
+            throw new Error(`Expected ASCII/hyphenated Pokémon Legends: Z-A base releases to match, got ${JSON.stringify({ zaBase, zaCompact })}`);
+        }
+        const letsGoMatch = evaluateProwlarrGameRelease(
+            {
+                title: "Pokemon.Lets.Go.Pikachu.NSW.NSP",
+                downloadUrl: "https://prowlarr.local/1/download?id=4b",
+                indexer: "NZBgeek",
+                size: 4_300_000_000,
+                protocol: "usenet",
+            },
+            "Pokémon: Let's Go, Pikachu!",
+            "nintendo-switch"
+        );
+        if (letsGoMatch.matchQuality !== "match") {
+            throw new Error(`Expected apostrophe/punctuation title 'Pokémon: Let's Go, Pikachu!' to match, got ${JSON.stringify(letsGoMatch)}`);
+        }
+        const switchUpdateOnly = evaluateProwlarrGameRelease(
+            {
+                title: "Animal Crossing New Horizons [01006F8002326800][v2031616].NSP",
+                downloadUrl: "https://prowlarr.local/1/download?id=5",
+                indexer: "NZBgeek",
+                size: 4_569_893_659,
+                protocol: "usenet",
+            },
+            "Animal Crossing: New Horizons",
+            "nintendo-switch"
+        );
+        if (!switchUpdateOnly.isUpdateOrDlc) {
+            throw new Error(`Expected [01006F8002326800] (ending in 800) to be tagged as Update/DLC, got ${JSON.stringify(switchUpdateOnly)}`);
+        }
+
         // 3b. SABnzbd category verification detects missing category vs configured category directory
         const sabCats = [
             { name: "movies", dir: "/downloads/movies" },
