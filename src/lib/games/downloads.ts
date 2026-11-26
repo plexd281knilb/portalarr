@@ -307,12 +307,13 @@ export async function queryProwlarrForGame(
   let lastError = "";
 
   for (let i = 0; i < searchAttempts.length; i++) {
-    // Skip redundant fallback calls if we already have solid platform matches
-    if (i > 0 && allRaw.length >= 6) {
-      const hasGoodHit = allRaw.some(
-        (r) => evaluateProwlarrGameRelease(r, rawTitle, platformSlug).matchQuality === "match"
-      );
-      if (hasGoodHit) break;
+    // Only skip remaining query variants after at least one unfiltered pass when a fresh (< 2 yr) base match exists
+    if (i > 1 && allRaw.length >= 6) {
+      const hasFreshBaseHit = allRaw.some((r) => {
+        const ev = evaluateProwlarrGameRelease(r, rawTitle, platformSlug);
+        return ev.matchQuality === "match" && !ev.isUpdateOrDlc && (ev.ageDays === null || ev.ageDays <= 730);
+      });
+      if (hasFreshBaseHit) break;
     }
 
     try {
