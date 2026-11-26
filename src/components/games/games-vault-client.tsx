@@ -1066,7 +1066,7 @@ export default function GamesVaultClient({
                   <SelectValue placeholder="Choose SAB category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {!sabCategories.some((c) => c.name === sabCategoryOverride) && (
+                  {sabCategoryOverride.trim() && !sabCategories.some((c) => c.name === sabCategoryOverride) && (
                     <SelectItem value={sabCategoryOverride}>{sabCategoryOverride} (missing in SABnzbd)</SelectItem>
                   )}
                   {sabCategories.map((cat) => (

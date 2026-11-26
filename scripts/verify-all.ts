@@ -5643,10 +5643,14 @@ async function runTestSuite() {
             fs.rmSync(tmpGameRoot, { recursive: true, force: true });
         }
 
-        // 4. Settings MediaApp form stability check (never remounts <form> on App Type change)
+        // 4. Settings MediaApp form & Radix Select stability checks
         const settingsSrc = fs.readFileSync(path.join(process.cwd(), "src/app/settings/page.tsx"), "utf8");
         if (settingsSrc.includes('new-app-${newAppType')) {
             throw new Error("MediaApp form key must not depend on newAppType or Radix Select remounts and crashes");
+        }
+        const selectUiSrc = fs.readFileSync(path.join(process.cwd(), "src/components/ui/select.tsx"), "utf8");
+        if (selectUiSrc.includes('position = "item-aligned"') || !selectUiSrc.includes('position = "popper"')) {
+            throw new Error("SelectContent must default to popper positioning on React 19 to avoid Radix SelectItemAlignedPosition onPlaced #185 loops");
         }
 
         // 5. GameRequest DB persistence round-trip
